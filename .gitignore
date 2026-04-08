@@ -1,0 +1,12 @@
+outputs/
+ARTIGOS/
+archive/
+venv/
+__pycache__/
+*.mp3
+*.pdf
+*.png
+downloads/
+logs/
+*.pyc
+.DS_Store
