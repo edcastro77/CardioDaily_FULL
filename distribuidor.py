@@ -15,7 +15,7 @@ import os
 import random
 import httpx
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from supabase import create_client
 
 # =============================================================================
@@ -35,7 +35,7 @@ TELEGRAM_CHAT_ID = "237863636"  # Dr. Eduardo — chat privado com o bot
 
 # Distribuição
 ARTIGOS_POR_DIA = 2
-JANELA_DIAS = 10
+DATA_INICIO = "2026-02-01"   # janela fixa — inclui revistas mensais/bimestrais
 NOTA_MINIMA = 7
 PRE_SELECAO = 8
 
@@ -107,11 +107,10 @@ def resolver_doencas(temas):
 
 
 def buscar_candidatos(sb, doencas, ja_enviados):
-    data_limite = (datetime.now(timezone.utc) - timedelta(days=JANELA_DIAS)).strftime("%Y-%m-%d")
     result = sb.table("artigos").select(
         "doc_id, titulo, revista, doenca_principal, tipo_estudo, "
         "nota_aplicabilidade, caminho_visual_abstract, caminho_audio, caminho_pdf"
-    ).gte("data_publicacao", data_limite
+    ).gte("data_publicacao", DATA_INICIO
     ).gte("nota_aplicabilidade", NOTA_MINIMA
     ).in_("doenca_principal", doencas
     ).order("nota_aplicabilidade", desc=True
