@@ -18,20 +18,26 @@ import logging
 from datetime import datetime, timezone
 from supabase import create_client
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # =============================================================================
-# CONFIGURAÇÃO
+# CONFIGURAÇÃO — lida de variáveis de ambiente (GitHub Secrets / .env local)
 # =============================================================================
-SUPABASE_URL = "https://hzqtogcpwdzhjfroxtfz.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6cXRvZ2Nwd2R6aGpmcm94dGZ6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODMwODM3MiwiZXhwIjoyMDgzODg0MzcyfQ.lxwpBEHZeFEBSgyNQa80NxQJecWqwreiUSGK_5vgEx4"  # ← Linha 22
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ["SUPABASE_KEY"]
 
 # Z-API WhatsApp
-ZAPI_BASE = "https://api.z-api.io/instances/3F0C22040662826CFF327E97F8598275/token/11EF94E831F98B000C7549C3"
-ZAPI_CLIENT_TOKEN = "Fef43e54f82bf486fa3c7d49accc12f76S"
-ZAPI_HEADERS = {"Client-Token": ZAPI_CLIENT_TOKEN}
+ZAPI_BASE         = os.environ["ZAPI_BASE"]
+ZAPI_CLIENT_TOKEN = os.environ["ZAPI_CLIENT_TOKEN"]
+ZAPI_HEADERS      = {"Client-Token": ZAPI_CLIENT_TOKEN}
 
 # Telegram
-TELEGRAM_BOT_TOKEN = "8349019693:AAGWvjzzoCNLZwmSTTCgNSSJiTVQWnq55-U"  # ← Linha 30
-TELEGRAM_CHAT_ID = "237863636"  # Dr. Eduardo — chat privado com o bot
+TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "237863636")
 
 # Distribuição
 ARTIGOS_POR_DIA = 2
@@ -41,12 +47,15 @@ PRE_SELECAO = 8
 
 # Logging
 os.makedirs("logs", exist_ok=True)
+_stream_handler = logging.StreamHandler()
+if hasattr(_stream_handler.stream, "reconfigure"):
+    _stream_handler.stream.reconfigure(encoding="utf-8", errors="replace")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("logs/distribuidor.log"),
-        logging.StreamHandler()
+        logging.FileHandler("logs/distribuidor.log", encoding="utf-8"),
+        _stream_handler,
     ]
 )
 log = logging.getLogger("CardioDaily")
@@ -57,28 +66,40 @@ log = logging.getLogger("CardioDaily")
 TEMA_PARA_DOENCAS = {
     "coronaria": [
         "Coronariopatia Aguda", "Coronariopatia Crônica",
-        "Intervenção Vascular", "Coronariopatia"
+        "Intervenção Vascular", "Coronariopatia",
+        "Prevenção Cardiovascular",
     ],
     "cardiometabolico": [
         "Dislipidemias", "Cardiometabólica",
-        "Manifestações Cardiovasculares de Doenças Sistêmicas"
+        "Manifestações Cardiovasculares de Doenças Sistêmicas",
+        "Hipertensão Arterial Sistêmica", "Farmacologia",
     ],
     "miocardiopatias": [
         "Miocardiopatias", "Insuficiencia Cardiaca",
-        "Cardio-Oncologia", "Cardio-Obstetricia",
-        "Cardiopatia Congênita", "Aortopatias"
+        "Aortopatias", "Pericardiopatias",
     ],
-    "prevencao": [
-        "Hipertensão Arterial Sistêmica", "Pré-Operatório",
-        "Prevenção Cardiovascular", "Farmacologia", "Outros"
+    "valvulopatias": [
+        "Valvulopatias",
     ],
-    "valvulopatias": ["Valvulopatias"],
-    "arritmia": ["Arritmias", "Marcapasso", "Stroke"],
-    "uti": ["Emergências/UTI"],
-    "imagem": ["Imagem Cardiovascular"],
-    "genomica": ["Miocardiopatias", "Cardiopatia Congênita"],
-    "obstetrica": ["Cardio-Obstetricia"],
-    "oncologia": ["Cardio-Oncologia"],
+    "arritmia": [
+        "Arritmias", "Marcapasso", "Stroke",
+    ],
+    "uti": [
+        "Emergências/UTI", "Choque", "Parada Cardiorespiratória",
+        "Pré-Operatório",
+    ],
+    "imagem": [
+        "Imagem Cardiovascular",
+    ],
+    "genomica": [
+        "Genética", "Cardiopatia Congênita",
+    ],
+    "obstetrica": [
+        "Cardio-Obstetricia",
+    ],
+    "oncologia": [
+        "Cardio-Oncologia",
+    ],
 }
 
 
@@ -129,21 +150,39 @@ def selecionar_artigos(candidatos):
     return random.sample(top, qtd)
 
 
-def montar_mensagem(artigo):
-    msg = f"📚 *{artigo['titulo']}*\n\n"
-    if artigo.get("revista"):
-        msg += f"📖 {artigo['revista']}\n"
-    if artigo.get("doenca_principal"):
-        msg += f"🏥 {artigo['doenca_principal']}\n"
-    if artigo.get("tipo_estudo"):
-        msg += f"🔬 {artigo['tipo_estudo']}\n"
-    if artigo.get("nota_aplicabilidade"):
-        estrelas = "⭐" * int(artigo["nota_aplicabilidade"])
-        msg += f"NAC: {artigo['nota_aplicabilidade']}/10 {estrelas}\n"
-    if artigo.get("caminho_pdf") and artigo["caminho_pdf"].startswith("http"):
-        msg += f"\n📄 Análise completa: {artigo['caminho_pdf']}"
-    if artigo.get("caminho_audio"):
-        msg += f"\n🎙️ Resumo em áudio: {artigo['caminho_audio']}"
+def montar_mensagem(artigo, html=False):
+    """Monta mensagem do artigo. html=True para Telegram (evita 400 com parse_mode HTML)."""
+    if html:
+        titulo = artigo['titulo'].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        msg = f"📚 <b>{titulo}</b>\n\n"
+        if artigo.get("revista"):
+            msg += f"📖 {artigo['revista']}\n"
+        if artigo.get("doenca_principal"):
+            msg += f"🏥 {artigo['doenca_principal']}\n"
+        if artigo.get("tipo_estudo"):
+            msg += f"🔬 {artigo['tipo_estudo']}\n"
+        if artigo.get("nota_aplicabilidade"):
+            estrelas = "⭐" * int(artigo["nota_aplicabilidade"])
+            msg += f"NAC: {artigo['nota_aplicabilidade']}/10 {estrelas}\n"
+        if artigo.get("caminho_pdf") and artigo["caminho_pdf"].startswith("http"):
+            msg += f"\n📄 Análise completa: {artigo['caminho_pdf']}"
+        if artigo.get("caminho_audio"):
+            msg += f"\n🎙️ Resumo em áudio: {artigo['caminho_audio']}"
+    else:
+        msg = f"📚 {artigo['titulo']}\n\n"
+        if artigo.get("revista"):
+            msg += f"📖 {artigo['revista']}\n"
+        if artigo.get("doenca_principal"):
+            msg += f"🏥 {artigo['doenca_principal']}\n"
+        if artigo.get("tipo_estudo"):
+            msg += f"🔬 {artigo['tipo_estudo']}\n"
+        if artigo.get("nota_aplicabilidade"):
+            estrelas = "⭐" * int(artigo["nota_aplicabilidade"])
+            msg += f"NAC: {artigo['nota_aplicabilidade']}/10 {estrelas}\n"
+        if artigo.get("caminho_pdf") and artigo["caminho_pdf"].startswith("http"):
+            msg += f"\n📄 Análise completa: {artigo['caminho_pdf']}"
+        if artigo.get("caminho_audio"):
+            msg += f"\n🎙️ Resumo em áudio: {artigo['caminho_audio']}"
     return msg
 
 
@@ -219,10 +258,13 @@ def zapi_send_document(phone, doc_url, filename=""):
 # TELEGRAM
 # =============================================================================
 
-def tg_send_text(text):
+def tg_send_text(text, html=False):
     try:
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text}
+        if html:
+            payload["parse_mode"] = "HTML"
         resp = httpx.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"},
+            json=payload,
             timeout=30)
         resp.raise_for_status()
         log.info(f"  Telegram texto → {TELEGRAM_CHAT_ID}")
@@ -235,7 +277,7 @@ def tg_send_text(text):
 def tg_send_image(image_url, caption=""):
     try:
         resp = httpx.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto",
-            json={"chat_id": TELEGRAM_CHAT_ID, "photo": image_url, "caption": caption[:1024], "parse_mode": "Markdown"},
+            json={"chat_id": TELEGRAM_CHAT_ID, "photo": image_url, "caption": caption[:1024]},
             timeout=30)
         resp.raise_for_status()
         log.info(f"  Telegram imagem → {TELEGRAM_CHAT_ID}")
@@ -273,10 +315,11 @@ def enviar_artigo(phone, artigo):
         zapi_send_image(phone, artigo["caminho_visual_abstract"], caption)
         tg_send_image(artigo["caminho_visual_abstract"], caption)
 
-    # 2. Texto com links
-    texto = montar_mensagem(artigo)
-    zapi_send_text(phone, texto)
-    tg_send_text(texto)
+    # 2. Texto com links (WhatsApp: plain text; Telegram: HTML para evitar 400)
+    texto_wa = montar_mensagem(artigo, html=False)
+    texto_tg = montar_mensagem(artigo, html=True)
+    zapi_send_text(phone, texto_wa)
+    tg_send_text(texto_tg, html=True)
 
     # 3. Áudio
     if artigo.get("caminho_audio"):
@@ -350,7 +393,7 @@ def distribuir_radar():
     log.info("=" * 60)
 
     sb = conectar_supabase()
-    hoje = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    hoje = datetime.now().strftime("%Y-%m-%d")  # horário local (Brasil)
     result = sb.table("radar").select("*").eq("data_varredura", hoje).limit(1).execute()
 
     if not result.data:
@@ -361,18 +404,48 @@ def distribuir_radar():
     tema = radar.get("tema", "")
     podcast_url = radar.get("caminho_podcast", "")
 
-    msg = f"🔬 *Radar CardioDaily — {tema}*\n\n"
-    msg += f"📅 Últimas 2 semanas\n"
-    msg += f"📊 {radar.get('artigos_analisados', '?')} artigos analisados\n"
-    resumo = radar.get("resumo_texto", "")
-    if resumo:
-        msg += f"\n{resumo[:500]}"
+    # Mapeia a chave do banco para o nome legível
+    TEMAS_PT = {
+        "doenca_coronariana":       "Coronária/DAC",
+        "cardio_metabolica":        "Cardiometabólica",
+        "arritmias":                "Arritmias",
+        "insuficiencia_cardiaca":   "Insuficiência Cardíaca",
+        "valvulopatias":            "Valvulopatias",
+        "miocardiopatias":          "Miocardiopatias",
+        "intervencao_hemodinamica": "Intervenção/Hemodinâmica",
+        "cardio_oncologia":         "Cardio-Oncologia",
+        "cardiobstetrica":          "Cardio-Obstétrica",
+        "cardio_genomica":          "Cardio-Genômica",
+        "uti_cardiologica":         "UTI Cardiológica",
+        "aorta_congenitas":         "Aorta e Congênitas",
+        "imagem_cardiovascular":    "Imagem Cardiovascular",
+    }
+    tema_nome = TEMAS_PT.get(tema, tema)
+    tema_safe = tema_nome.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    pergunta = radar.get("pergunta_socratica", "")
+    n_artigos = radar.get("artigos_analisados", "?")
+    data_hoje = datetime.now().strftime("%d/%m/%Y")
+
+    # WhatsApp (plain text)
+    msg_wa = f"🔬 *Radar CardioDaily* — {data_hoje}\n"
+    msg_wa += f"📡 {tema_nome}\n\n"
+    if pergunta:
+        msg_wa += f"💭 _{pergunta}_\n\n"
+    msg_wa += f"🎙️ Ouça o podcast de hoje — {n_artigos} estudos analisados."
+
+    # Telegram (HTML)
+    pergunta_safe = pergunta.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    msg_tg = f"🔬 <b>Radar CardioDaily</b> — {data_hoje}\n"
+    msg_tg += f"📡 {tema_safe}\n\n"
+    if pergunta_safe:
+        msg_tg += f"💭 <i>{pergunta_safe}</i>\n\n"
+    msg_tg += f"🎙️ Ouça o podcast de hoje — {n_artigos} estudos analisados."
 
     assinantes = buscar_assinantes_ativos(sb)
     for assinante in assinantes:
         phone = assinante.get("phone", "")
-        zapi_send_text(phone, msg)
-        tg_send_text(msg)
+        zapi_send_text(phone, msg_wa)
+        tg_send_text(msg_tg, html=True)
         if podcast_url:
             zapi_send_audio(phone, podcast_url)
             tg_send_audio(podcast_url, f"Radar - {tema}")

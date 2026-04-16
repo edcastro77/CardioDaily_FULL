@@ -1,0 +1,33 @@
+name: Radar Enviar (08:00 BRT)
+
+on:
+  schedule:
+    - cron: '0 11 * * *'   # 11:00 UTC = 08:00 BRT
+  workflow_dispatch:
+
+jobs:
+  enviar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL:        ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      ZAPI_BASE:           ${{ secrets.ZAPI_BASE }}
+      ZAPI_CLIENT_TOKEN:   ${{ secrets.ZAPI_CLIENT_TOKEN }}
+      TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Enviar radar
+        run: python distribuidor.py radar

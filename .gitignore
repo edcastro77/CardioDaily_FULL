@@ -10,3 +10,5 @@ downloads/
 logs/
 *.pyc
 .DS_Store
+.env
+inputs/

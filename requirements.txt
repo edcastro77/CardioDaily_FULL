@@ -1,0 +1,7 @@
+httpx
+supabase
+python-dotenv
+requests
+openai
+google-genai
+biopython
