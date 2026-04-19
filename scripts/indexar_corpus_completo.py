@@ -87,15 +87,15 @@ def _extract_journal_date_from_md(md_content: str) -> tuple[str | None, str | No
 
 
 def _titulo_parece_filename(titulo: str, pdf_filename: str) -> bool:
-    """Retorna True se o título parece ser o nome do arquivo (não o título real)."""
+    """Retorna True se o título é não-vazio mas parece ser o nome do arquivo."""
     if not titulo:
-        return True
+        return False  # vazio já é tratado pelo fallback normal (or _extract_titulo)
     stem = re.sub(r'\.pdf$', '', pdf_filename, flags=re.IGNORECASE).lower()
-    # É o próprio nome do arquivo
+    # É exatamente o nome do arquivo (ex: "host-exam" para "host-exam.pdf")
     if titulo.lower() == stem:
         return True
-    # Não tem espaços (ex: "host-exam", "NEJM2026") — não é um título real
-    if ' ' not in titulo and len(titulo) < 40:
+    # Sem espaços e curto — claramente não é um título real (ex: "host-exam", "NEJM2026")
+    if ' ' not in titulo and len(titulo) < 40 and titulo.lower() != titulo.upper():
         return True
     return False
 
