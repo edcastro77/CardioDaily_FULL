@@ -362,10 +362,15 @@ class VisualAbstractGenerator:
         except (json.JSONDecodeError, AttributeError):
             return "original"
 
-    def extrair_dados(self, article_dir: Path, force: bool = False) -> dict:
+    def extrair_dados(self, article_dir: Path, force: bool = False,
+                      canonical_type: str | None = None) -> dict:
         """
         Extrai dados estruturados do analysis.md via Claude Sonnet 4.
         Usa cache em assets/visual_abstract_data.json se disponível.
+
+        canonical_type: quando passado pelo article_analyzer ("original",
+        "metanalise", "revisao"), evita depender do analysis.json que pode
+        ainda não ter sido escrito no momento da geração.
         """
         assets_dir = article_dir / "assets"
         assets_dir.mkdir(exist_ok=True)
@@ -401,8 +406,14 @@ class VisualAbstractGenerator:
         if len(content) > self.MAX_CONTENT_CHARS:
             content = content[: self.MAX_CONTENT_CHARS]
 
-        # Detectar tipo de artigo para escolher prompt correto
-        tipo_artigo = self._detectar_tipo_artigo(analysis_json_path)
+        # Determinar tipo: canonical_type tem precedência (evita timing issue),
+        # fallback para leitura do analysis.json
+        if canonical_type in ("metanalise", "revisao"):
+            tipo_artigo = "revisao"
+        elif canonical_type == "original":
+            tipo_artigo = "original"
+        else:
+            tipo_artigo = self._detectar_tipo_artigo(analysis_json_path)
         is_review = (tipo_artigo == "revisao")
 
         # Ler nota_aplicabilidade do JSON existente (mais confiável que re-gerar)
@@ -481,10 +492,15 @@ class VisualAbstractGenerator:
         template = self.jinja_env.get_template(self.TEMPLATE_NAME)
         return template.render(data=data)
 
-    def gerar_png(self, article_dir: Path, force: bool = False, open_file: bool = False) -> Path:
+    def gerar_png(self, article_dir: Path, force: bool = False, open_file: bool = False,
+                  canonical_type: str | None = None) -> Path:
         """
         Pipeline completo: extração → HTML → PNG.
         Retorna o path do PNG gerado.
+
+        canonical_type: "original" | "metanalise" | "revisao" — passado pelo
+        article_analyzer para seleção correta do prompt sem depender do timing
+        de escrita do analysis.json.
         """
         assets_dir = article_dir / "assets"
         assets_dir.mkdir(exist_ok=True)
@@ -497,7 +513,7 @@ class VisualAbstractGenerator:
 
         # 1. Extrair dados
         print(f"  🔍 Extraindo dados via Claude Sonnet 4...")
-        data = self.extrair_dados(article_dir, force=force)
+        data = self.extrair_dados(article_dir, force=force, canonical_type=canonical_type)
 
         # 2. Renderizar HTML
         print(f"  🎨 Renderizando HTML...")
