@@ -1,149 +1,145 @@
-# CardioDaily — Contexto do Projeto
+# CLAUDE.md - Instrucoes do Projeto CardioDaily
 
-Plataforma de curadoria científica em cardiologia para médicos.
-Desenvolvida por Dr. Eduardo Castro. Em fase de **beta fechado** (abril/maio 2026).
+## LEIS INVIOLAVEIS DO PROJETO
 
----
+Estas regras sao ABSOLUTAS e nao podem ser quebradas em nenhuma circunstancia:
 
-## Arquitetura geral
+### LEI 1: NUNCA PROPOR ABANDONAR PARTE DO PROJETO
+- O Claude NUNCA deve sugerir abandonar, descontinuar, remover ou desistir de qualquer funcionalidade planejada ou em desenvolvimento do CardioDaily.
+- Se uma abordagem tecnica nao funciona, o Claude deve propor ALTERNATIVAS, nunca eliminacao.
+- "Abandonar a ideia" NAO e uma opcao. Sempre existe uma solucao — encontre-a.
+- O dono do projeto (Dr. Eduardo) decide o que entra e o que sai. O Claude executa e resolve.
 
-```
-WhatsApp (Z-API) ←→ Supabase Edge Function (agente_whatsapp)
-                          ↓
-                   jobs_pendentes (Supabase)
-                          ↓
-                   processar_jobs.py  ← roda via Windows Task Scheduler local
-                          ↓
-              ingerir_artigos.py (GPT-4o + TTS + imagem + PDF)
-                          ↓
-              Supabase Storage (buckets: visual_abstracts, podcasts, resumos_pdf)
-                          ↓
-              Entrega WhatsApp + Telegram ao usuário
-```
+### LEI 2: RESOLVER, NAO DESISTIR
+- Diante de dificuldades tecnicas, o Claude deve:
+  1. Identificar o problema real
+  2. Propor 2-3 alternativas viaveis
+  3. Recomendar a melhor opcao
+  4. NUNCA listar "abandonar" como uma das opcoes
 
-**Distribuição diária (GitHub Actions — cloud, independente do PC):**
-- 07:00 BRT → `distribuidor.py artigos` (2 artigos por assinante)
-- 07:30 BRT → `scripts/run_radar_diario.py` (gera podcast do radar PubMed)
-- 08:00 BRT → `distribuidor.py radar` (envia o podcast gerado)
+### LEI 3: RESPEITAR A VISAO DO PRODUCT OWNER
+- O Dr. Eduardo define o que o CardioDaily deve fazer e como deve parecer.
+- O Claude implementa a visao do dono, nao substitui por sua propria opiniao.
+- Se o Claude discorda tecnicamente, apresenta a ressalva MAS executa o que foi pedido.
 
 ---
 
-## Stack
+## DECISOES TECNICAS PERMANENTES
 
-| Componente | Tecnologia |
+### CARDS HTML→PNG (Playwright) PARA WHATSAPP — PROIBIDO
+O modelo de card 1080×1080px via HTML/CSS + Playwright foi testado para WhatsApp Top e DESCARTADO. Motivos:
+1. **Texto minusculo**: Bullets curtos (como devem ser) ficam com fonte pequena que nao preenche o espaco
+2. **Espacos vazios grandes**: Layout com flex expande os boxes mas o conteudo nao ocupa — resultado visual amador
+3. **Nao serve para WhatsApp**: Card de redes sociais precisa ser lido em 2 segundos; esse modelo exige leitura cuidadosa
+
+**Regra**: NAO gerar cards HTML→PNG para WhatsApp em nenhuma circunstancia enquanto nao existir um layout adaptativo que garanta densidade visual real.
+
+**Alternativas validas para visual WhatsApp:**
+- Imagem central do artigo original (figura da revista)
+- Post "slogan" simples (titulo + 1 linha de descricao)
+- Apenas texto formatado (sem imagem)
+
+**Arquivo de referencia historica**: `src/infographics/templates/whatsapp_card.html` — NAO usar em producao.
+
+---
+
+### ÚNICO ARTEFATO VISUAL PERMITIDO: VISUAL ABSTRACT 8 SEÇÕES — LEI ABSOLUTA
+
+**ÚNICO formato visual de artigo permitido no CardioDaily é o Visual Abstract de 8 seções:**
+- Arquivo: `src/infographics/visual_abstract_generator.py`
+- Template: `src/infographics/templates/visual_abstract_template.html`
+- Output: `assets/visual_abstract.png`
+
+**TODOS os outros geradores de imagem/gráfico estão em QUARENTENA PERMANENTE:**
+- `InfographicPortrait` (portrait_visualmed) — PROIBIDO
+- `MindmapGenerator` visual PNG — PROIBIDO
+- `infographic_mpl.py` (matplotlib) — PROIBIDO
+- Qualquer gerador de gráficos de barras, charts, ou artifícios visuais — PROIBIDO
+- DALL-E 3 — PROIBIDO (já existia)
+- Cards HTML→PNG para WhatsApp — PROIBIDO (já existia)
+
+**Regra**: Nunca adicionar, reativar ou sugerir qualquer outro gerador visual sem aprovação explícita do Dr. Eduardo.
+
+---
+
+### DALL-E 3 — PROIBIDO NO PROJETO
+O DALL-E 3 (OpenAI) foi testado e REMOVIDO do CardioDaily. Motivos:
+1. **Imagens genericas e inuteis**: Gera coracoes bonitos com setas e bolinhas, mas ZERO conteudo clinico real. Nenhum dado, nenhum numero, nenhuma informacao util aparece nas imagens.
+2. **Custo sem retorno**: ~US$ 0.04/imagem para gerar lixo visual sem valor cientifico.
+3. **Impossibilidade tecnica**: O DALL-E 3 NAO consegue renderizar texto, numeros, tabelas ou dados clinicos com precisao. Ele e um gerador de arte, nao de infograficos.
+4. **Arquivos removidos**: `src/dalle_image_generator.py` e `src/image_prompt_generator.py` foram movidos para `archive/legacy_images/`.
+
+**Regra**: Nenhum codigo do CardioDaily deve usar DALL-E para geracao de infograficos. Se precisar de geracao de imagem, usar alternativas que consigam renderizar dados reais (Gemini Imagen com prompts estruturados, SVGs programaticos, HTML/CSS renderizado).
+
+---
+
+## META DO PROJETO
+
+- **TESTE BETA:** Abril 2026 — sistema funcional para 10 medicos avaliarem (Eduardo Lapa/CardioPapers + convidados)
+- **LANCAMENTO:** Maio 2026 — inicio das vendas
+- **Caderno de execucao completo:** `docs/CADERNO_EXECUCAO.md` (v12.0)
+
+## ESTRUTURA DO PROJETO
+
+- `/src/` - Codigo fonte principal
+- `/src/infographics/` - Geradores de infograficos e mapas mentais (Playwright + Jinja2)
+- `/scripts/` - Scripts de execucao em lote
+- `/docs/` - Documentacao (inclui CADERNO_EXECUCAO.md v12.0)
+- `/outputs/corpus/` - Artigos analisados (doi_XXXXX/)
+- `/ARTIGOS/` - Classificador e PDFs novos
+- `/archive/` - Codigo descontinuado
+
+## STACK TECNICA
+
+- Python 3
+- Claude Sonnet 4 (analise de revisoes/guidelines + extracao JSON para mapas mentais)
+- Gemini 2.5 Pro (analise de originais/meta-analises)
+- Gemini 2.0 Flash (classificacao visual)
+- OpenAI GPT-4o (script de podcast)
+- OpenAI TTS-HD voz onyx (audio de podcast)
+- Playwright + Jinja2 (infograficos e mapas mentais visuais — HTML/CSS → PNG 1920x1080)
+- Supabase (banco de dados — 2.700+ artigos, taxonomia 73 categorias EN)
+
+## ESTADO ATUAL DO SISTEMA (Fev/2026)
+
+| Componente | Status |
 |---|---|
-| Banco de dados | Supabase (PostgreSQL) |
-| Armazenamento | Supabase Storage |
-| Webhook / Agente IA | Supabase Edge Function `agente_whatsapp` |
-| WhatsApp | Z-API |
-| Telegram | Bot API direto |
-| Análise de artigos | GPT-4o (texto + visão) |
-| Podcast TTS | OpenAI TTS (voz onyx, modelo tts-1-hd) |
-| Radar científico | PubMed (biopython Entrez) + Gemini (triagem) + OpenAI TTS |
-| Cron em nuvem | GitHub Actions |
-| Python | 3.11+ (venv local em Windows, ubuntu-latest no CI) |
+| Classificador v8.0 (Gemini Vision) | ✅ 98%+ acuracia |
+| Analise Claude Sonnet 4 (revisoes) | ✅ Operacional |
+| Analise Gemini 2.5 Pro (originais) | ✅ Operacional |
+| Mapa mental visual v3 (Claude + Playwright) | ✅ Nota 9/10 |
+| Podcast (GPT-4o script + TTS-HD audio) | ✅ 240 gerados |
+| Indexacao Supabase | ✅ 2.700+ artigos |
+| **Infografico rico (estilo NotebookLM)** | **🔴 PENDENTE CRITICO** |
+| **Administrador/Bibliotecario** | **🔴 PENDENTE CRITICO** |
+| Telegram Bot | ⏳ Nao implementado |
+| Templates Instagram (Reel/post) | ⏳ Nao implementado |
 
----
+## 4 BLOCOS DE TRABALHO (cronograma no CADERNO_EXECUCAO.md)
 
-## Arquivos principais
+1. **BLOCO 1: CONTEUDO** — Pipeline de analise (✅ quase completo, falta infografico rico)
+2. **BLOCO 2: ADMINISTRADOR** — Bibliotecario inteligente + automacao redes sociais
+3. **BLOCO 3: DISTRIBUICAO** — Telegram Bot, Instagram, WhatsApp
+4. **BLOCO 4: FEEDBACK BETA** — 10 testers, formulario, metricas
 
-| Arquivo | Função |
-|---|---|
-| `distribuidor.py` | Distribui artigos (07h) e radar (08h) via WhatsApp + Telegram |
-| `scripts/run_radar_diario.py` | Gera podcast diário do radar PubMed |
-| `scripts/processar_jobs.py` | Processa PDFs enviados pelo usuário via WhatsApp |
-| `scripts/ingerir_artigos.py` | Pipeline completo: PDF → GPT-4o → assets → Supabase |
-| `scripts/gerar_imagens_lote.py` | Gera visual abstracts (HTML → PNG via Playwright) |
-| `scripts/gerar_audios_lote.py` | Gera áudios em lote para artigos sem MP3 |
-| `scripts/gerar_pdfs_lote.py` | Gera PDFs resumo em lote |
-| `src/radar/radar_pubmed.py` | Backend do radar: busca PubMed, triagem Gemini, TTS |
-| `.github/workflows/` | 3 workflows de cron em nuvem |
-
----
-
-## Supabase — tabelas principais
-
-| Tabela | Uso |
-|---|---|
-| `artigos` | 3100+ artigos analisados |
-| `whatsapp_users` | Assinantes (phone, temas, artigos_enviados) |
-| `radar` | Registros diários do podcast do radar |
-| `jobs_pendentes` | Fila de PDFs enviados via WhatsApp para análise |
-| `conversas_whatsapp` | Histórico de chat do agente IA |
-
-**Buckets Storage:** `visual_abstracts`, `podcasts`, `resumos_pdf`, `radar_podcasts`, `pdf_uploads`
-
----
-
-## Credenciais
-
-**Nunca commitadas.** Existem em dois lugares:
-1. `.env` na raiz — para rodar localmente no Windows/Mac
-2. GitHub Secrets — para os workflows em nuvem
-
-Variáveis necessárias: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ZAPI_BASE`, `ZAPI_CLIENT_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ENTREZ_EMAIL`
-
-O arquivo `.env.template` tem a estrutura sem os valores.
-
----
-
-## Mudanças recentes (abril 2026)
-
-### 18/04 — Prompts: conduta clínica prática
-- **GPT-4o vision ativado**: primeiras 6 páginas do PDF renderizadas como imagem → captura fluxogramas e gráficos de diretrizes
-- **Podcast reescrito (90s)**: estrutura Abertura → Paciente-alvo → Resultado-chave → Como usar → Pérola. Zero contexto histórico, zero metodologia antes do resultado
-- **Branching revisão vs original**: diretrizes recebem fluxo diagnóstico-terapêutico; estudos originais recebem resultado com NNT e conduta específica
-- **PROMPT_ANALISE reescrito**: exige números absolutos/relativos, NNT, fármaco com dose, pérola com verbo de ação
-- **PROMPT_EXTRACAO reescrito**: infográfico orientado a aptidão prática
-
-### 16/04 — GitHub Actions (cron em nuvem)
-- Cron movido do Agendador de Tarefas do Windows → GitHub Actions
-- `distribuidor.py` refatorado para ler credenciais de variáveis de ambiente
-- `requirements.txt` criado
-- `.env` adicionado ao `.gitignore`
-
-### 15/04 — Bug crítico: entrega WhatsApp silenciosa
-- `processar_jobs.py` não entregava artigos analisados: `ZAPI_BASE` ausente no `.env`
-- Corrigido: `ZAPI_BASE` e `ZAPI_CLIENT_TOKEN` adicionados ao `.env`
-
-### 15/04 — Edge Function `agente_whatsapp`
-- Já existia e funciona: recebe webhook Z-API, baixa PDF, cria job em `jobs_pendentes`
-- Agente IA (Claude) responde perguntas sobre cardiologia via WhatsApp
-- Ferramentas: `buscar_artigos`, `atualizar_temas`, `minha_conta`
-
----
-
-## Pendências ativas
-
-- [ ] **Beta fechado**: finalizar lista de participantes e cadastrá-los em `whatsapp_users`
-- [ ] **Análise via WhatsApp**: testar fluxo completo com PDF de revisão/diretriz após correção dos prompts
-- [ ] **`processar_jobs.py`**: migrar para GitHub Actions (hoje roda só no Windows local)
-- [ ] **Configurar GitHub Secrets** se ainda não feito: necessário para workflows funcionarem
-
----
-
-## Como rodar localmente (Mac)
+## CLI
 
 ```bash
-# Instalar dependências
-pip install -r requirements.txt
-
-# Configurar credenciais
-cp .env.template .env
-# editar .env com as chaves
-
-# Testar distribuição (sem enviar)
-python distribuidor.py teste
-
-# Rodar radar manualmente
-python scripts/run_radar_diario.py --dry-run
-
-# Processar PDFs na fila
-python scripts/processar_jobs.py
+./cardiodaily [comando]
+# classify, analyze, originals, reviews, meta, archive, pdf, infographic, audit, report, radar
 ```
 
-**Playwright** (para gerar imagens/PDFs) precisa de instalação extra:
-```bash
-pip install playwright
-playwright install chromium
+## PACOTE CANONICO
+
+```
+outputs/corpus/{doc_id}/
+├── source.pdf              # PDF original
+├── analysis.md             # Analise completa
+├── analysis.json           # Metadados estruturados
+├── mindmap.md              # Mapa mental Markdown
+└── assets/
+    ├── mindmap.png         # Mapa mental visual (Claude Sonnet 4 + Playwright)
+    ├── mindmap_data.json   # Cache JSON do Claude
+    ├── infografico.png     # 🔴 PENDENTE (rico, estilo NotebookLM)
+    └── podcast.mp3         # Podcast (score >= 8)
 ```

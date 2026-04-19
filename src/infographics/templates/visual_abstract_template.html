@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --teal-900: #04342C;
+  --teal-800: #085041;
+  --teal-600: #0F6E56;
+  --teal-400: #1D9E75;
+  --teal-200: #5DCAA5;
+  --teal-100: #9FE1CB;
+  --teal-50: #E1F5EE;
+  --coral-800: #712B13;
+  --coral-600: #993C1D;
+  --coral-400: #D85A30;
+  --coral-200: #F0997B;
+  --coral-50: #FAECE7;
+  --gold-900: #412402;
+  --gold-800: #633806;
+  --gold-600: #854F0B;
+  --gold-400: #BA7517;
+  --gold-200: #FAC775;
+  --gold-100: #FAEEDA;
+  --green-600: #3B6D11;
+  --green-100: #C0DD97;
+  --green-50: #EAF3DE;
+  --red-600: #A32D2D;
+  --red-100: #F7C1C1;
+  --red-50: #FCEBEB;
+  --gray-50: #F7F6F3;
+  --gray-100: #EEEDEB;
+  --gray-200: #D3D1C7;
+  --gray-400: #888780;
+  --gray-600: #5F5E5A;
+  --gray-800: #2C2C2A;
+  --white: #FFFFFF;
+}
+
+body {
+  width: 1080px;
+  font-family: 'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
+  background: var(--white);
+  color: var(--gray-800);
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  width: 1080px;
+  min-height: 100px;
+  background: var(--white);
+}
+
+/* ===== HEADER ===== */
+.header {
+  background: var(--teal-600);
+  padding: 28px 36px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.header-content { flex: 1; max-width: 820px; }
+
+.header-title {
+  color: var(--white);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+
+.header-subtitle {
+  color: var(--teal-100);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  max-width: 700px;
+}
+
+.header-logo {
+  text-align: right;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.logo-mark {
+  width: 44px;
+  height: 44px;
+  background: var(--white);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  margin-bottom: 6px;
+}
+
+.logo-mark svg { width: 24px; height: 24px; }
+
+.logo-text {
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.logo-sub {
+  color: var(--teal-200);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ===== BARRA DE TEMA ===== */
+.tema-bar {
+  background: var(--teal-50);
+  padding: 10px 36px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--teal-100);
+}
+
+.tema-tag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--teal-800);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.tema-divider {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--teal-200);
+}
+
+.tema-revista {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--teal-600);
+}
+
+/* ===== BODY ===== */
+.body {
+  padding: 20px 36px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ===== SEÇÕES ===== */
+.section {
+  border-left: 4px solid var(--teal-600);
+  padding: 6px 0 6px 16px;
+}
+
+.section.accent { border-left-color: var(--coral-400); }
+.section.warn { border-left-color: var(--red-600); }
+.section.neutral { border-left-color: var(--gray-400); }
+
+.section-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section .section-header { color: var(--teal-800); }
+.section.accent .section-header { color: var(--coral-800); }
+.section.warn .section-header { color: var(--red-600); }
+.section.neutral .section-header { color: var(--gray-600); }
+
+.section-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.section .section-number { background: var(--teal-50); color: var(--teal-600); }
+.section.accent .section-number { background: var(--coral-50); color: var(--coral-600); }
+.section.warn .section-number { background: var(--red-50); color: var(--red-600); }
+.section.neutral .section-number { background: var(--gray-100); color: var(--gray-600); }
+
+.section ul {
+  list-style: none;
+  padding: 0;
+}
+
+.section li {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--gray-800);
+  padding: 2px 0 2px 16px;
+  position: relative;
+}
+
+.section li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--teal-400);
+}
+
+.section.accent li::before { background: var(--coral-400); }
+.section.warn li::before { background: var(--red-600); }
+.section.neutral li::before { background: var(--gray-400); }
+
+/* ===== GRID 2 COLUNAS ===== */
+.cols-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* ===== LIMITAÇÕES (3 sub-blocos) ===== */
+.lim-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.lim-block {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.lim-block.vieses { background: var(--red-50); }
+.lim-block.fortes { background: var(--green-50); }
+.lim-block.fracos { background: var(--gold-100); }
+
+.lim-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 4px;
+}
+
+.lim-block.vieses .lim-label { color: var(--red-600); }
+.lim-block.fortes .lim-label { color: var(--green-600); }
+.lim-block.fracos .lim-label { color: var(--gold-600); }
+
+.lim-block ul { list-style: none; padding: 0; }
+.lim-block li {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gray-800);
+  padding: 1px 0 1px 10px;
+  position: relative;
+}
+.lim-block li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+.lim-block.vieses li::before { background: var(--red-600); }
+.lim-block.fortes li::before { background: var(--green-600); }
+.lim-block.fracos li::before { background: var(--gold-600); }
+
+/* ===== DESTAQUE APLICABILIDADE ===== */
+.aplicabilidade {
+  background: var(--gold-100);
+  border: 1px solid var(--gold-200);
+  border-left: 5px solid var(--gold-400);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  margin-top: 2px;
+}
+
+.aplicabilidade .section-header { color: var(--gold-800); }
+.aplicabilidade .section-number { background: var(--gold-400); color: var(--white); }
+
+.aplic-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  margin-top: 4px;
+}
+
+.aplic-item { }
+
+.aplic-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--gold-600);
+  margin-bottom: 2px;
+}
+
+.aplic-value {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--gold-900);
+}
+
+.aplic-perola {
+  grid-column: 1 / -1;
+  background: var(--gold-400);
+  color: var(--white);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+/* ===== FOOTER ===== */
+.footer {
+  background: var(--gray-50);
+  padding: 10px 36px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--gray-100);
+}
+
+.footer-ref {
+  font-size: 10px;
+  color: var(--gray-400);
+  max-width: 700px;
+  line-height: 1.4;
+}
+
+.footer-disclaimer {
+  font-size: 9px;
+  color: var(--gray-400);
+  font-style: italic;
+}
+
+.nac-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.nac-badge.verde { background: var(--green-50); color: var(--green-600); border: 1px solid var(--green-100); }
+.nac-badge.amarelo { background: var(--gold-100); color: var(--gold-600); border: 1px solid var(--gold-200); }
+.nac-badge.vermelho { background: var(--red-50); color: var(--red-600); border: 1px solid var(--red-100); }
+
+.nac-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.nac-badge.verde .nac-dot { background: var(--green-600); }
+.nac-badge.amarelo .nac-dot { background: var(--gold-400); }
+.nac-badge.vermelho .nac-dot { background: var(--red-600); }
+
+/* ===== COR DO HEADER POR DESTAQUE ===== */
+.container.cor-verde .header { background: var(--green-600); }
+.container.cor-verde .header-subtitle { color: var(--green-100); }
+.container.cor-verde .tema-bar { background: var(--green-50); border-color: var(--green-100); }
+.container.cor-verde .tema-tag { color: #27500A; }
+.container.cor-verde .tema-revista { color: var(--green-600); }
+.container.cor-verde .logo-mark svg path { fill: var(--green-600); }
+
+.container.cor-vermelho .header { background: #8B2020; }
+.container.cor-vermelho .header-subtitle { color: var(--red-100); }
+.container.cor-vermelho .tema-bar { background: var(--red-50); border-color: var(--red-100); }
+.container.cor-vermelho .tema-tag { color: #501313; }
+.container.cor-vermelho .tema-revista { color: var(--red-600); }
+.container.cor-vermelho .logo-mark svg path { fill: var(--red-600); }
+</style>
+</head>
+<body>
+<div class="container cor-{{ data.cor_destaque | default('amarelo') }}">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-content">
+      <div class="header-title">{{ data.tema_central.titulo }}</div>
+      {% if data.pergunta_clinica and data.pergunta_clinica[0] %}
+      <div class="header-subtitle">{{ data.pergunta_clinica[0] }}</div>
+      {% endif %}
+    </div>
+    <div class="header-logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#0F6E56"/>
+        </svg>
+      </div>
+      <div class="logo-text">CardioDaily</div>
+      <div class="logo-sub">Visual Abstract</div>
+    </div>
+  </div>
+
+  <!-- BARRA DE TEMA -->
+  <div class="tema-bar">
+    <span class="tema-tag">{{ data.tema_central.categoria }}</span>
+    <span class="tema-divider"></span>
+    <span class="tema-revista">{{ data.tema_central.revista }} {{ data.tema_central.ano }}</span>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- 1. PERGUNTA CLÍNICA -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-number">1</span>
+        Pergunta clínica
+      </div>
+      <ul>
+        {% for item in data.pergunta_clinica %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- 2 + 3. MÉTODOS + POPULAÇÃO (lado a lado) -->
+    <div class="cols-2">
+      <div class="section">
+        <div class="section-header">
+          <span class="section-number">2</span>
+          {% if data.tipo_artigo == 'revisao' %}Origem{% else %}Métodos{% endif %}
+        </div>
+        <ul>
+          {% for item in data.metodos %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="section">
+        <div class="section-header">
+          <span class="section-number">3</span>
+          {% if data.tipo_artigo == 'revisao' %}Escopo{% else %}População{% endif %}
+        </div>
+        <ul>
+          {% for item in data.populacao %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- 4. RESULTADOS (destaque) -->
+    <div class="section accent">
+      <div class="section-header">
+        <span class="section-number">4</span>
+        {% if data.tipo_artigo == 'revisao' %}Recomendações clínicas{% else %}Principais resultados{% endif %}
+      </div>
+      <ul>
+        {% for item in data.resultados %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- 5. LIMITAÇÕES (3 blocos) -->
+    <div class="section neutral">
+      <div class="section-header">
+        <span class="section-number">5</span>
+        Limitações do estudo
+      </div>
+      <div class="lim-grid">
+        {% if data.limitacoes.vieses %}
+        <div class="lim-block vieses">
+          <div class="lim-label">Viéses</div>
+          <ul>
+            {% for item in data.limitacoes.vieses %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+        {% if data.limitacoes.pontos_fortes %}
+        <div class="lim-block fortes">
+          <div class="lim-label">Pontos fortes</div>
+          <ul>
+            {% for item in data.limitacoes.pontos_fortes %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+        {% if data.limitacoes.pontos_fracos %}
+        <div class="lim-block fracos">
+          <div class="lim-label">Pontos fracos</div>
+          <ul>
+            {% for item in data.limitacoes.pontos_fracos %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- 6. DISCUSSÃO -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-number">6</span>
+        {% if data.tipo_artigo == 'revisao' %}Contexto & lacunas{% else %}Discussão{% endif %}
+      </div>
+      <ul>
+        {% for item in data.discussao %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- 7. CONCLUSÃO -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-number">7</span>
+        Conclusão
+      </div>
+      <ul>
+        {% for item in data.conclusao %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- 8. APLICABILIDADE CLÍNICA (destaque dourado) -->
+    <div class="aplicabilidade">
+      <div class="section-header">
+        <span class="section-number">8</span>
+        Aplicabilidade clínica — Pérolas pro ambulatório
+      </div>
+      <div class="aplic-grid">
+        {% if data.aplicabilidade_clinica.o_que_usar %}
+        <div class="aplic-item">
+          <div class="aplic-label">O que usar</div>
+          <div class="aplic-value">{{ data.aplicabilidade_clinica.o_que_usar }}</div>
+        </div>
+        {% endif %}
+        {% if data.aplicabilidade_clinica.em_quem %}
+        <div class="aplic-item">
+          <div class="aplic-label">Em quem</div>
+          <div class="aplic-value">{{ data.aplicabilidade_clinica.em_quem }}</div>
+        </div>
+        {% endif %}
+        {% if data.aplicabilidade_clinica.beneficio_paciente %}
+        <div class="aplic-item">
+          <div class="aplic-label">O que o paciente ganha</div>
+          <div class="aplic-value">{{ data.aplicabilidade_clinica.beneficio_paciente }}</div>
+        </div>
+        {% endif %}
+        {% if data.aplicabilidade_clinica.cuidados %}
+        <div class="aplic-item">
+          <div class="aplic-label">Cuidados</div>
+          <div class="aplic-value">{{ data.aplicabilidade_clinica.cuidados }}</div>
+        </div>
+        {% endif %}
+        {% if data.aplicabilidade_clinica.perola %}
+        <div class="aplic-perola">
+          {{ data.aplicabilidade_clinica.perola }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div>
+      <div class="footer-ref">{{ data.tema_central.revista }} {{ data.tema_central.ano }} | CardioDaily — Dados e fatos, sem firulas.</div>
+      <div class="footer-disclaimer">Este material não substitui o julgamento clínico.</div>
+    </div>
+    <div class="nac-badge {{ data.cor_destaque | default('amarelo') }}">
+      <span class="nac-dot"></span>
+      NAC {{ data.nota_aplicabilidade }}/10
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

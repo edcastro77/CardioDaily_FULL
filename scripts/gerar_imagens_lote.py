@@ -258,11 +258,15 @@ def _esc(t: str) -> str:
     return html.escape(str(t))
 
 
+_TIPOS_REVISAO = {"revisao", "revisao_geral", "metanalise", "meta_analise",
+                  "diretriz", "guideline", "editorial", "ponto_de_vista"}
+
 def montar_html(d: dict, nota: int) -> str:
     titulo   = _esc(d.get("titulo", ""))
     tagline  = _esc(d.get("tagline", ""))
     espec    = _esc(d.get("especialidade", ""))
     rev_ano  = _esc(d.get("revista_ano", ""))
+    _is_rev  = (d.get("tipo_estudo", "").lower() in _TIPOS_REVISAO)
     perola   = _esc(d.get("perola", ""))
     o_usar   = _esc(d.get("o_que_usar", ""))
     em_quem  = _esc(d.get("em_quem", ""))
@@ -524,15 +528,15 @@ def montar_html(d: dict, nota: int) -> str:
   <div class="section">
     <div class="section-header">
       <div class="num">2</div>
-      <span class="section-title">Métodos &amp; População</span>
+      <span class="section-title">{"Origem &amp; Escopo" if _is_rev else "Métodos &amp; População"}</span>
     </div>
     <div class="two-col">
       <div class="col">
-        <div class="col-title">Métodos</div>
+        <div class="col-title">{"Origem" if _is_rev else "Métodos"}</div>
         <ul>{_li(d.get("metodos", []))}</ul>
       </div>
       <div class="col">
-        <div class="col-title">População</div>
+        <div class="col-title">{"Escopo" if _is_rev else "População"}</div>
         <ul>{_li(d.get("populacao", []))}</ul>
       </div>
     </div>
@@ -544,7 +548,7 @@ def montar_html(d: dict, nota: int) -> str:
   <div class="section">
     <div class="section-header">
       <div class="num">3</div>
-      <span class="section-title">Principais Resultados</span>
+      <span class="section-title">{"Recomendações Clínicas" if _is_rev else "Principais Resultados"}</span>
     </div>
     <ul>{_li(d.get("resultados", []))}</ul>
   </div>
@@ -579,7 +583,7 @@ def montar_html(d: dict, nota: int) -> str:
   <div class="section">
     <div class="section-header">
       <div class="num">5</div>
-      <span class="section-title">Discussão</span>
+      <span class="section-title">{"Contexto &amp; Lacunas" if _is_rev else "Discussão"}</span>
     </div>
     <ul>{_li(d.get("discussao", []))}</ul>
   </div>
