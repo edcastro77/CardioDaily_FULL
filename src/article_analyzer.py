@@ -645,17 +645,26 @@ class ArticleAnalyzer:
         if not anthropic_client:
             raise ValueError("Cliente Anthropic não está configurado")
         
-        message = anthropic_client.messages.create(
-            model=model_name,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_message if system_message else "",
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        
-        return message.content[0].text
+        # Retry automático para falhas de rede/API (internet instável)
+        delays = [15, 45, 120]  # 15s, 45s, 2min
+        last_exc = None
+        for attempt, delay in enumerate(delays + [0], 1):
+            try:
+                message = anthropic_client.messages.create(
+                    model=model_name,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    system=system_message if system_message else "",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return message.content[0].text
+            except Exception as e:
+                last_exc = e
+                if attempt <= len(delays):
+                    print(f"   ⚠️  Claude tentativa {attempt} falhou ({type(e).__name__}). Aguardando {delay}s...")
+                    time.sleep(delay)
+                else:
+                    raise last_exc
     
     def _call_gemini(self, model_name, prompt, system_message=None, temperature=0.3, max_tokens=16000):
         """
@@ -741,7 +750,27 @@ class ArticleAnalyzer:
         except Exception as e:
             print(f"⚠️  Erro ao chamar Gemini: {e}")
             raise
-    
+
+    def _call_gemini_with_retry(self, model_name, prompt, system_message=None, temperature=0.3, max_tokens=16000):
+        """Wrapper do _call_gemini com retry automático para falhas de rede."""
+        delays = [15, 45, 120]
+        last_exc = None
+        for attempt, delay in enumerate(delays + [0], 1):
+            try:
+                return self._call_gemini(model_name, prompt, system_message, temperature, max_tokens)
+            except Exception as e:
+                last_exc = e
+                msg = str(e).lower()
+                # Só retentar em erros de rede/rate-limit — não em erros de conteúdo
+                if any(k in msg for k in ("connection", "network", "timeout", "503", "502", "429", "rate", "overload", "temporarily")):
+                    if attempt <= len(delays):
+                        print(f"   ⚠️  Gemini tentativa {attempt} falhou ({type(e).__name__}). Aguardando {delay}s...")
+                        time.sleep(delay)
+                    else:
+                        raise last_exc
+                else:
+                    raise  # Erros não-recuperáveis: falha imediata
+
     def _call_model(self, model_name, prompt, system_message=None, temperature=0.3, max_tokens=16000):
         """
         Chama o modelo apropriado baseado no nome.
@@ -766,7 +795,7 @@ class ArticleAnalyzer:
         # Se é modelo Gemini
         if 'gemini' in model_name.lower():
             if self.use_gemini:
-                return self._call_gemini(model_name, prompt, system_message, temperature, max_tokens)
+                return self._call_gemini_with_retry(model_name, prompt, system_message, temperature, max_tokens)
             else:
                 print(f"   ⚠️  Gemini não disponível, usando OpenAI como fallback...")
                 return self._call_openai_fallback(self.fallback_model, prompt, system_message, temperature, max_tokens)
