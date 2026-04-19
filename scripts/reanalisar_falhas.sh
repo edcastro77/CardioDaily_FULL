@@ -93,9 +93,9 @@ fi
 echo "Deseja limpar os stubs e re-analisar os $N_FALHAS artigos com falha?"
 echo "(Os $((N_PDFS - N_FALHAS > 0 ? N_PDFS - N_FALHAS : 0)) já analisados com sucesso serão pulados)"
 echo ""
-read -p "Digite SIM para continuar: " CONFIRMA
+read -p "Digite sim para continuar: " CONFIRMA
 
-if [ "$CONFIRMA" != "SIM" ]; then
+if [[ "${CONFIRMA,,}" != "sim" ]]; then
     echo "Operação cancelada."
     exit 0
 fi
