@@ -145,27 +145,50 @@ def _data_inicio(dias):
     return (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%d")
 
 
-def _buscar_tema(sb, tema, doencas, ja_set, dias):
+def _buscar_tema(sb, tema, doencas, ja_set, ja_dois, dias):
     """Busca artigos de um tema numa janela específica."""
     result = sb.table("artigos").select(
-        "doc_id, titulo, revista, doenca_principal, tipo_estudo, "
+        "doc_id, doi, titulo, revista, doenca_principal, tipo_estudo, "
         "nota_aplicabilidade, caminho_visual_abstract, caminho_audio, caminho_pdf"
     ).gte("data_publicacao", _data_inicio(dias)
     ).gte("nota_aplicabilidade", NOTA_MINIMA
     ).in_("doenca_principal", doencas
     ).order("nota_aplicabilidade", desc=True
     ).order("data_publicacao", desc=True
-    ).limit(PRE_SELECAO).execute()
-    return [a for a in (result.data or []) if a["doc_id"] not in ja_set]
+    ).limit(PRE_SELECAO * 3).execute()  # busca mais para compensar filtro de DOI
+
+    filtrados = []
+    for a in (result.data or []):
+        if a["doc_id"] in ja_set:
+            continue
+        doi = (a.get("doi") or "").strip().lower()
+        if doi and doi in ja_dois:
+            continue
+        filtrados.append(a)
+    return filtrados[:PRE_SELECAO]
+
+
+def _extrair_dois_enviados(sb, doc_ids):
+    """Busca os DOIs dos artigos já enviados para deduplicar por conteúdo."""
+    if not doc_ids:
+        return set()
+    result = sb.table("artigos").select("doi").in_("doc_id", list(doc_ids)).execute()
+    return {
+        (r.get("doi") or "").strip().lower()
+        for r in (result.data or [])
+        if r.get("doi")
+    }
 
 
 def buscar_candidatos_por_tema(sb, temas, ja_enviados):
     """
     Para cada tema subscrito busca os melhores artigos com fallback:
     tenta 15 dias → 30 dias → 60 dias até encontrar artigos.
+    Deduplica por doc_id E por DOI (evita mesmo estudo indexado 2x).
     Retorna dict {tema: [artigos]}.
     """
     ja_set = set(ja_enviados or [])
+    ja_dois = _extrair_dois_enviados(sb, ja_set)
     por_tema = {}
 
     for tema in temas:
@@ -173,7 +196,7 @@ def buscar_candidatos_por_tema(sb, temas, ja_enviados):
         if not doencas:
             continue
         for dias in JANELAS_FALLBACK:
-            candidatos = _buscar_tema(sb, tema, doencas, ja_set, dias)
+            candidatos = _buscar_tema(sb, tema, doencas, ja_set, ja_dois, dias)
             if candidatos:
                 por_tema[tema] = candidatos
                 if dias > JANELAS_FALLBACK[0]:
@@ -198,15 +221,22 @@ def selecionar_artigos_por_tema(por_tema):
     if not por_tema:
         return []
 
-    # Montar pool único com tag de tema
+    # Montar pool único com tag de tema — deduplica por doc_id E por DOI
     pool = []
-    vistos = set()
+    vistos_ids = set()
+    vistos_dois = set()
     for tema, candidatos in por_tema.items():
         for artigo in candidatos:
-            if artigo["doc_id"] not in vistos:
-                artigo["_tema"] = tema
-                pool.append(artigo)
-                vistos.add(artigo["doc_id"])
+            if artigo["doc_id"] in vistos_ids:
+                continue
+            doi = (artigo.get("doi") or "").strip().lower()
+            if doi and doi in vistos_dois:
+                continue
+            artigo["_tema"] = tema
+            pool.append(artigo)
+            vistos_ids.add(artigo["doc_id"])
+            if doi:
+                vistos_dois.add(doi)
 
     def _date_int(a):
         d = (a.get("data_publicacao") or "0000-00-00").replace("-", "")
@@ -234,11 +264,15 @@ def selecionar_artigos_por_tema(por_tema):
     tipo_revisao  = {"revisao_geral", "revisao", "revisao_sistematica_meta_analise", "metanalise", "guideline"}
 
     art1_e_original = tipo1 in tipo_original
+    doi1 = (art1.get("doi") or "").strip().lower()
     art2 = None
 
     for candidato in pool[1:]:
         if candidato["doc_id"] == art1["doc_id"]:
             continue
+        doi_c = (candidato.get("doi") or "").strip().lower()
+        if doi_c and doi_c == doi1:
+            continue  # mesmo estudo com doc_id diferente
         tipo_c = (candidato.get("tipo_estudo") or "").lower()
         # Prefere tipo diferente
         if art1_e_original and tipo_c in tipo_revisao:
@@ -248,12 +282,16 @@ def selecionar_artigos_por_tema(por_tema):
             art2 = candidato
             break
 
-    # Fallback: próximo da lista independente do tipo
+    # Fallback: próximo da lista independente do tipo (mas nunca mesmo DOI)
     if art2 is None:
         for candidato in pool[1:]:
-            if candidato["doc_id"] != art1["doc_id"]:
-                art2 = candidato
-                break
+            if candidato["doc_id"] == art1["doc_id"]:
+                continue
+            doi_c = (candidato.get("doi") or "").strip().lower()
+            if doi_c and doi_c == doi1:
+                continue
+            art2 = candidato
+            break
 
     if art2:
         selecionados.append(art2)
