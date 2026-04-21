@@ -26,17 +26,29 @@ except ImportError:
 # =============================================================================
 # CONFIGURAÇÃO — lida de variáveis de ambiente (GitHub Secrets / .env local)
 # =============================================================================
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ["SUPABASE_KEY"]
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY", "")
 
 # Z-API WhatsApp
-ZAPI_BASE         = os.environ["ZAPI_BASE"]
-ZAPI_CLIENT_TOKEN = os.environ["ZAPI_CLIENT_TOKEN"]
+ZAPI_BASE         = os.environ.get("ZAPI_BASE", "")
+ZAPI_CLIENT_TOKEN = os.environ.get("ZAPI_CLIENT_TOKEN", "")
 ZAPI_HEADERS      = {"Client-Token": ZAPI_CLIENT_TOKEN}
 
 # Telegram
-TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "237863636")
+
+# Validação antecipada de credenciais críticas
+_missing = [k for k, v in {
+    "SUPABASE_URL": SUPABASE_URL,
+    "SUPABASE_SERVICE_KEY": SUPABASE_KEY,
+    "ZAPI_BASE": ZAPI_BASE,
+    "ZAPI_CLIENT_TOKEN": ZAPI_CLIENT_TOKEN,
+}.items() if not v]
+if _missing:
+    print(f"❌ ERRO: secrets não configurados: {', '.join(_missing)}")
+    print("   Configure em: GitHub → Settings → Secrets and variables → Actions")
+    sys.exit(1)
 
 # Distribuição
 ARTIGOS_POR_DIA = 2
