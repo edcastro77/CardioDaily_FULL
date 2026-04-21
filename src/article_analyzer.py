@@ -260,10 +260,10 @@ from taxonomy import TAXONOMY_CATEGORIES, TAXONOMY_SET as _TAXONOMY_SET, PROMPT_
 # - Revisões e Guidelines: Claude Sonnet 4 (análise profunda)
 # - Artigos Originais e Meta-análises: Gemini 2.5 Pro (poder estatístico)
 MODEL_CONFIG = {
-    # Revisões e Guidelines - Claude Sonnet 4
-    'revisao_geral': 'claude-sonnet-4-5-20250929',
-    'guideline': 'claude-sonnet-4-5-20250929',
-    'ponto_de_vista': 'claude-sonnet-4-5-20250929',
+    # Revisões e Guidelines - Claude Sonnet 4.6
+    'revisao_geral': 'claude-sonnet-4-6',
+    'guideline': 'claude-sonnet-4-6',
+    'ponto_de_vista': 'claude-sonnet-4-6',
     # Meta-análises e originais -> Gemini 2.5 Pro
     'revisao_sistematica_meta_analise': 'gemini-2.5-pro',
     'artigo_original': 'gemini-2.5-pro',
@@ -1410,21 +1410,26 @@ class ArticleAnalyzer:
         Suporta os formatos gerados pelo AI:
           - "Nota de aplicabilidade clínica: 8/10"
           - "| **Nota de aplicabilidade clínica** | **8**/10 |"  (tabela markdown)
-          - "Nota de aplicabilidade clínica: X/10" no system_message
+          - "**Nota:** [ 7 ] /10"  (formato metanálises Gemini)
+          - "║  APLICABILIDADE: 7/10"  (caixa de resumo Gemini)
         """
         # Padrões em ordem de especificidade — param no primeiro match válido.
-        # \*{0,2} captura markdown bold opcional ao redor do número.
         patterns = [
+            # Formato padrão: "Nota de aplicabilidade clínica: 8/10"
             r'Nota de aplicabilidade cl[ií]nica[^0-9]{0,40}\*{0,2}(\d+)\*{0,2}/10',
             r'Aplicabilidade cl[ií]nica[^0-9]{0,40}\*{0,2}(\d+)\*{0,2}/10',
             r'Nota de aplicabilidade[^0-9]{0,40}\*{0,2}(\d+)\*{0,2}/10',
+            # Formato metanálises Gemini: "## Nota de Aplicabilidade Clínica\n**Nota:** [ 7 ] /10"
+            r'Nota de Aplicabilidade\s+Cl[ií]nica[^0-9]{0,120}\[\s*(\d+)\s*\]',
+            # Caixa de resumo: "║  APLICABILIDADE: 7/10"
+            r'APLICABILIDADE:\s*(\d+)/10',
         ]
 
         for pattern in patterns:
             match = re.search(pattern, analysis_text, re.IGNORECASE)
             if match:
                 score = int(match.group(1))
-                if 0 <= score <= 10:
+                if 1 <= score <= 10:
                     return score
 
         print("   ⚠️  Nota de aplicabilidade clínica não encontrada na análise, usando 0")
@@ -1767,46 +1772,25 @@ class ArticleAnalyzer:
             audio_path = None
 
             # ========== VERIFICAÇÃO EXTRA PARA PODCAST ==========
-            # Só gera podcast se:
+            # Gera podcast se:
             # 1. nota_aplicabilidade_clinica >= 8
-            # 2. Tipo canônico == "original"
-            # 3. NÃO é revisão/meta-análise disfarçada (verificar keywords no texto)
-            
+            # 2. Tipo canônico em: original, revisao, metanalise, guideline
+
+            TIPOS_COM_PODCAST = {"original", "revisao", "metanalise", "guideline"}
+
             should_generate_podcast = False
             skip_reason = None
-            
+
             if score < 8:
                 skip_reason = f"Nota de aplicabilidade insuficiente ({score}/10 — mínimo: 8)"
-            elif canonical_type != "original":
-                skip_reason = f"Tipo não é original ({canonical_type})"
+            elif canonical_type not in TIPOS_COM_PODCAST:
+                skip_reason = f"Tipo não elegível para podcast ({canonical_type})"
             else:
-                # Verificação extra: checar se NÃO é revisão/meta-análise disfarçada
-                # NOTA: Muitos artigos originais citam/discutem meta-análises, então
-                # o threshold precisa ser alto para evitar falsos positivos.
-                # Verificamos apenas as primeiras 3000 chars (abstract/intro) para
-                # evitar que referências no body ativem o filtro indevidamente.
-                text_head = (text[:3000] if text else "").lower()
-
-                # Red flags FORTES (só no abstract/intro) que indicam que o PRÓPRIO
-                # artigo é uma revisão/meta-análise, não que ele apenas cita uma.
-                meta_review_indicators = [
-                    'systematic review and meta-analysis',
-                    'prisma flow diagram', 'prisma checklist',
-                    'forest plot', 'funnel plot',
-                    'we searched medline', 'we searched pubmed',
-                    'databases were searched', 'eligible studies',
-                ]
-
-                red_flag_count = sum(1 for indicator in meta_review_indicators if indicator in text_head)
-
-                if red_flag_count >= 2:
-                    skip_reason = f"Possível revisão/meta-análise disfarçada ({red_flag_count} indicadores no abstract)"
-                    print(f"   ⚠️  ALERTA: Artigo classificado como original mas tem {red_flag_count} indicadores de revisão/meta-análise no abstract")
-                else:
-                    should_generate_podcast = True
+                should_generate_podcast = True
 
             if should_generate_podcast:
-                print(f"\n7️⃣ Original com score ≥ 8: Gerando podcast...")
+                tipo_label = {"original": "Original", "revisao": "Revisão", "metanalise": "Meta-análise", "guideline": "Guideline"}.get(canonical_type, canonical_type)
+                print(f"\n7️⃣ {tipo_label} com score ≥ 8: Gerando podcast...")
 
                 if self.podcast_script_generator and self.audio_enabled:
                     # Gerar script de podcast
@@ -1868,10 +1852,8 @@ class ArticleAnalyzer:
                 print(f"\n7️⃣ Pulando podcast: {skip_reason}")
                 if skip_reason and "Nota de aplicabilidade insuficiente" in skip_reason:
                     audio_status = "skipped_low_score"
-                elif skip_reason and "não é original" in skip_reason:
-                    audio_status = "skipped_not_original"
-                elif skip_reason and "disfarçada" in skip_reason:
-                    audio_status = "skipped_misclassified_review"
+                elif skip_reason and "não elegível" in skip_reason:
+                    audio_status = "skipped_type_not_eligible"
                 else:
                     audio_status = "skipped"
             
@@ -1972,6 +1954,7 @@ class ArticleAnalyzer:
                     "audio_status": audio_status,
                     "mindmap_status": mindmap_render_status if mindmap_render_status == "rendered" else ("extracted" if mindmap_path_abs else "not_found"),
                     "infographic_status": infographic_status,
+                    "visual_abstract_status": visual_abstract_status,
                 },
                 "artifacts": {
                     "article_dir": article_dir_rel_from_outputs,
@@ -1988,6 +1971,22 @@ class ArticleAnalyzer:
 
             with open(json_path, 'w', encoding='utf-8') as jf:
                 json.dump(analysis_json, jf, ensure_ascii=False, indent=2)
+
+            # Alertar sobre metadados incompletos (título, data, revista)
+            _titulo_ok = bool(_titulo_real and len(_titulo_real.split()) >= 3 and not _titulo_parece_filename(_titulo_real, filename))
+            _data_ok = bool(_pub_date and re.match(r'^\d{4}-\d{2}', _pub_date))
+            _revista_ok = bool(analysis_json["source"].get("journal", "").strip())
+            if not _titulo_ok or not _data_ok or not _revista_ok:
+                print(f"\n   ⚠️  METADADOS INCOMPLETOS — artigo indexado com dados parciais:")
+                if not _titulo_ok:
+                    print(f"      ❌ Título: '{_titulo_real}' (parece nome do arquivo ou vazio)")
+                    print(f"         → Renomeie o PDF: YYYY-MM-Revista-Titulo-Real.pdf")
+                if not _data_ok:
+                    print(f"      ❌ Data publicação: '{_pub_date}' (vazia ou inválida)")
+                    print(f"         → PDF deve ter formato: 2026-04-Lancet-Titulo.pdf")
+                if not _revista_ok:
+                    print(f"      ❌ Revista: não extraída do nome do arquivo")
+                print(f"      💡 Use: indexar_corpus_completo.py para corrigir após renomear o PDF")
 
             print(f"   ✅ Pacote salvo: outputs/corpus/{doc_id}/")
 

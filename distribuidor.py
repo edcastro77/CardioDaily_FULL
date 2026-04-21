@@ -12,10 +12,9 @@ Uso:
 
 import sys
 import os
-import random
 import httpx
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from supabase import create_client
 
 try:
@@ -41,9 +40,9 @@ TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "237863636")
 
 # Distribuição
 ARTIGOS_POR_DIA = 2
-DATA_INICIO = "2026-02-01"   # janela fixa — inclui revistas mensais/bimestrais
-NOTA_MINIMA = 7
-PRE_SELECAO = 8
+JANELA_DIAS    = 15          # busca nos últimos 15 dias
+NOTA_MINIMA    = 7
+PRE_SELECAO    = 5           # top-N por tema antes de sortear
 
 # Logging
 os.makedirs("logs", exist_ok=True)
@@ -127,27 +126,127 @@ def resolver_doencas(temas):
     return list(doencas)
 
 
-def buscar_candidatos(sb, doencas, ja_enviados):
+JANELAS_FALLBACK = [15, 30, 60]  # dias — tenta cada janela em ordem
+
+
+def _data_inicio(dias):
+    return (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%d")
+
+
+def _buscar_tema(sb, tema, doencas, ja_set, dias):
+    """Busca artigos de um tema numa janela específica."""
     result = sb.table("artigos").select(
         "doc_id, titulo, revista, doenca_principal, tipo_estudo, "
         "nota_aplicabilidade, caminho_visual_abstract, caminho_audio, caminho_pdf"
-    ).gte("data_publicacao", DATA_INICIO
+    ).gte("data_publicacao", _data_inicio(dias)
     ).gte("nota_aplicabilidade", NOTA_MINIMA
     ).in_("doenca_principal", doencas
     ).order("nota_aplicabilidade", desc=True
-    ).limit(50).execute()
+    ).order("data_publicacao", desc=True
+    ).limit(PRE_SELECAO).execute()
+    return [a for a in (result.data or []) if a["doc_id"] not in ja_set]
 
-    if not result.data:
+
+def buscar_candidatos_por_tema(sb, temas, ja_enviados):
+    """
+    Para cada tema subscrito busca os melhores artigos com fallback:
+    tenta 15 dias → 30 dias → 60 dias até encontrar artigos.
+    Retorna dict {tema: [artigos]}.
+    """
+    ja_set = set(ja_enviados or [])
+    por_tema = {}
+
+    for tema in temas:
+        doencas = TEMA_PARA_DOENCAS.get(tema.lower().strip(), [])
+        if not doencas:
+            continue
+        for dias in JANELAS_FALLBACK:
+            candidatos = _buscar_tema(sb, tema, doencas, ja_set, dias)
+            if candidatos:
+                por_tema[tema] = candidatos
+                if dias > JANELAS_FALLBACK[0]:
+                    log.info(f"  [{tema}] sem artigos em {JANELAS_FALLBACK[0]}d → usando janela {dias}d")
+                break
+
+    return por_tema
+
+
+def selecionar_artigos_por_tema(por_tema):
+    """
+    Seleciona ARTIGOS_POR_DIA artigos.
+
+    Regras:
+    1. Junta todos os candidatos de todos os temas num pool único.
+    2. Ordena por nota_aplicabilidade DESC → data_publicacao DESC.
+    3. Artigo 1: melhor do pool (sem random).
+    4. Artigo 2: melhor do pool com tipo diferente do artigo 1.
+       Se não houver tipo diferente disponível, pega o próximo da lista.
+    5. Nunca envia o mesmo doc_id duas vezes.
+    """
+    if not por_tema:
         return []
-    return [a for a in result.data if a["doc_id"] not in (ja_enviados or [])]
 
+    # Montar pool único com tag de tema
+    pool = []
+    vistos = set()
+    for tema, candidatos in por_tema.items():
+        for artigo in candidatos:
+            if artigo["doc_id"] not in vistos:
+                artigo["_tema"] = tema
+                pool.append(artigo)
+                vistos.add(artigo["doc_id"])
 
-def selecionar_artigos(candidatos):
-    if not candidatos:
+    def _date_int(a):
+        d = (a.get("data_publicacao") or "0000-00-00").replace("-", "")
+        try:
+            return int(d)
+        except ValueError:
+            return 0
+
+    # Ordenar: nota DESC → data_publicacao DESC
+    pool.sort(key=lambda a: (-(a.get("nota_aplicabilidade") or 0), -_date_int(a)))
+
+    if not pool:
         return []
-    top = candidatos[:PRE_SELECAO]
-    qtd = min(ARTIGOS_POR_DIA, len(top))
-    return random.sample(top, qtd)
+
+    # Artigo 1: melhor disponível
+    art1 = pool[0]
+    tipo1 = (art1.get("tipo_estudo") or "").lower()
+    selecionados = [art1]
+
+    if ARTIGOS_POR_DIA < 2:
+        return selecionados
+
+    # Artigo 2: prefere tipo diferente
+    tipo_original = {"artigo_original", "original"}
+    tipo_revisao  = {"revisao_geral", "revisao", "revisao_sistematica_meta_analise", "metanalise", "guideline"}
+
+    art1_e_original = tipo1 in tipo_original
+    art2 = None
+
+    for candidato in pool[1:]:
+        if candidato["doc_id"] == art1["doc_id"]:
+            continue
+        tipo_c = (candidato.get("tipo_estudo") or "").lower()
+        # Prefere tipo diferente
+        if art1_e_original and tipo_c in tipo_revisao:
+            art2 = candidato
+            break
+        if not art1_e_original and tipo_c in tipo_original:
+            art2 = candidato
+            break
+
+    # Fallback: próximo da lista independente do tipo
+    if art2 is None:
+        for candidato in pool[1:]:
+            if candidato["doc_id"] != art1["doc_id"]:
+                art2 = candidato
+                break
+
+    if art2:
+        selecionados.append(art2)
+
+    return selecionados
 
 
 def montar_mensagem(artigo, html=False):
@@ -339,6 +438,7 @@ def distribuir_artigos():
     log.info("=" * 60)
     log.info("DISTRIBUIÇÃO DIÁRIA — 07:00")
     log.info(f"Data: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    log.info(f"Janela: últimos {JANELA_DIAS} dias (desde {_data_inicio(JANELAS_FALLBACK[0])})")
     log.info("=" * 60)
 
     sb = conectar_supabase()
@@ -352,25 +452,25 @@ def distribuir_artigos():
         ja_enviados = assinante.get("artigos_enviados", [])
 
         log.info(f"\n{'─' * 40}")
-        log.info(f"Assinante: {nome} ({phone})")
+        log.info(f"Assinante: {nome} ({phone}) | temas: {temas}")
 
-        doencas = resolver_doencas(temas)
-        if not doencas:
-            log.warning("  Sem doenças mapeadas. Pulando.")
+        por_tema = buscar_candidatos_por_tema(sb, temas, ja_enviados)
+        temas_com_artigos = list(por_tema.keys())
+        total_candidatos = sum(len(v) for v in por_tema.values())
+        log.info(f"  Temas com artigos novos: {temas_com_artigos}")
+        log.info(f"  Total candidatos: {total_candidatos}")
+
+        if not por_tema:
+            log.warning("  Sem artigos novos nos últimos 15 dias.")
             continue
 
-        candidatos = buscar_candidatos(sb, doencas, ja_enviados)
-        log.info(f"  Candidatos: {len(candidatos)}")
-
-        if not candidatos:
-            log.warning("  Sem artigos novos.")
-            continue
-
-        selecionados = selecionar_artigos(candidatos)
+        selecionados = selecionar_artigos_por_tema(por_tema)
         log.info(f"  Selecionados: {len(selecionados)}")
 
         doc_ids = []
         for artigo in selecionados:
+            tema_tag = artigo.pop("_tema", "")
+            log.info(f"  → [{tema_tag}] {artigo.get('titulo','')[:55]}...")
             enviar_artigo(phone, artigo)
             doc_ids.append(artigo["doc_id"])
             total += 1
@@ -460,6 +560,7 @@ def distribuir_radar():
 def modo_teste():
     log.info("=" * 60)
     log.info("MODO TESTE — nenhuma mensagem será enviada")
+    log.info(f"Janela: últimos {JANELA_DIAS} dias (desde {_data_inicio(JANELAS_FALLBACK[0])})")
     log.info("=" * 60)
 
     sb = conectar_supabase()
@@ -468,20 +569,19 @@ def modo_teste():
     for a in assinantes:
         nome = a.get("nome", "?")
         temas = a.get("temas", [])
-        doencas = resolver_doencas(temas)
-        candidatos = buscar_candidatos(sb, doencas, a.get("artigos_enviados", []))
-        selecionados = selecionar_artigos(candidatos)
+        por_tema = buscar_candidatos_por_tema(sb, temas, a.get("artigos_enviados", []))
+        selecionados = selecionar_artigos_por_tema(por_tema)
 
         log.info(f"\n{nome}:")
         log.info(f"  Temas: {temas}")
-        log.info(f"  Doenças mapeadas: {len(doencas)}")
-        log.info(f"  Candidatos: {len(candidatos)}")
+        log.info(f"  Temas com artigos: {list(por_tema.keys())}")
         log.info(f"  Selecionados:")
         for s in selecionados:
-            va = "✅" if s.get("caminho_visual_abstract") else "❌"
+            tema_tag = s.pop("_tema", "")
+            va    = "✅" if s.get("caminho_visual_abstract") else "❌"
             audio = "✅" if s.get("caminho_audio") else "❌"
-            pdf = "✅" if s.get("caminho_pdf") and s["caminho_pdf"].startswith("http") else "❌"
-            log.info(f"    [{s['nota_aplicabilidade']}] {s['titulo'][:55]}...")
+            pdf   = "✅" if s.get("caminho_pdf") and s["caminho_pdf"].startswith("http") else "❌"
+            log.info(f"    [{tema_tag}] [{s['nota_aplicabilidade']}] {s['titulo'][:55]}...")
             log.info(f"         VA:{va}  Audio:{audio}  PDF:{pdf}")
 
 

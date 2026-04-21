@@ -523,6 +523,12 @@ class VisualAbstractGenerator:
         print(f"  📸 Capturando PNG...")
         self._html_to_png(html, output_path)
 
+        if not output_path.exists() or output_path.stat().st_size < 1024:
+            raise RuntimeError(
+                f"Playwright falhou: {output_path.name} não criado ou muito pequeno "
+                f"({output_path.stat().st_size if output_path.exists() else 0} bytes)"
+            )
+
         size_kb = output_path.stat().st_size / 1024
         print(f"  ✅ Visual Abstract gerado: {output_path.name} ({size_kb:.0f} KB)")
 
@@ -537,8 +543,13 @@ class VisualAbstractGenerator:
             doc_id = article_dir.name
             public_url = upload_visual_abstract_supabase(doc_id, output_path)
             if public_url:
-                atualizar_campo_supabase(doc_id, "caminho_visual_abstract", public_url)
-                print(f"  ☁️  Publicado: {public_url}")
+                ok = atualizar_campo_supabase(doc_id, "caminho_visual_abstract", public_url)
+                if ok:
+                    print(f"  ☁️  Publicado e Supabase atualizado: {public_url}")
+                else:
+                    print(f"  ⚠️  Upload OK mas Supabase NÃO atualizado (PATCH retornou erro)")
+            else:
+                print(f"  ⚠️  Upload para Storage falhou (URL não retornada)")
         except Exception as e:
             print(f"  ⚠️  Upload Supabase falhou (não-fatal): {e}")
 
