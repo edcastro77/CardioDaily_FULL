@@ -218,10 +218,9 @@ def selecionar_artigos_por_tema(por_tema):
     Regras:
     1. Junta todos os candidatos de todos os temas num pool único.
     2. Ordena por nota_aplicabilidade DESC → data_publicacao DESC.
-    3. Artigo 1: melhor do pool (sem random).
-    4. Artigo 2: melhor do pool com tipo diferente do artigo 1.
-       Se não houver tipo diferente disponível, pega o próximo da lista.
-    5. Nunca envia o mesmo doc_id duas vezes.
+    3. Sempre 1 original + 1 revisão/guideline/meta-análise quando disponível.
+    4. Se só houver um tipo, envia os 2 melhores daquele tipo.
+    5. Nunca envia o mesmo DOI duas vezes.
     """
     if not por_tema:
         return []
@@ -256,50 +255,44 @@ def selecionar_artigos_por_tema(por_tema):
     if not pool:
         return []
 
-    # Artigo 1: melhor disponível
-    art1 = pool[0]
-    tipo1 = (art1.get("tipo_estudo") or "").lower()
-    selecionados = [art1]
-
-    if ARTIGOS_POR_DIA < 2:
-        return selecionados
-
-    # Artigo 2: prefere tipo diferente
     tipo_original = {"artigo_original", "original"}
     tipo_revisao  = {"revisao_geral", "revisao", "revisao_sistematica_meta_analise", "metanalise", "guideline"}
 
-    art1_e_original = tipo1 in tipo_original
-    doi1 = (art1.get("doi") or "").strip().lower()
-    art2 = None
+    def _tipo(a):
+        return (a.get("tipo_estudo") or "").lower()
 
-    for candidato in pool[1:]:
-        if candidato["doc_id"] == art1["doc_id"]:
+    def _doi(a):
+        return (a.get("doi") or "").strip().lower()
+
+    # Separa pool em originais e revisões
+    originais = [a for a in pool if _tipo(a) in tipo_original]
+    revisoes  = [a for a in pool if _tipo(a) in tipo_revisao]
+
+    # Melhor original e melhor revisão (já ordenados por nota DESC)
+    best_orig = originais[0] if originais else None
+    best_rev  = revisoes[0]  if revisoes  else None
+
+    if ARTIGOS_POR_DIA < 2:
+        art1 = best_orig or best_rev or pool[0]
+        return [art1]
+
+    # Meta: 1 original + 1 revisão sempre que possível
+    if best_orig and best_rev and _doi(best_orig) != _doi(best_rev):
+        return [best_orig, best_rev]
+
+    # Só um tipo disponível: melhores 2 do mesmo tipo (sem repetir DOI)
+    fonte = originais if originais else revisoes if revisoes else pool
+    selecionados = []
+    dois_vistos: set = set()
+    for a in fonte:
+        doi_a = _doi(a)
+        if doi_a and doi_a in dois_vistos:
             continue
-        doi_c = (candidato.get("doi") or "").strip().lower()
-        if doi_c and doi_c == doi1:
-            continue  # mesmo estudo com doc_id diferente
-        tipo_c = (candidato.get("tipo_estudo") or "").lower()
-        # Prefere tipo diferente
-        if art1_e_original and tipo_c in tipo_revisao:
-            art2 = candidato
+        selecionados.append(a)
+        if doi_a:
+            dois_vistos.add(doi_a)
+        if len(selecionados) == ARTIGOS_POR_DIA:
             break
-        if not art1_e_original and tipo_c in tipo_original:
-            art2 = candidato
-            break
-
-    # Fallback: próximo da lista independente do tipo (mas nunca mesmo DOI)
-    if art2 is None:
-        for candidato in pool[1:]:
-            if candidato["doc_id"] == art1["doc_id"]:
-                continue
-            doi_c = (candidato.get("doi") or "").strip().lower()
-            if doi_c and doi_c == doi1:
-                continue
-            art2 = candidato
-            break
-
-    if art2:
-        selecionados.append(art2)
 
     return selecionados
 
