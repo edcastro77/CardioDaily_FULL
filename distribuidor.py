@@ -164,6 +164,11 @@ def _buscar_tema(sb, tema, doencas, ja_set, ja_dois, dias):
         doi = (a.get("doi") or "").strip().lower()
         if doi and doi in ja_dois:
             continue
+        # Só artigos com VA e áudio — sem eles o envio é incompleto
+        if not a.get("caminho_visual_abstract"):
+            continue
+        if not a.get("caminho_audio"):
+            continue
         filtrados.append(a)
     return filtrados[:PRE_SELECAO]
 
@@ -313,8 +318,7 @@ def montar_mensagem(artigo, html=False):
         if artigo.get("nota_aplicabilidade"):
             estrelas = "⭐" * int(artigo["nota_aplicabilidade"])
             msg += f"NAC: {artigo['nota_aplicabilidade']}/10 {estrelas}\n"
-        if artigo.get("caminho_pdf") and artigo["caminho_pdf"].startswith("http"):
-            msg += f"\n📄 Análise completa: {artigo['caminho_pdf']}"
+        # PDF link removido — geração atual não produz documento de qualidade
         if artigo.get("caminho_audio"):
             msg += f"\n🎙️ Resumo em áudio: {artigo['caminho_audio']}"
     else:
@@ -328,8 +332,7 @@ def montar_mensagem(artigo, html=False):
         if artigo.get("nota_aplicabilidade"):
             estrelas = "⭐" * int(artigo["nota_aplicabilidade"])
             msg += f"NAC: {artigo['nota_aplicabilidade']}/10 {estrelas}\n"
-        if artigo.get("caminho_pdf") and artigo["caminho_pdf"].startswith("http"):
-            msg += f"\n📄 Análise completa: {artigo['caminho_pdf']}"
+        # PDF link removido — geração atual não produz documento de qualidade
         if artigo.get("caminho_audio"):
             msg += f"\n🎙️ Resumo em áudio: {artigo['caminho_audio']}"
     return msg
@@ -474,10 +477,6 @@ def enviar_artigo(phone, artigo):
     if artigo.get("caminho_audio"):
         zapi_send_audio(phone, artigo["caminho_audio"])
         tg_send_audio(artigo["caminho_audio"], f"CardioDaily - {titulo[:50]}")
-
-    # 4. PDF
-    if artigo.get("caminho_pdf") and artigo["caminho_pdf"].startswith("http"):
-        zapi_send_document(phone, artigo["caminho_pdf"], f"CardioDaily_{artigo['doc_id']}.pdf")
 
 
 # =============================================================================
