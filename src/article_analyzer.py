@@ -1293,6 +1293,8 @@ class ArticleAnalyzer:
             json_path = os.path.join(article_dir, "analysis.json")
 
             _pub_date = extract_pub_date_from_filename(filename)
+            if not _pub_date or "article in press" in filename.lower():
+                _pub_date = analysis_dt[:10]
             md = (
                 "---\n"
                 f"doc_id: \"{doc_id}\"\n"
@@ -1555,6 +1557,8 @@ class ArticleAnalyzer:
                     analysis_dt = now_iso_brt()
 
                     _pub_date = extract_pub_date_from_filename(filename)
+                    if not _pub_date or "article in press" in filename.lower():
+                        _pub_date = analysis_dt[:10]
                     md_stub = (
                         "---\n"
                         f"doc_id: \"{doc_id}\"\n"
@@ -1727,6 +1731,15 @@ class ArticleAnalyzer:
                 _crossref_date = extract_pub_date_from_crossref(doi_clean)
                 if _crossref_date:
                     _pub_date = _crossref_date
+            # Article in Press: sem data real → usar data da análise
+            _is_in_press = (
+                not _pub_date
+                or "article in press" in (text[:500] if text else "").lower()
+                or "article in press" in filename.lower()
+            )
+            if _is_in_press and not _pub_date:
+                _pub_date = analysis_dt[:10]  # YYYY-MM-DD da análise
+                print(f"   📅 Article in Press — usando data da análise: {_pub_date}")
             # Extrair título real do artigo (do texto da análise ou do PDF)
             _titulo_real = extract_podcast_article_title(analysis, filename)
             with open(md_path, 'w', encoding='utf-8') as f:

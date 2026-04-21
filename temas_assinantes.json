@@ -1,0 +1,20 @@
+{
+  "Carol":            ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Dr. Eduardo Castro":["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia", "uti", "imagem", "prevencao", "genomica", "obstetrica", "oncologia"],
+  "Mateus":           ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Diogo Coutinho":   ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Leonardo":         ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Michele":          ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Alice":            ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Bonaldi":          ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Figuinha":         ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Lapa":             ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Bruno":            ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Dário":            ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Patrick":          ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Salomão":          ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Gabriel":          ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Sanderson":        ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Alexandre Varela": ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"],
+  "Fernanda":         ["coronaria", "cardiometabolico", "miocardiopatias", "valvulopatias", "arritmia"]
+}
