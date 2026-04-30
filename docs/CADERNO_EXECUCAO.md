@@ -222,7 +222,14 @@ pip install supabase httpx python-telegram-bot
 - [x] Radar: OpenAI TTS → ElevenLabs PT-BR (29/Abr)
 - [x] Distribuidor: 1 artigo/dia, nota ≥ 8, prioridade Original > Meta > Revisão (29/Abr)
 - [x] Cron corrigido: `/opt/homebrew/bin/python3` → `venv/bin/python3` (30/Abr — era a causa raiz: distribuidor.py nunca executava)
-- [x] `daily_sender.py` corrigido: nota ≥ 8, 1 artigo, filtro `created_at`, prioridade de tipo (30/Abr — era o processo que realmente enviava os artigos via web_biblioteca.py)
+- [x] `daily_sender.py` corrigido: nota ≥ 8, 1 artigo, filtro `created_at`, prioridade de tipo (30/Abr)
+- [x] GitHub Actions identificado como distribuidor real (30/Abr — roda `ubuntu-latest` independente do Mac)
+- [x] Bug crítico de áudio: `UNIFIED_AUDIO_AVAILABLE` ausente em `audio_generator.py` — pipeline nunca gerou áudio desde fevereiro (975 artigos sem áudio). Corrigido + provider trocado para ElevenLabs (30/Abr)
+
+### Pendente imediato
+- [ ] Rodar `git push` quando internet disponível — código local está 2 commits à frente do GitHub Actions
+- [ ] Backfill de áudio: 975 artigos com VA mas sem áudio precisam de geração em lote
+- [ ] Radar: não enviado hoje — investigar e corrigir
 - [x] Caderno unificado em `docs/CADERNO_EXECUCAO.md`
 - [x] Pasta raiz limpa (51 arquivos → `archive/logs_operacionais/`)
 

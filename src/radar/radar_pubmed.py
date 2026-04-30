@@ -890,7 +890,6 @@ class RadarPubMed:
         payload = {
             'text': texto,
             'model_id': mid,
-            'language_code': 'pt-BR',   # força PT-BR — elimina bug de alternância
             'voice_settings': {
                 'stability': 0.5,
                 'similarity_boost': 0.75,
