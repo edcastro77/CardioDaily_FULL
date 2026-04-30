@@ -5,9 +5,11 @@ Distribuição via Z-API (WhatsApp) + Telegram Bot.
 Roda via cron ou Agendador de Tarefas do Windows.
 
 Uso:
-  python3 distribuidor.py artigos   → distribuição diária (07:00)
-  python3 distribuidor.py radar     → podcast do radar (08:00)
-  python3 distribuidor.py teste     → simula sem enviar
+  python3 distribuidor.py artigos        → distribuição diária (07:00)
+  python3 distribuidor.py radar          → podcast do radar (08:00)
+  python3 distribuidor.py semana         → lista semanal por revista (segunda 07:30)
+  python3 distribuidor.py semana --dry-run → preview sem enviar
+  python3 distribuidor.py teste          → simula sem enviar
 """
 
 import sys
@@ -610,12 +612,142 @@ def modo_teste():
 
 
 # =============================================================================
+# LISTA SEMANAL POR REVISTA
+# =============================================================================
+
+# Mapeamento de abreviações do banco para nomes legíveis
+REVISTA_NOMES = {
+    "NEJM":              "New England Journal of Medicine",
+    "Lancet":            "The Lancet",
+    "JAMA":              "JAMA",
+    "JAMA_Cardiology":   "JAMA Cardiology",
+    "EHJ":               "European Heart Journal",
+    "EHJO":              "EHJ Open",
+    "EHF":               "European Heart Journal — Failure",
+    "EJPC":              "European Journal of Preventive Cardiology",
+    "JACC":              "JACC",
+    "JACC:_Advances":    "JACC: Advances",
+    "CCI":               "Circulation: Cardiovascular Imaging",
+    "CAE":               "Circulation: Arrhythmia and Electrophysiology",
+    "JHF":               "JACC: Heart Failure",
+    "Circulation":       "Circulation",
+    "Heart":             "Heart",
+    "Hypertension":      "Hypertension",
+    "Atherosclerosis":   "Atherosclerosis",
+    "Stroke":            "Stroke",
+    "JAHA":              "Journal of the American Heart Association",
+}
+
+# Revistas top-tier que aparecem primeiro na lista
+REVISTAS_TOP = {"NEJM", "Lancet", "JAMA", "JAMA_Cardiology", "EHJ", "JACC", "Circulation"}
+
+TIPO_SIGLA = {
+    "artigo_original":                   "original",
+    "original":                          "original",
+    "revisao_sistematica_meta_analise":   "meta",
+    "metanalise":                         "meta",
+    "revisao_geral":                     "revisão",
+    "revisao":                           "revisão",
+    "guideline":                         "guideline",
+}
+
+
+def buscar_artigos_semana(sb, dias: int = 7):
+    """Busca artigos nota >= 8 indexados nos últimos `dias` dias."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+    result = (
+        sb.table("artigos")
+        .select("id,titulo,revista,nota_aplicabilidade,tipo_estudo,doenca_principal,created_at")
+        .gte("nota_aplicabilidade", 8)
+        .gte("created_at", cutoff)
+        .order("revista", desc=False)
+        .order("nota_aplicabilidade", desc=True)
+        .limit(200)
+        .execute()
+    )
+    return result.data or []
+
+
+def montar_lista_semanal(artigos: list) -> str:
+    """Formata a lista semanal agrupada por revista para WhatsApp."""
+    if not artigos:
+        return "📭 Nenhum artigo com nota ≥ 8 indexado esta semana."
+
+    # Agrupar por revista
+    por_revista: dict[str, list] = {}
+    for a in artigos:
+        rev = a.get("revista") or "Sem revista"
+        por_revista.setdefault(rev, []).append(a)
+
+    # Ordenar: top-tier primeiro, depois alfabético
+    def _rev_sort(rev):
+        return (0 if rev in REVISTAS_TOP else 1, rev.lower())
+
+    data_ref = datetime.now().strftime("%d/%m/%Y")
+    linhas = [f"📋 *Destaques da semana — CardioDaily*", f"📅 {data_ref}\n"]
+
+    total = 0
+    for rev in sorted(por_revista.keys(), key=_rev_sort):
+        nome_rev = REVISTA_NOMES.get(rev, rev)
+        lista = por_revista[rev]
+        linhas.append(f"📖 *{nome_rev}*")
+        for a in lista:
+            titulo = a.get("titulo", "Sem título")
+            # Trunca título longo para caber no WhatsApp
+            if len(titulo) > 90:
+                titulo = titulo[:87] + "…"
+            nota = a.get("nota_aplicabilidade", "?")
+            tipo = TIPO_SIGLA.get(a.get("tipo_estudo", ""), a.get("tipo_estudo", "") or "")
+            tag = f"[{tipo}] " if tipo else ""
+            linhas.append(f"  • {tag}NAC {nota} — {titulo}")
+            total += 1
+        linhas.append("")  # linha em branco entre revistas
+
+    linhas.append(f"_Total: {total} artigos indexados esta semana (nota ≥ 8)_")
+    return "\n".join(linhas)
+
+
+def lista_semanal(dry_run: bool = False):
+    """Envia a lista semanal de artigos por revista para todos os assinantes."""
+    log.info("=" * 60)
+    log.info("LISTA SEMANAL — artigos por revista")
+    log.info("=" * 60)
+
+    sb = conectar_supabase()
+    artigos = buscar_artigos_semana(sb, dias=7)
+    log.info(f"  {len(artigos)} artigos nota ≥ 8 nos últimos 7 dias")
+
+    mensagem = montar_lista_semanal(artigos)
+    log.info(f"  Mensagem: {len(mensagem)} chars")
+
+    if dry_run:
+        log.info("--- PREVIEW ---")
+        log.info(mensagem)
+        log.info("--- FIM PREVIEW (dry-run, nada enviado) ---")
+        return
+
+    assinantes = buscar_assinantes_ativos(sb)
+    enviados = 0
+    for assinante in assinantes:
+        phone = assinante.get("phone", "")
+        nome = assinante.get("nome", phone)
+        ok = zapi_send_text(phone, mensagem)
+        tg_send_text(mensagem)
+        status = "✅" if ok else "⚠️"
+        log.info(f"  {status} {nome} ({phone})")
+        if ok:
+            enviados += 1
+
+    log.info(f"Lista semanal enviada para {enviados}/{len(assinantes)} assinantes.")
+
+
+# =============================================================================
 # ENTRY POINT
 # =============================================================================
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Uso: python3 distribuidor.py [artigos|radar|teste]")
+        print("Uso: python3 distribuidor.py [artigos|radar|semana|teste]")
         sys.exit(1)
 
     modo = sys.argv[1].lower()
@@ -624,8 +756,11 @@ if __name__ == "__main__":
         distribuir_artigos()
     elif modo == "radar":
         distribuir_radar()
+    elif modo == "semana":
+        dry = "--dry-run" in sys.argv
+        lista_semanal(dry_run=dry)
     elif modo == "teste":
         modo_teste()
     else:
-        print(f"Modo desconhecido: {modo}")
+        print(f"Modo desconhecido: {modo}. Use: artigos | radar | semana | teste")
         sys.exit(1)

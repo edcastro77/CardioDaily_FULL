@@ -1,6 +1,6 @@
 # CADERNO DE EXECUÇÃO — CARDIODAILY
-## Versão 16.1 | 29/Abril/2026
-### Histórico: v13.2 (20/Fev) → v15.0 (05/Abr) → v16.0 (29/Abr) → v16.1 (29/Abr)
+## Versão 16.2 | 30/Abril/2026
+### Histórico: v13.2 (20/Fev) → v15.0 (05/Abr) → v16.0 (29/Abr) → v16.1 (29/Abr) → v16.2 (30/Abr)
 
 ---
 
@@ -14,9 +14,12 @@
 - **Prioridade de tipo:** Original > Meta-análise > Revisão (dentro do tipo: nota DESC → data DESC)
 - **Implementado em `distribuidor.py`:** `ARTIGOS_POR_DIA=1`, `NOTA_MINIMA=8`, `selecionar_artigos_por_tema()` reescrita
 
-### Lista semanal por revista
-- Formato: lista dos artigos da semana agrupados por revista, com clique para expandir
-- Direção clara — implementação a definir (web ou WhatsApp)
+### Lista semanal por revista ✅ Implementado
+- **Quando:** toda segunda-feira às 07:30 BRT (cron + GitHub Actions `lista-semanal.yml`)
+- **Conteúdo:** artigos nota ≥ 8 indexados nos últimos 7 dias, agrupados por revista
+- **Formato:** mensagem WhatsApp (plain text) — top-tier primeiro (NEJM, JAMA, EHJ, JACC, Circulation), depois alfabético
+- **Campos:** tipo (original/meta/revisão), NAC, título truncado a 90 chars
+- **Comando:** `python3 distribuidor.py semana` (dry-run: `--dry-run`)
 
 ### Roadmap médio prazo
 - **Site próprio** — plataforma web do CardioDaily
@@ -227,11 +230,14 @@ pip install supabase httpx python-telegram-bot
 - [x] Bug crítico de áudio: `UNIFIED_AUDIO_AVAILABLE` ausente em `audio_generator.py` — pipeline nunca gerou áudio desde fevereiro (975 artigos sem áudio). Corrigido + provider trocado para ElevenLabs (30/Abr)
 
 ### Pendente imediato
-- [ ] Rodar `git push` quando internet disponível — código local está 2 commits à frente do GitHub Actions
-- [ ] Backfill de áudio: 975 artigos com VA mas sem áudio precisam de geração em lote
-- [ ] Radar: não enviado hoje — investigar e corrigir
+- [ ] Backfill de áudio: ~975 artigos com VA mas sem áudio — Dr. Eduardo vai gravar os scripts manualmente (voz própria, sem custo de API). Precisamos de interface para listar e acessar os scripts facilmente.
+- [ ] Lista semanal de artigos por revista — formato e frequência a definir
+- [x] Radar: gerado e enviado (30/Abr) — tema Insuficiência Cardíaca
+- [x] Bug ElevenLabs `language_code` removido (eleven_multilingual_v2 não suporta)
+- [x] Bug curadoria do Radar: Gemini incluía artigos de outras doenças. Prompt agora injeta o tema e proíbe artigos tangenciais explicitamente (30/Abr)
 - [x] Caderno unificado em `docs/CADERNO_EXECUCAO.md`
 - [x] Pasta raiz limpa (51 arquivos → `archive/logs_operacionais/`)
+- [x] Lista semanal por revista implementada em `distribuidor.py lista_semanal()` + cron segunda 07:30 BRT + GitHub Actions `lista-semanal.yml` (30/Abr)
 
 ### Pendente — Prioridade ALTA
 - [ ] Preencher credenciais no distribuidor.py (SUPABASE_SERVICE_KEY, ZAPI_TOKEN, TELEGRAM_BOT_TOKEN)
@@ -274,4 +280,4 @@ pip install supabase httpx python-telegram-bot
 
 ---
 
-*Versão 16.0 — 29/Abril/2026 — atualizado por Claude ao final da sessão*
+*Versão 16.2 — 30/Abril/2026 — atualizado por Claude ao final da sessão*
