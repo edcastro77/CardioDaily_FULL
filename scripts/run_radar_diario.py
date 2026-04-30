@@ -236,7 +236,7 @@ def run(categoria: str | None = None, dry_run: bool = False):
 
     # ── 4. Gerar script ───────────────────────────────────────────────────
     print(f"\n✍️  Gerando script de podcast…")
-    script = radar.gerar_script_pubmed(artigos, triagem, cat_nome)
+    script = radar.gerar_script_pubmed(artigos, triagem, cat_nome, tema_nome=cat_nome)
     print(f"   Script: {len(script)} chars")
 
     # ── 5. Salvar script local ────────────────────────────────────────────

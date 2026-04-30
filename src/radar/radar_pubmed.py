@@ -475,6 +475,13 @@ LEMBRE: Você trabalha apenas com RESUMOS. Use "pode mudar", "sugere", não afir
 PROMPT_PODCAST_PUBMED = """
 Você é o roteirista do Radar PubMed CardioDaily — podcast de atualização em cardiologia.
 
+TEMA DO DIA: {TEMA}
+
+REGRA ABSOLUTA DE CURADORIA: Comente APENAS artigos que sejam diretamente sobre o tema do dia.
+- Se um artigo usa pacientes com o tema como subgrupo ou contexto, mas o foco principal é outra doença — IGNORE.
+- Se a semana foi fraca para o tema, diga isso honestamente. Não preencha com artigos tangenciais.
+- Exemplos do que IGNORAR no tema "Insuficiência Cardíaca": estudo de doença coronária que menciona IC como comorbidade, subanálise de isquemia com desfecho funcional, AVC com disfunção sistólica como preditor.
+
 FILOSOFIA: duração proporcional à QUALIDADE dos artigos, não a um tempo pré-definido.
 - Artigos excelentes = análise profunda
 - Artigos ruins = explicação breve de por que ignorar
@@ -490,21 +497,20 @@ Comece sempre com:
 
 Organize por QUALIDADE (não por ordem):
 
-ARTIGOS EXCELENTES:
+ARTIGOS EXCELENTES (diretamente sobre o tema):
 - Problema clínico e contexto
 - Metodologia, população, resultados com números (HR, IC95%, NNT, p-valor)
 - Impacto prático: para quem usar, dose, quando evitar
 
-ARTIGOS MEDIANOS:
-- Resumo compacto, foco no uso prático em situações específicas
+ARTIGOS MEDIANOS: resumo compacto, foco no uso prático
 
-ARTIGOS FRACOS:
-- Agrupe: "Também vieram artigos sobre X, Y e Z, mas com N pequeno..."
+ARTIGOS FRACOS: agrupe brevemente
 
 Termine sempre com:
 "Eu sou o Dr. Eduardo Castro e este foi o Radar PubMed de hoje. Fatos à mesa para um bom aprendizado. Até a próxima!"
 
 REGRAS: SEMPRE cite números. NUNCA coloque títulos ou marcadores no texto narrado.
+NUNCA inclua artigos fora do tema {TEMA}, por melhor que sejam.
 """
 
 PROMPT_NUMERO = """
@@ -760,7 +766,7 @@ class RadarPubMed:
         return self._chamar_gemini(prompt)
 
     def gerar_script_pubmed(self, artigos: list[dict], triagem: str,
-                            contexto: str) -> str:
+                            contexto: str, tema_nome: str = '') -> str:
         """Gera script de podcast a partir de artigos + triagem."""
         resumos = ''
         for i, art in enumerate(artigos, 1):
@@ -773,8 +779,9 @@ class RadarPubMed:
                 f"- Tipos: {', '.join(art['types'][:3])}\n\n"
                 f"**Resumo:** {art['abstract']}\n\n---\n"
             )
+        prompt_com_tema = PROMPT_PODCAST_PUBMED.replace('{TEMA}', tema_nome or contexto)
         prompt = (
-            f"{PROMPT_PODCAST_PUBMED}\n\n"
+            f"{prompt_com_tema}\n\n"
             f"## TRIAGEM PRÉVIA:\n{triagem}\n\n"
             f"## ARTIGOS COMPLETOS ({len(artigos)}):\n{resumos}\n\n"
             f"CONTEXTO: {contexto}"
