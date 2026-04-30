@@ -418,8 +418,8 @@ def unique_path(path: str) -> str:
 class GeminiVisionClassifier:
     """Classifica artigos enviando imagem da primeira pagina ao Gemini."""
 
-    def __init__(self, api_key: str = None, model: str = "gemini-2.0-flash",
-                 verbose: bool = False, call_interval: float = 4.0):
+    def __init__(self, api_key: str = None, model: str = "gemini-2.5-flash",
+                 verbose: bool = False, call_interval: float = 1.0):
         self.api_key = api_key or os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')
         self.model = model
         self.verbose = verbose
@@ -514,7 +514,8 @@ class GeminiVisionClassifier:
             contents=contents,
             config=types.GenerateContentConfig(
                 temperature=0.1,
-                max_output_tokens=500,
+                max_output_tokens=1000,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             )
         )
 
@@ -755,13 +756,13 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Apenas simular")
     parser.add_argument("--no-rename", action="store_true", help="Nao renomear arquivos")
     parser.add_argument("--dest-root", help="Pasta de destino")
-    parser.add_argument("--model", default="gemini-2.0-flash", help="Modelo Gemini (default: gemini-2.0-flash)")
-    parser.add_argument("--intervalo", type=float, default=4.0, metavar="S",
-                        help="Segundos entre chamadas Gemini (default: 4 — limite free tier 15 RPM)")
+    parser.add_argument("--model", default="gemini-2.5-flash", help="Modelo Gemini (default: gemini-2.5-flash)")
+    parser.add_argument("--intervalo", type=float, default=1.0, metavar="S",
+                        help="Segundos entre chamadas Gemini (default: 1 — tier pago suporta ~60 RPM)")
     parser.add_argument("--lote", type=int, default=0, metavar="N",
                         help="Processar N PDFs por vez com pausa de 60s entre lotes (0 = sem lotes)")
     parser.add_argument("--max", type=int, default=0, metavar="N",
-                        help="Parar após N PDFs classificados (0 = sem limite). Use 200 no free tier para não esgotar quota.")
+                        help="Parar após N PDFs classificados (0 = sem limite).")
     parser.add_argument("-v", "--verbose", action="store_true", help="Log detalhado")
     args = parser.parse_args()
 
@@ -803,17 +804,11 @@ def main():
                 continue
 
             # ── PREFLIGHT CHECK ───────────────────────────────────────────
-            LIMITE_DIARIO_FREE = 200   # estimativa segura para free tier
             total_rodar = min(len(pdfs), args.max) if args.max > 0 else len(pdfs)
             tempo_min = total_rodar * args.intervalo / 60
             print(f"⏱️  PDFs na fila: {len(pdfs)}  |  Serão processados: {total_rodar}  |  Tempo: ~{tempo_min:.0f} min")
-            if args.max == 0 and len(pdfs) > LIMITE_DIARIO_FREE:
-                print(f"\n⚠️  AVISO: {len(pdfs)} PDFs pode esgotar a quota diária do Gemini free tier.")
-                print(f"   Recomendado: use --max 200 para processar 200/dia em segurança.")
-                if args.lote == 0:
-                    print(f"   Sugestão adicional: --lote 40 para pausas entre grupos.")
-            elif args.max > 0:
-                print(f"   Modo quota-safe: para após {args.max} PDFs.")
+            if args.max > 0:
+                print(f"   Modo limitado: para após {args.max} PDFs.")
             print()
             # ─────────────────────────────────────────────────────────────
 
@@ -828,7 +823,7 @@ def main():
                 if args.max > 0 and classificados_hoje >= args.max:
                     restantes = len(pdfs) - i + 1
                     print(f"\n\n🛑 Limite diário de {args.max} PDFs atingido. {restantes} PDFs aguardam amanhã.")
-                    print(f"   Execute novamente após 04h00 (reset da quota Gemini free tier).")
+                    print(f"   Execute novamente para processar o restante.")
                     break
 
                 print(f"\n[{i}/{len(pdfs)}] ", end="", flush=True)

@@ -116,6 +116,19 @@ def _normalize_date(d) -> str | None:
         return d + "-01-01"
     return None
 
+_IMPACTO_RE = re.compile(
+    r'(?:✅\s*MUDA CONDUTA|⏳\s*EM INVESTIGAÇÃO|📚\s*CONTEXTO)[:\s]*.{5,120}',
+    re.IGNORECASE
+)
+
+def _extract_impacto_pratica(md_content: str) -> str | None:
+    """Extrai a linha de impacto clínico do MD gerado pelo prompt."""
+    m = _IMPACTO_RE.search(md_content)
+    if m:
+        return m.group(0).strip()[:200]
+    return None
+
+
 _SKIP_HEADING = re.compile(
     r'^(Análise|Analysis|Contextualiz|Descrição|Principais|Interpretação|'
     r'Discussão|Conclusão|Take.Home|ETAPA|Resumo|BLOCO|Ficha|Seção|'
@@ -204,6 +217,9 @@ def extract_metadata(folder):
         if nota_geral is None or nota_geral < 5:
             return None
 
+        # Impacto na prática clínica — extraído do MD se não estiver no JSON
+        impacto_pratica = data.get("analysis", {}).get("impacto_pratica") or _extract_impacto_pratica(md_content)
+
         with open(md_path, "r", encoding="utf-8") as f:
             md_content = f.read()
 
@@ -266,6 +282,7 @@ def extract_metadata(folder):
             "populacao":                populacao,
             "intervencao":              intervencao,
             "caminho_visual_abstract":  caminho_va,
+            "impacto_pratica":          impacto_pratica,
             # resumo_md só enviado ao Claude se doenca_principal estiver faltando
             "_resumo_md":               md_content[:2500] if not doenca_principal else None,
             "caminho_pasta":            str(folder),
@@ -425,6 +442,8 @@ def importar_supabase(metadata):
         # Incluir URL do visual abstract se existir localmente
         if metadata.get("caminho_visual_abstract"):
             data["caminho_visual_abstract"] = metadata["caminho_visual_abstract"]
+        if metadata.get("impacto_pratica"):
+            data["impacto_pratica"] = metadata["impacto_pratica"]
         response = requests.post(url, headers=headers, json=data)
         if response.status_code not in [200, 201, 204]:
             log(f"❌ importar {metadata['doc_id']}: HTTP {response.status_code} — {response.text[:300]}")

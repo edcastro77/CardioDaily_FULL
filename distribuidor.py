@@ -51,9 +51,9 @@ if _missing:
     sys.exit(1)
 
 # Distribuição
-ARTIGOS_POR_DIA = 2
+ARTIGOS_POR_DIA = 1
 JANELA_DIAS    = 15          # busca nos últimos 15 dias
-NOTA_MINIMA    = 7
+NOTA_MINIMA    = 8
 PRE_SELECAO    = 5           # top-N por tema antes de sortear
 
 # Logging
@@ -149,7 +149,7 @@ def _buscar_tema(sb, tema, doencas, ja_set, ja_dois, dias):
     """Busca artigos de um tema numa janela específica."""
     result = sb.table("artigos").select(
         "doc_id, doi, titulo, revista, doenca_principal, tipo_estudo, "
-        "nota_aplicabilidade, caminho_visual_abstract, caminho_audio, caminho_pdf"
+        "nota_aplicabilidade, impacto_pratica, caminho_visual_abstract, caminho_audio, caminho_pdf"
     ).gte("data_publicacao", _data_inicio(dias)
     ).gte("nota_aplicabilidade", NOTA_MINIMA
     ).in_("doenca_principal", doencas
@@ -213,22 +213,43 @@ def buscar_candidatos_por_tema(sb, temas, ja_enviados):
 
 def selecionar_artigos_por_tema(por_tema):
     """
-    Seleciona ARTIGOS_POR_DIA artigos.
+    Seleciona 1 artigo por dia.
 
     Regras:
-    1. Junta todos os candidatos de todos os temas num pool único.
-    2. Ordena por nota_aplicabilidade DESC → data_publicacao DESC.
-    3. Sempre 1 original + 1 revisão/guideline/meta-análise quando disponível.
-    4. Se só houver um tipo, envia os 2 melhores daquele tipo.
-    5. Nunca envia o mesmo DOI duas vezes.
+    1. Junta todos os candidatos num pool único (deduplica por doc_id e DOI).
+    2. Ordena por prioridade de tipo: Original > Meta-análise > Revisão.
+    3. Dentro do mesmo tipo: nota_aplicabilidade DESC → data_publicacao DESC.
+    4. Retorna o melhor artigo do pool ordenado.
     """
     if not por_tema:
         return []
 
-    # Montar pool único com tag de tema — deduplica por doc_id E por DOI
+    # Prioridade de tipo: menor número = maior prioridade
+    TIPO_PRIORIDADE = {
+        "artigo_original":                    0,
+        "original":                           0,
+        "revisao_sistematica_meta_analise":   1,
+        "metanalise":                         1,
+        "revisao_geral":                      2,
+        "revisao":                            2,
+        "guideline":                          2,
+    }
+
+    def _tipo_prio(a):
+        t = (a.get("tipo_estudo") or "").lower()
+        return TIPO_PRIORIDADE.get(t, 99)
+
+    def _date_int(a):
+        d = (a.get("data_publicacao") or "0000-00-00").replace("-", "")
+        try:
+            return int(d)
+        except ValueError:
+            return 0
+
+    # Montar pool único — deduplica por doc_id e DOI
     pool = []
-    vistos_ids = set()
-    vistos_dois = set()
+    vistos_ids: set = set()
+    vistos_dois: set = set()
     for tema, candidatos in por_tema.items():
         for artigo in candidatos:
             if artigo["doc_id"] in vistos_ids:
@@ -242,59 +263,17 @@ def selecionar_artigos_por_tema(por_tema):
             if doi:
                 vistos_dois.add(doi)
 
-    def _date_int(a):
-        d = (a.get("data_publicacao") or "0000-00-00").replace("-", "")
-        try:
-            return int(d)
-        except ValueError:
-            return 0
-
-    # Ordenar: nota DESC → data_publicacao DESC
-    pool.sort(key=lambda a: (-(a.get("nota_aplicabilidade") or 0), -_date_int(a)))
-
     if not pool:
         return []
 
-    tipo_original = {"artigo_original", "original"}
-    tipo_revisao  = {"revisao_geral", "revisao", "revisao_sistematica_meta_analise", "metanalise", "guideline"}
+    # Ordenar: tipo ASC (Original=0 primeiro) → nota DESC → data DESC
+    pool.sort(key=lambda a: (
+        _tipo_prio(a),
+        -(a.get("nota_aplicabilidade") or 0),
+        -_date_int(a),
+    ))
 
-    def _tipo(a):
-        return (a.get("tipo_estudo") or "").lower()
-
-    def _doi(a):
-        return (a.get("doi") or "").strip().lower()
-
-    # Separa pool em originais e revisões
-    originais = [a for a in pool if _tipo(a) in tipo_original]
-    revisoes  = [a for a in pool if _tipo(a) in tipo_revisao]
-
-    # Melhor original e melhor revisão (já ordenados por nota DESC)
-    best_orig = originais[0] if originais else None
-    best_rev  = revisoes[0]  if revisoes  else None
-
-    if ARTIGOS_POR_DIA < 2:
-        art1 = best_orig or best_rev or pool[0]
-        return [art1]
-
-    # Meta: 1 original + 1 revisão sempre que possível
-    if best_orig and best_rev and _doi(best_orig) != _doi(best_rev):
-        return [best_orig, best_rev]
-
-    # Só um tipo disponível: melhores 2 do mesmo tipo (sem repetir DOI)
-    fonte = originais if originais else revisoes if revisoes else pool
-    selecionados = []
-    dois_vistos: set = set()
-    for a in fonte:
-        doi_a = _doi(a)
-        if doi_a and doi_a in dois_vistos:
-            continue
-        selecionados.append(a)
-        if doi_a:
-            dois_vistos.add(doi_a)
-        if len(selecionados) == ARTIGOS_POR_DIA:
-            break
-
-    return selecionados
+    return [pool[0]]
 
 
 def montar_mensagem(artigo, html=False):
@@ -302,6 +281,9 @@ def montar_mensagem(artigo, html=False):
     if html:
         titulo = artigo['titulo'].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         msg = f"📚 <b>{titulo}</b>\n\n"
+        if artigo.get("impacto_pratica"):
+            impacto = artigo['impacto_pratica'].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            msg += f"<b>{impacto}</b>\n\n"
         if artigo.get("revista"):
             msg += f"📖 {artigo['revista']}\n"
         if artigo.get("doenca_principal"):
@@ -311,11 +293,12 @@ def montar_mensagem(artigo, html=False):
         if artigo.get("nota_aplicabilidade"):
             estrelas = "⭐" * int(artigo["nota_aplicabilidade"])
             msg += f"NAC: {artigo['nota_aplicabilidade']}/10 {estrelas}\n"
-        # PDF link removido — geração atual não produz documento de qualidade
         if artigo.get("caminho_audio"):
             msg += f"\n🎙️ Resumo em áudio: {artigo['caminho_audio']}"
     else:
         msg = f"📚 {artigo['titulo']}\n\n"
+        if artigo.get("impacto_pratica"):
+            msg += f"{artigo['impacto_pratica']}\n\n"
         if artigo.get("revista"):
             msg += f"📖 {artigo['revista']}\n"
         if artigo.get("doenca_principal"):
@@ -325,7 +308,6 @@ def montar_mensagem(artigo, html=False):
         if artigo.get("nota_aplicabilidade"):
             estrelas = "⭐" * int(artigo["nota_aplicabilidade"])
             msg += f"NAC: {artigo['nota_aplicabilidade']}/10 {estrelas}\n"
-        # PDF link removido — geração atual não produz documento de qualidade
         if artigo.get("caminho_audio"):
             msg += f"\n🎙️ Resumo em áudio: {artigo['caminho_audio']}"
     return msg

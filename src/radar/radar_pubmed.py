@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 CardioDaily — Radar PubMed
-Backend: busca PubMed + análise Gemini + áudio OpenAI TTS
+Backend: busca PubMed + análise Gemini + áudio ElevenLabs TTS (PT-BR)
 Dr. Eduardo Castro
 """
 
@@ -543,22 +543,28 @@ REGRAS: SEMPRE cite números. NUNCA coloque marcadores no texto narrado.
 # ─── Classe principal ─────────────────────────────────────────────────────────
 
 class RadarPubMed:
-    """Radar CardioDaily — busca PubMed + análise Gemini + áudio TTS."""
+    """Radar CardioDaily — busca PubMed + análise Gemini + áudio ElevenLabs TTS (PT-BR)."""
+
+    # Voz padrão ElevenLabs: Adam (multilingual, masculina profissional)
+    ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFmaJgB"
+    ELEVENLABS_MODEL    = "eleven_multilingual_v2"
 
     def __init__(self):
         self._gemini = None
-        self._openai_key = None
+        self._elevenlabs_key = None
         self._ncbi_key = None
         self._email = None
         self._modelo = 'gemini-2.5-pro'
         self._configured = False
 
     def configure(self, gemini_key: str, email: str, ncbi_key: str = '',
-                  openai_key: str = '', modelo: str = 'gemini-2.5-pro'):
+                  elevenlabs_key: str = '', modelo: str = 'gemini-2.5-pro',
+                  # alias de compatibilidade — ignorado silenciosamente
+                  openai_key: str = ''):
         """Configura APIs. Deve ser chamado antes de usar."""
         self._email = email
         self._ncbi_key = ncbi_key
-        self._openai_key = openai_key
+        self._elevenlabs_key = elevenlabs_key
         self._modelo = modelo
 
         if not BIO_AVAILABLE:
@@ -867,84 +873,43 @@ class RadarPubMed:
     # ── Áudio ─────────────────────────────────────────────────────────────────
 
     def gerar_audio(self, script: str, output_path: str,
-                    voice: str = 'onyx', model: str = 'tts-1-hd',
-                    speed: float = 1.1) -> bool:
-        """Gera MP3 via OpenAI TTS (sem pydub/ffmpeg)."""
-        if not self._openai_key:
-            raise RuntimeError("OPENAI_API_KEY não configurado")
+                    voice_id: str = '', model_id: str = '') -> bool:
+        """Gera MP3 via ElevenLabs TTS em PT-BR (eleven_multilingual_v2)."""
+        if not self._elevenlabs_key:
+            raise RuntimeError("ELEVENLABS_API_KEY não configurado")
         texto = limpar_para_audio(script).strip()
         if not texto:
             return False
 
-        max_chars = 4096
-        if len(texto) <= max_chars:
-            return self._tts_single(texto, output_path, voice, model, speed)
-        return self._tts_chunked(texto, output_path, voice, model, speed, max_chars)
+        # Respeita ELEVENLABS_VOICE_ID / ELEVENLABS_MODEL_ID do .env se definidos
+        vid = voice_id or os.environ.get('ELEVENLABS_VOICE_ID') or self.ELEVENLABS_VOICE_ID
+        mid = model_id or os.environ.get('ELEVENLABS_MODEL_ID') or self.ELEVENLABS_MODEL
 
-    def _tts_single(self, texto, output_path, voice, model, speed) -> bool:
+        # ElevenLabs aceita textos longos nativamente (sem chunking manual)
+        url = f'https://api.elevenlabs.io/v1/text-to-speech/{vid}'
+        payload = {
+            'text': texto,
+            'model_id': mid,
+            'language_code': 'pt-BR',   # força PT-BR — elimina bug de alternância
+            'voice_settings': {
+                'stability': 0.5,
+                'similarity_boost': 0.75,
+                'style': 0.0,
+                'use_speaker_boost': True,
+            },
+        }
         resp = requests.post(
-            'https://api.openai.com/v1/audio/speech',
-            headers={'Authorization': f'Bearer {self._openai_key}',
+            url,
+            headers={'xi-api-key': self._elevenlabs_key,
                      'Content-Type': 'application/json'},
-            json={'model': model, 'input': texto, 'voice': voice,
-                  'response_format': 'mp3', 'speed': speed},
+            json=payload,
             timeout=300,
         )
         if resp.status_code != 200:
-            raise RuntimeError(f"TTS HTTP {resp.status_code}: {resp.text[:200]}")
+            raise RuntimeError(
+                f"ElevenLabs TTS HTTP {resp.status_code}: {resp.text[:300]}")
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_bytes(resp.content)
-        return True
-
-    def _tts_chunked(self, texto, output_path, voice, model, speed, max_chars) -> bool:
-        paragraphs = texto.split('\n\n')
-        chunks, current = [], ''
-        for p in paragraphs:
-            p = p.strip()
-            if not p:
-                continue
-            if len(current) + len(p) + 2 <= max_chars:
-                current = (current + '\n\n' + p).strip()
-            else:
-                if current:
-                    chunks.append(current)
-                if len(p) > max_chars:
-                    sentences = re.split(r'(?<=[.!?])\s+', p)
-                    sub = ''
-                    for s in sentences:
-                        if len(sub) + len(s) + 1 <= max_chars:
-                            sub = (sub + ' ' + s).strip()
-                        else:
-                            if sub:
-                                chunks.append(sub)
-                            sub = s
-                    if sub:
-                        chunks.append(sub)
-                else:
-                    current = p
-        if current:
-            chunks.append(current)
-
-        all_bytes = []
-        for i, chunk in enumerate(chunks):
-            resp = requests.post(
-                'https://api.openai.com/v1/audio/speech',
-                headers={'Authorization': f'Bearer {self._openai_key}',
-                         'Content-Type': 'application/json'},
-                json={'model': model, 'input': chunk, 'voice': voice,
-                      'response_format': 'mp3', 'speed': speed},
-                timeout=300,
-            )
-            if resp.status_code != 200:
-                raise RuntimeError(
-                    f"TTS chunk {i+1} HTTP {resp.status_code}: {resp.text[:200]}")
-            all_bytes.append(resp.content)
-            time.sleep(0.5)
-
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, 'wb') as f:
-            for b in all_bytes:
-                f.write(b)
         return True
 
     # ── Helpers ───────────────────────────────────────────────────────────────

@@ -217,7 +217,7 @@ def run(categoria: str | None = None, dry_run: bool = False):
     radar = RadarPubMed()
     radar.configure(
         gemini_key=os.getenv("GEMINI_API_KEY", ""),
-        openai_key=os.getenv("OPENAI_API_KEY", ""),
+        elevenlabs_key=os.getenv("ELEVENLABS_API_KEY", ""),
         email=os.getenv("ENTREZ_EMAIL", "cardiodaily@cardiodaily.com.br"),
     )
 
@@ -247,7 +247,7 @@ def run(categoria: str | None = None, dry_run: bool = False):
     print(f"   💾 Script salvo: {script_path.name}")
 
     # ── 6. Gerar MP3 ──────────────────────────────────────────────────────
-    print(f"\n🔊 Gerando MP3 (OpenAI TTS)…")
+    print(f"\n🔊 Gerando MP3 (ElevenLabs TTS PT-BR)…")
     mp3_path = script_dir / mp3_filename
     ok = radar.gerar_audio(script, str(mp3_path))
     if not ok or not mp3_path.exists():
