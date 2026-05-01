@@ -151,7 +151,7 @@ def _buscar_tema(sb, tema, doencas, ja_set, ja_dois, dias):
     """Busca artigos de um tema numa janela específica."""
     result = sb.table("artigos").select(
         "doc_id, doi, titulo, revista, doenca_principal, tipo_estudo, "
-        "nota_aplicabilidade, impacto_pratica, caminho_visual_abstract, caminho_audio, caminho_pdf"
+        "nota_aplicabilidade, caminho_visual_abstract, caminho_audio, caminho_pdf"
     ).gte("data_publicacao", _data_inicio(dias)
     ).gte("nota_aplicabilidade", NOTA_MINIMA
     ).in_("doenca_principal", doencas
