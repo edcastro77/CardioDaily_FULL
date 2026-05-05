@@ -14,6 +14,7 @@ jobs:
       SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       GEMINI_API_KEY:       ${{ secrets.GEMINI_API_KEY }}
+      OPENAI_API_KEY:       ${{ secrets.OPENAI_API_KEY }}
       ENTREZ_EMAIL:         ${{ secrets.ENTREZ_EMAIL }}
       ELEVENLABS_API_KEY:   ${{ secrets.ELEVENLABS_API_KEY }}
       ELEVENLABS_VOICE_ID:  ${{ secrets.ELEVENLABS_VOICE_ID }}
@@ -28,12 +29,6 @@ jobs:
 
       - name: Instalar dependências
         run: pip install -r requirements.txt
-
-      - name: Verificar variáveis
-        run: |
-          echo "ELEVENLABS_API_KEY length: ${#ELEVENLABS_API_KEY}"
-          echo "GEMINI_API_KEY length: ${#GEMINI_API_KEY}"
-          echo "SUPABASE_URL: ${SUPABASE_URL:0:30}..."
 
       - name: Gerar podcast do radar
         run: python scripts/run_radar_diario.py

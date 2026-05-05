@@ -493,7 +493,7 @@ FORMATO DE SAÍDA:
 - Texto corrido, fluido, 100% pronto para TTS
 
 Comece sempre com:
-"Olá! Eu sou Eduardo Castro e este é o Radar PubMed do CardioDaily — seu filtro semanal do que realmente importa na literatura. Fatos à mesa, sem firula!"
+"Olá! Eu sou Eduardo Castro e este é o Radar PubMed do CardioDaily — seu filtro semanal do que realmente importa na literatura. Fatos à mesa, sem firulas!"
 
 Organize por QUALIDADE (não por ordem):
 
@@ -524,7 +524,7 @@ FORMATO DE SAÍDA:
 - Texto corrido, fluido, 100% pronto para TTS
 
 Comece sempre com:
-"Olá! Eu sou Eduardo Castro e este é o Radar {REVISTA}, volume {VOLUME}, número {ISSUE} — aqui no CardioDaily, Fatos à mesa, sem firula!"
+"Olá! Eu sou Eduardo Castro e este é o Radar {REVISTA}, volume {VOLUME}, número {ISSUE} — aqui no CardioDaily, Fatos à mesa, sem firulas!"
 
 Organize por QUALIDADE:
 
@@ -881,41 +881,77 @@ class RadarPubMed:
 
     def gerar_audio(self, script: str, output_path: str,
                     voice_id: str = '', model_id: str = '') -> bool:
-        """Gera MP3 via ElevenLabs TTS em PT-BR (eleven_multilingual_v2)."""
-        if not self._elevenlabs_key:
-            raise RuntimeError("ELEVENLABS_API_KEY não configurado")
+        """Gera MP3 via OpenAI TTS HD (onyx). Fallback para ElevenLabs se configurado."""
         texto = limpar_para_audio(script).strip()
         if not texto:
             return False
 
-        # Respeita ELEVENLABS_VOICE_ID / ELEVENLABS_MODEL_ID do .env se definidos
+        openai_key = os.environ.get('OPENAI_API_KEY', '')
+        if openai_key:
+            return self._gerar_audio_openai(texto, output_path, openai_key)
+
+        # Fallback: ElevenLabs (se tiver créditos)
+        if self._elevenlabs_key:
+            return self._gerar_audio_elevenlabs(texto, output_path, voice_id, model_id)
+
+        raise RuntimeError("Nenhum provedor TTS configurado (OPENAI_API_KEY ou ELEVENLABS_API_KEY)")
+
+    def _gerar_audio_openai(self, texto: str, output_path: str, api_key: str) -> bool:
+        """OpenAI TTS HD, voz onyx, chunks de 4096 chars com concatenação."""
+        import struct
+
+        MAX_CHARS = 4000
+        chunks = []
+        while texto:
+            chunks.append(texto[:MAX_CHARS])
+            texto = texto[MAX_CHARS:]
+
+        audio_parts = []
+        for i, chunk in enumerate(chunks, 1):
+            if len(chunks) > 1:
+                print(f"   🔊 OpenAI TTS chunk {i}/{len(chunks)}…")
+            resp = requests.post(
+                'https://api.openai.com/v1/audio/speech',
+                headers={'Authorization': f'Bearer {api_key}',
+                         'Content-Type': 'application/json'},
+                json={'model': 'tts-1-hd', 'voice': 'onyx',
+                      'input': chunk, 'response_format': 'mp3'},
+                timeout=120,
+            )
+            if resp.status_code != 200:
+                raise RuntimeError(f"OpenAI TTS HTTP {resp.status_code}: {resp.text[:200]}")
+            audio_parts.append(resp.content)
+
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_bytes(b''.join(audio_parts))
+        print(f"   ✅ MP3 gerado via OpenAI TTS HD ({Path(output_path).stat().st_size // 1024} KB)")
+        return True
+
+    def _gerar_audio_elevenlabs(self, texto: str, output_path: str,
+                                 voice_id: str = '', model_id: str = '') -> bool:
+        """ElevenLabs TTS (usado como fallback quando OpenAI não está disponível)."""
         vid = voice_id or os.environ.get('ELEVENLABS_VOICE_ID') or self.ELEVENLABS_VOICE_ID
         mid = model_id or os.environ.get('ELEVENLABS_MODEL_ID') or self.ELEVENLABS_MODEL
-
-        # ElevenLabs aceita textos longos nativamente (sem chunking manual)
         url = f'https://api.elevenlabs.io/v1/text-to-speech/{vid}'
         payload = {
             'text': texto,
             'model_id': mid,
             'voice_settings': {
-                'stability': 0.5,
-                'similarity_boost': 0.75,
-                'style': 0.0,
-                'use_speaker_boost': True,
+                'stability': 0.5, 'similarity_boost': 0.75,
+                'style': 0.0, 'use_speaker_boost': True, 'speed': 1.1,
             },
         }
         resp = requests.post(
             url,
             headers={'xi-api-key': self._elevenlabs_key,
                      'Content-Type': 'application/json'},
-            json=payload,
-            timeout=300,
+            json=payload, timeout=300,
         )
         if resp.status_code != 200:
-            raise RuntimeError(
-                f"ElevenLabs TTS HTTP {resp.status_code}: {resp.text[:300]}")
+            raise RuntimeError(f"ElevenLabs TTS HTTP {resp.status_code}: {resp.text[:300]}")
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_bytes(resp.content)
+        print(f"   ✅ MP3 gerado via ElevenLabs ({Path(output_path).stat().st_size // 1024} KB)")
         return True
 
     # ── Helpers ───────────────────────────────────────────────────────────────
