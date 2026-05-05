@@ -17,6 +17,7 @@ jobs:
       ZAPI_CLIENT_TOKEN:   ${{ secrets.ZAPI_CLIENT_TOKEN }}
       TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+      BETA_PAUSADO:        ${{ secrets.BETA_PAUSADO }}
 
     steps:
       - uses: actions/checkout@v4

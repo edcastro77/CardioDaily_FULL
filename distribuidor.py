@@ -52,6 +52,9 @@ if _missing:
     print("   Configure em: GitHub → Settings → Secrets and variables → Actions")
     sys.exit(1)
 
+# Modo beta: quando BETA_PAUSADO=1, envia apenas para Dr. Eduardo
+BETA_PAUSADO = os.environ.get("BETA_PAUSADO", "1") == "1"
+
 # Distribuição
 ARTIGOS_POR_DIA = 1
 JANELA_DIAS    = 15          # busca nos últimos 15 dias
@@ -140,19 +143,21 @@ def resolver_doencas(temas):
     return list(doencas)
 
 
-JANELAS_FALLBACK = [15, 30, 60]  # dias — tenta cada janela em ordem
+JANELAS_FALLBACK = [90, 180, 365]  # dias de data_publicacao — tenta cada janela em ordem
+DATA_PUBLICACAO_PISO = "2024-01-01"  # nunca enviar artigos mais velhos que isso
 
 
-def _data_inicio(dias):
+def _data_publicacao_inicio(dias):
     return (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%d")
 
 
 def _buscar_tema(sb, tema, doencas, ja_set, ja_dois, dias):
-    """Busca artigos de um tema numa janela específica."""
+    """Busca artigos de um tema numa janela de data_publicacao."""
+    data_inicio = max(_data_publicacao_inicio(dias), DATA_PUBLICACAO_PISO)
     result = sb.table("artigos").select(
         "doc_id, doi, titulo, revista, doenca_principal, tipo_estudo, "
         "nota_aplicabilidade, caminho_visual_abstract, caminho_audio, caminho_pdf"
-    ).gte("data_publicacao", _data_inicio(dias)
+    ).gte("data_publicacao", data_inicio
     ).gte("nota_aplicabilidade", NOTA_MINIMA
     ).in_("doenca_principal", doencas
     ).order("nota_aplicabilidade", desc=True
@@ -207,7 +212,7 @@ def buscar_candidatos_por_tema(sb, temas, ja_enviados):
             if candidatos:
                 por_tema[tema] = candidatos
                 if dias > JANELAS_FALLBACK[0]:
-                    log.info(f"  [{tema}] sem artigos em {JANELAS_FALLBACK[0]}d → usando janela {dias}d")
+                    log.info(f"  [{tema}] sem artigos em {JANELAS_FALLBACK[0]}d de publicação → usando janela {dias}d")
                 break
 
     return por_tema
@@ -464,7 +469,7 @@ def distribuir_artigos():
     log.info("=" * 60)
     log.info("DISTRIBUIÇÃO DIÁRIA — 07:00")
     log.info(f"Data: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    log.info(f"Janela: últimos {JANELA_DIAS} dias (desde {_data_inicio(JANELAS_FALLBACK[0])})")
+    log.info(f"Janela: data_publicacao >= {_data_publicacao_inicio(JANELAS_FALLBACK[0])} ({JANELAS_FALLBACK[0]}d), piso {DATA_PUBLICACAO_PISO}")
     log.info("=" * 60)
 
     sb = conectar_supabase()
@@ -476,6 +481,10 @@ def distribuir_artigos():
         phone = assinante.get("phone", "")
         temas = assinante.get("temas", [])
         ja_enviados = assinante.get("artigos_enviados", [])
+
+        if BETA_PAUSADO and phone != DR_EDUARDO_PHONE:
+            log.info(f"  ⏸️  Beta pausado — pulando {nome} ({phone})")
+            continue
 
         log.info(f"\n{'─' * 40}")
         log.info(f"Assinante: {nome} ({phone}) | temas: {temas}")
@@ -567,9 +576,15 @@ def distribuir_radar():
         msg_tg += f"💭 <i>{pergunta_safe}</i>\n\n"
     msg_tg += f"🎙️ Ouça o podcast de hoje — {n_artigos} estudos analisados."
 
+    if BETA_PAUSADO:
+        log.info(f"  ⏸️  Beta pausado — enviando radar apenas para Dr. Eduardo ({DR_EDUARDO_PHONE})")
+
     assinantes = buscar_assinantes_ativos(sb)
     for assinante in assinantes:
         phone = assinante.get("phone", "")
+        if BETA_PAUSADO and phone != DR_EDUARDO_PHONE:
+            log.info(f"  ⏸️  Pulando {assinante.get('nome','?')} ({phone})")
+            continue
         zapi_send_text(phone, msg_wa)
         tg_send_text(msg_tg, html=True)
         if podcast_url:
@@ -586,7 +601,7 @@ def distribuir_radar():
 def modo_teste():
     log.info("=" * 60)
     log.info("MODO TESTE — nenhuma mensagem será enviada")
-    log.info(f"Janela: últimos {JANELA_DIAS} dias (desde {_data_inicio(JANELAS_FALLBACK[0])})")
+    log.info(f"Janela: data_publicacao >= {_data_publicacao_inicio(JANELAS_FALLBACK[0])} ({JANELAS_FALLBACK[0]}d), piso {DATA_PUBLICACAO_PISO}")
     log.info("=" * 60)
 
     sb = conectar_supabase()
@@ -609,6 +624,74 @@ def modo_teste():
             pdf   = "✅" if s.get("caminho_pdf") and s["caminho_pdf"].startswith("http") else "❌"
             log.info(f"    [{tema_tag}] [{s['nota_aplicabilidade']}] {s['titulo'][:55]}...")
             log.info(f"         VA:{va}  Audio:{audio}  PDF:{pdf}")
+
+
+# =============================================================================
+# DISTRIBUIÇÃO PESSOAL — Dr. Eduardo (revisão de conteúdo)
+# Envia 1 original + 1 revisão/meta diretamente para o número do Dr. Eduardo.
+# Sem filtro de assinante, sem registro de enviados — para revisão de qualidade.
+# =============================================================================
+
+DR_EDUARDO_PHONE = "5527996089248"
+
+def distribuir_eduardo():
+    """Busca 1 original (nota ≥ 8) + 1 revisão/meta (nota ≥ 7) recentes e envia ao Dr. Eduardo."""
+    log.info("=" * 60)
+    log.info("DISTRIBUIÇÃO DR. EDUARDO — revisão de conteúdo")
+    log.info(f"Data: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    log.info("=" * 60)
+
+    sb = conectar_supabase()
+    data_inicio = _data_publicacao_inicio(30)  # últimos 30 dias
+
+    TIPOS_ORIGINAL = ["artigo_original", "original"]
+    TIPOS_REVISAO  = ["revisao_sistematica_meta_analise", "metanalise", "revisao_geral",
+                      "revisao", "guideline", "meta_analise", "ponto_de_vista"]
+
+    def _buscar(tipos, nota_min, limite=10):
+        r = sb.table("artigos").select(
+            "doc_id, doi, titulo, revista, doenca_principal, tipo_estudo, "
+            "nota_aplicabilidade, caminho_visual_abstract, caminho_audio, caminho_pdf"
+        ).gte("created_at", (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
+        ).gte("nota_aplicabilidade", nota_min
+        ).in_("tipo_estudo", tipos
+        ).not_.is_("caminho_audio", "null"
+        ).order("nota_aplicabilidade", desc=True
+        ).order("created_at", desc=True
+        ).limit(limite).execute()
+        return r.data or []
+
+    originais = _buscar(TIPOS_ORIGINAL, nota_min=8)
+    revisoes  = _buscar(TIPOS_REVISAO,  nota_min=7)
+
+    if not originais:
+        log.warning("Nenhum original com nota ≥ 8 e áudio nos últimos 30 dias.")
+    if not revisoes:
+        log.warning("Nenhuma revisão/meta com nota ≥ 7 e áudio nos últimos 30 dias.")
+
+    selecionados = []
+    if originais:
+        selecionados.append(originais[0])
+    if revisoes:
+        # garantir que não é o mesmo artigo
+        for r in revisoes:
+            if not selecionados or r["doc_id"] != selecionados[0]["doc_id"]:
+                selecionados.append(r)
+                break
+
+    if not selecionados:
+        log.error("Nada para enviar.")
+        return
+
+    for artigo in selecionados:
+        tipo = artigo.get("tipo_estudo", "")
+        log.info(f"\n→ [{tipo}] {artigo.get('titulo','')[:70]}...")
+        log.info(f"  Nota: {artigo.get('nota_aplicabilidade')} | VA: {'✅' if artigo.get('caminho_visual_abstract') else '❌'} | Áudio: {'✅' if artigo.get('caminho_audio') else '❌'}")
+        enviar_artigo(DR_EDUARDO_PHONE, artigo)
+
+    log.info(f"\n{'=' * 60}")
+    log.info(f"CONCLUÍDO — {len(selecionados)} artigos enviados para Dr. Eduardo")
+    log.info("=" * 60)
 
 
 # =============================================================================
@@ -761,6 +844,8 @@ if __name__ == "__main__":
         lista_semanal(dry_run=dry)
     elif modo == "teste":
         modo_teste()
+    elif modo == "eduardo":
+        distribuir_eduardo()
     else:
-        print(f"Modo desconhecido: {modo}. Use: artigos | radar | semana | teste")
+        print(f"Modo desconhecido: {modo}. Use: artigos | radar | semana | teste | eduardo")
         sys.exit(1)
