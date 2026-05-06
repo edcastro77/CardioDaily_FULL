@@ -34,6 +34,12 @@ try:
 except ImportError:
     GENAI_AVAILABLE = False
 
+try:
+    import anthropic as _anthropic_lib
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
 # ─── Categorias ───────────────────────────────────────────────────────────────
 
 CATEGORIAS = {
@@ -557,16 +563,16 @@ class RadarPubMed:
 
     def __init__(self):
         self._gemini = None
+        self._claude = None
         self._elevenlabs_key = None
         self._ncbi_key = None
         self._email = None
         self._modelo = 'gemini-2.5-pro'
         self._configured = False
 
-    def configure(self, gemini_key: str, email: str, ncbi_key: str = '',
+    def configure(self, gemini_key: str = '', email: str = '', ncbi_key: str = '',
                   elevenlabs_key: str = '', modelo: str = 'gemini-2.5-pro',
-                  # alias de compatibilidade — ignorado silenciosamente
-                  openai_key: str = ''):
+                  openai_key: str = '', anthropic_key: str = ''):
         """Configura APIs. Deve ser chamado antes de usar."""
         self._email = email
         self._ncbi_key = ncbi_key
@@ -581,10 +587,14 @@ class RadarPubMed:
         if ncbi_key:
             Entrez.api_key = ncbi_key
 
+        # Claude Sonnet (primário para geração de texto)
+        _ant_key = anthropic_key or os.environ.get('ANTHROPIC_API_KEY', '')
+        if ANTHROPIC_AVAILABLE and _ant_key:
+            self._claude = _anthropic_lib.Anthropic(api_key=_ant_key)
+
+        # Gemini (mantido como fallback opcional)
         if GENAI_AVAILABLE and gemini_key:
             self._gemini = genai.Client(api_key=gemini_key)
-        elif gemini_key:
-            raise RuntimeError("google-genai não instalado: pip install google-genai")
 
         self._configured = True
 
@@ -829,53 +839,77 @@ class RadarPubMed:
         )
         return self._chamar_gemini(prompt)
 
-    def _chamar_gemini(self, prompt: str) -> str:
+    def _chamar_llm(self, prompt: str) -> str:
+        """Claude Sonnet 4.6 (primário). Gemini como fallback se Claude indisponível."""
         self._check_configured()
-        if not self._gemini:
-            raise RuntimeError("Gemini não configurado — verifique GEMINI_API_KEY")
 
-        # Modelos em ordem de preferência: Pro → Flash (fallback)
-        modelos = [self._modelo]
-        if '2.5-pro' in self._modelo or 'pro' in self._modelo.lower():
-            modelos.append('gemini-2.0-flash')
-
-        max_tentativas = 4
-        espera_base = 15  # segundos
-
-        for modelo in modelos:
+        # ── Claude Sonnet 4.6 ────────────────────────────────────────────────
+        if self._claude:
+            max_tentativas = 3
             for tentativa in range(1, max_tentativas + 1):
                 try:
-                    if modelo != self._modelo or tentativa > 1:
-                        print(f"   🔄 Tentativa {tentativa}/{max_tentativas} [{modelo}]…")
-                    response = self._gemini.models.generate_content(
-                        model=modelo,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            temperature=0.7,
-                            max_output_tokens=32768,
-                        ),
+                    if tentativa > 1:
+                        print(f"   🔄 Tentativa {tentativa}/{max_tentativas} [claude-sonnet-4-6]…")
+                    msg = self._claude.messages.create(
+                        model='claude-sonnet-4-6',
+                        max_tokens=8192,
+                        messages=[{'role': 'user', 'content': prompt}],
                     )
-                    if modelo != self._modelo:
-                        print(f"   ✅ Respondido por fallback: {modelo}")
-                    return response.text
-
+                    return msg.content[0].text
                 except Exception as e:
-                    msg = str(e)
-                    is_503 = '503' in msg or 'UNAVAILABLE' in msg or 'high demand' in msg.lower()
-                    is_429 = '429' in msg or 'quota' in msg.lower() or 'RESOURCE_EXHAUSTED' in msg
-
-                    if (is_503 or is_429) and tentativa < max_tentativas:
-                        espera = espera_base * tentativa  # 15s, 30s, 45s
-                        print(f"   ⏳ Gemini indisponível ({modelo}) — aguardando {espera}s antes de tentar novamente…")
+                    msg_e = str(e)
+                    is_retry = ('529' in msg_e or '503' in msg_e or 'overloaded' in msg_e.lower()
+                                or '429' in msg_e or 'rate' in msg_e.lower())
+                    if is_retry and tentativa < max_tentativas:
+                        espera = 20 * tentativa
+                        print(f"   ⏳ Claude indisponível — aguardando {espera}s…")
                         time.sleep(espera)
                         continue
-                    elif tentativa == max_tentativas:
-                        print(f"   ⚠️  {modelo} falhou após {max_tentativas} tentativas: {msg[:120]}")
-                        break  # tenta próximo modelo
-                    else:
-                        raise  # erro não recuperável — propaga imediatamente
+                    print(f"   ⚠️  Claude falhou: {msg_e[:120]}")
+                    break  # tenta Gemini como fallback
 
-        raise RuntimeError("Todos os modelos Gemini falharam. Tente novamente mais tarde.")
+        # ── Gemini (fallback) ────────────────────────────────────────────────
+        if self._gemini:
+            modelos = [self._modelo]
+            if 'pro' in self._modelo.lower():
+                modelos.append('gemini-2.0-flash')
+            max_tentativas = 3
+            espera_base = 15
+            for modelo in modelos:
+                for tentativa in range(1, max_tentativas + 1):
+                    try:
+                        if tentativa > 1:
+                            print(f"   🔄 Tentativa {tentativa}/{max_tentativas} [{modelo}]…")
+                        response = self._gemini.models.generate_content(
+                            model=modelo,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                temperature=0.7,
+                                max_output_tokens=32768,
+                            ),
+                        )
+                        print(f"   ✅ Respondido por fallback Gemini: {modelo}")
+                        return response.text
+                    except Exception as e:
+                        msg_e = str(e)
+                        is_retry = ('503' in msg_e or 'UNAVAILABLE' in msg_e
+                                    or '429' in msg_e or 'RESOURCE_EXHAUSTED' in msg_e)
+                        if is_retry and tentativa < max_tentativas:
+                            espera = espera_base * tentativa
+                            print(f"   ⏳ Gemini indisponível ({modelo}) — aguardando {espera}s…")
+                            time.sleep(espera)
+                            continue
+                        elif tentativa == max_tentativas:
+                            print(f"   ⚠️  {modelo} falhou após {max_tentativas} tentativas: {msg_e[:120]}")
+                            break
+                        else:
+                            raise
+
+        raise RuntimeError("Nenhum LLM disponível (Claude + Gemini falharam). Tente novamente mais tarde.")
+
+    # manter alias para não quebrar chamadas internas legadas
+    def _chamar_gemini(self, prompt: str) -> str:
+        return self._chamar_llm(prompt)
 
     # ── Áudio ─────────────────────────────────────────────────────────────────
 

@@ -217,6 +217,7 @@ def run(categoria: str | None = None, dry_run: bool = False):
     radar = RadarPubMed()
     radar.configure(
         gemini_key=os.getenv("GEMINI_API_KEY", ""),
+        anthropic_key=os.getenv("ANTHROPIC_API_KEY", ""),
         elevenlabs_key=os.getenv("ELEVENLABS_API_KEY", ""),
         email=os.getenv("ENTREZ_EMAIL", "cardiodaily@cardiodaily.com.br"),
     )
