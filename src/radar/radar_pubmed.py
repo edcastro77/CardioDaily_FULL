@@ -845,7 +845,7 @@ class RadarPubMed:
 
         # ── Claude Sonnet 4.6 ────────────────────────────────────────────────
         if self._claude:
-            max_tentativas = 3
+            max_tentativas = 5
             for tentativa in range(1, max_tentativas + 1):
                 try:
                     if tentativa > 1:
@@ -861,8 +861,8 @@ class RadarPubMed:
                     is_retry = ('529' in msg_e or '503' in msg_e or 'overloaded' in msg_e.lower()
                                 or '429' in msg_e or 'rate' in msg_e.lower())
                     if is_retry and tentativa < max_tentativas:
-                        espera = 20 * tentativa
-                        print(f"   ⏳ Claude indisponível — aguardando {espera}s…")
+                        espera = 30 * tentativa  # 30s, 60s, 90s, 120s
+                        print(f"   ⏳ Claude sobrecarregado — aguardando {espera}s…")
                         time.sleep(espera)
                         continue
                     print(f"   ⚠️  Claude falhou: {msg_e[:120]}")
