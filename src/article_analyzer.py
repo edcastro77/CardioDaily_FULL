@@ -23,6 +23,7 @@ import re
 import json
 import hashlib
 import shutil
+import time
 import requests as _requests
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -168,6 +169,57 @@ def _upload_podcast_supabase(doc_id: str, mp3_path: str) -> str | None:
 
     except Exception as e:
         print(f"   ⚠️  Erro no upload do podcast: {e}")
+        return None
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Upload de PDF para Supabase Storage ──────────────────────────────────────
+def _upload_pdf_supabase(doc_id: str, pdf_path: str) -> str | None:
+    """
+    Faz upload do resumo.pdf para Supabase Storage (bucket 'resumos_pdf').
+    Atualiza artigos.caminho_pdf com a URL pública.
+    Retorna a URL pública ou None em caso de falha.
+    """
+    sb_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    sb_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
+    if not sb_url or not sb_key:
+        return None
+
+    bucket = "resumos_pdf"
+    objeto = f"{doc_id}.pdf"
+    url_publica = f"{sb_url}/storage/v1/object/public/{bucket}/{objeto}"
+
+    try:
+        with open(pdf_path, "rb") as f:
+            dados = f.read()
+        h = {
+            "apikey": sb_key,
+            "Authorization": f"Bearer {sb_key}",
+            "Content-Type": "application/pdf",
+            "x-upsert": "true",
+        }
+        r = _requests.post(
+            f"{sb_url}/storage/v1/object/{bucket}/{objeto}",
+            headers=h, data=dados, timeout=120
+        )
+        if r.status_code not in (200, 201):
+            print(f"   ⚠️  PDF Storage upload falhou: {r.status_code} {r.text[:100]}")
+            return None
+
+        # Atualizar caminho_pdf na tabela artigos
+        h_db = {
+            "apikey": sb_key,
+            "Authorization": f"Bearer {sb_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        }
+        _requests.patch(
+            f"{sb_url}/rest/v1/artigos?doc_id=eq.{doc_id}",
+            headers=h_db, json={"caminho_pdf": url_publica}, timeout=15
+        )
+        return url_publica
+
+    except Exception as e:
+        print(f"   ⚠️  Erro no upload do PDF: {e}")
         return None
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -417,6 +469,47 @@ def extract_podcast_article_title(analysis_text: str, fallback_filename: str) ->
                 return title
 
     return re.sub(r"\.pdf\b", "", fallback, flags=re.IGNORECASE).strip() or "Artigo (título não informado)"
+
+
+def _build_analysis_fields(s: dict, titulo_fallback: str, pub_date: str) -> dict:
+    """Build analysis fields for analysis.json from structured JSON — handles both schemas."""
+    is_guideline = bool(s.get('por_que_importa') or s.get('principais_recomendacoes'))
+    base = {
+        "titulo": s.get('titulo') or titulo_fallback,
+        "ano": s.get('ano') or (pub_date[:4] if pub_date else ""),
+    }
+    if is_guideline:
+        base.update({
+            "publicacao": s.get('publicacao') or "",
+            "departamento": s.get('departamento') or "",
+            "sistema_evidencia": s.get('sistema_evidencia') or "",
+            "justificativa_nota": s.get('justificativa_nota') or "",
+            "nota_relevancia_pratica": s.get('nota_relevancia_pratica'),
+            "por_que_importa": s.get('por_que_importa') or {},
+            "definicao_criterios": s.get('definicao_criterios') or {},
+            "fisiopatologia_essencial": s.get('fisiopatologia_essencial') or [],
+            "principais_recomendacoes": s.get('principais_recomendacoes') or [],
+            "algoritmo_principal": s.get('algoritmo_principal') or "",
+            "tabelas_essenciais": s.get('tabelas_essenciais') or [],
+            "situacoes_especiais": s.get('situacoes_especiais') or [],
+            "o_que_muda": s.get('o_que_muda') or [],
+            "incertezas_limitacoes": s.get('incertezas_limitacoes') or [],
+            "numeros_memorizar": s.get('numeros_memorizar') or [],
+            "referencias_chave": s.get('referencias_chave') or [],
+        })
+    else:
+        base.update({
+            "revista": s.get('revista') or "",
+            "autores_principais": s.get('autores_principais') or "",
+            "nota_aplicabilidade_clinica": s.get('nota_aplicabilidade_clinica'),
+            "nota_trabalho_estatistico": s.get('nota_trabalho_estatistico'),
+            "justificativa_notas": s.get('justificativa_notas') or "",
+            "contexto_tema": s.get('contexto_tema') or "",
+            "nucleo_comum": s.get('nucleo_comum') or {},
+            "analise_especifica": s.get('analise_especifica') or {},
+            "reflexao_final": s.get('reflexao_final') or {},
+        })
+    return base
 
 
 class ArticleAnalyzer:
@@ -694,6 +787,7 @@ class ArticleAnalyzer:
                         temperature=temperature,
                         max_output_tokens=max_tokens,
                         system_instruction=system_message if system_message else None,
+                        http_options=types.HttpOptions(timeout=300_000),  # 5 min
                     )
                 )
                 
@@ -752,24 +846,48 @@ class ArticleAnalyzer:
             raise
 
     def _call_gemini_with_retry(self, model_name, prompt, system_message=None, temperature=0.3, max_tokens=16000):
-        """Wrapper do _call_gemini com retry automático para falhas de rede."""
-        delays = [15, 45, 120]
+        """Wrapper do _call_gemini com retry automático para falhas de rede.
+
+        Estratégia:
+          - 3 retries no modelo solicitado (2.5 Pro) com backoff crescente
+          - Se ainda falhar, 1 tentativa com gemini-2.5-flash (mais disponível)
+          - Se Flash também falhar, levanta exceção
+        """
+        FLASH_FALLBACK = 'gemini-2.5-flash'
+        delays = [15, 45, 120]  # 3 tentativas no modelo original
         last_exc = None
+        is_transient = lambda e: any(k in str(e).lower() for k in (
+            "connection", "network", "timeout", "503", "502", "429",
+            "rate", "overload", "temporarily", "unavailable", "high demand", "resource_exhausted"
+        ))
+
+        # Tentativas no modelo original
         for attempt, delay in enumerate(delays + [0], 1):
             try:
                 return self._call_gemini(model_name, prompt, system_message, temperature, max_tokens)
             except Exception as e:
                 last_exc = e
-                msg = str(e).lower()
-                # Só retentar em erros de rede/rate-limit — não em erros de conteúdo
-                if any(k in msg for k in ("connection", "network", "timeout", "503", "502", "429", "rate", "overload", "temporarily")):
+                if is_transient(e):
                     if attempt <= len(delays):
-                        print(f"   ⚠️  Gemini tentativa {attempt} falhou ({type(e).__name__}). Aguardando {delay}s...")
+                        print(f"   ⚠️  Gemini tentativa {attempt}/{len(delays)} falhou ({type(e).__name__}). Aguardando {delay}s...")
                         time.sleep(delay)
-                    else:
-                        raise last_exc
+                    # else: sai do loop → tenta Flash abaixo
                 else:
-                    raise  # Erros não-recuperáveis: falha imediata
+                    raise  # Erro não-recuperável: falha imediata
+
+        # Fallback para Flash se o modelo original estava sobrecarregado
+        if model_name != FLASH_FALLBACK:
+            print(f"   ⚠️  {model_name} indisponível após {len(delays)} tentativas — usando {FLASH_FALLBACK} como fallback...")
+            try:
+                return self._call_gemini(FLASH_FALLBACK, prompt, system_message, temperature, max_tokens)
+            except Exception as e:
+                if is_transient(e):
+                    print(f"   ⚠️  Flash também sobrecarregado. Aguardando 60s e tentando uma última vez...")
+                    time.sleep(60)
+                    return self._call_gemini(FLASH_FALLBACK, prompt, system_message, temperature, max_tokens)
+                raise
+
+        raise last_exc
 
     def _call_model(self, model_name, prompt, system_message=None, temperature=0.3, max_tokens=16000):
         """
@@ -870,13 +988,13 @@ class ArticleAnalyzer:
             # Tentar inicializar gerador de áudio (unificado ou ElevenLabs)
             try:
                 if UNIFIED_AUDIO_AVAILABLE:
-                    # Usar sistema unificado (escolhe OpenAI ou ElevenLabs via env)
-                    self.audio_generator = UnifiedAudioGenerator()
-                    provider = os.environ.get('CARDIODAILY_AUDIO_PROVIDER', 'elevenlabs')
+                    # Podcasts de artigos individuais usam OpenAI TTS (mais barato)
+                    # ElevenLabs fica reservado para o Radar Científico
+                    provider = os.environ.get('CARDIODAILY_AUDIO_PROVIDER', 'openai')
+                    self.audio_generator = UnifiedAudioGenerator(provider=provider)
                     self.audio_enabled = True
                     print(f"   ✅ Gerador de áudio inicializado (provider: {provider})")
                 elif ElevenLabsAudioGenerator:
-                    # Fallback para ElevenLabs direto
                     self.audio_generator = ElevenLabsAudioGenerator()
                     self.audio_enabled = True
                     print("   ✅ Gerador de áudio ElevenLabs inicializado")
@@ -1165,21 +1283,15 @@ class ArticleAnalyzer:
                 print(f"   ✂️  Truncando para {MAX_CHARS:,} caracteres...")
                 text = text[:MAX_CHARS]
             
-            # Preparar mensagens (onde o Prompt-Mestre entra pode mudar o resultado).
-            # Para preservar compatibilidade, isso é configurável via env.
-            prompt_mode = os.environ.get('CARDIODAILY_PROMPT_MODE', 'system_only').strip().lower()
-
-            if prompt_mode == 'system_plus_base':
-                system_msg = f"{self.system_message}\n\n{prompt_template}"
-                user_prompt = f"POR FAVOR, ANALISE O SEGUINTE ARTIGO CIENTÍFICO:\n\n{text}"
-            elif prompt_mode == 'user':
-                system_msg = self.system_message
-                user_prompt = f"{prompt_template}\n\nPOR FAVOR, ANALISE O SEGUINTE ARTIGO CIENTÍFICO:\n\n{text}"
-            else:
-                # Padrão: Prompt-Mestre no system (sem concatenar a mensagem base).
-                # Isto tende a reproduzir melhor o comportamento do analisador legado.
+            # Para Gemini: prompt + artigo juntos em contents (igual ao Replete).
+            # Para Claude: prompt no system, artigo no user.
+            if is_claude:
                 system_msg = prompt_template
                 user_prompt = f"POR FAVOR, ANALISE O SEGUINTE ARTIGO CIENTÍFICO:\n\n{text}"
+            else:
+                # Gemini — tudo junto num único contents, sem system_instruction separado
+                system_msg = None
+                user_prompt = f"{prompt_template}\n\nARTIGO PARA ANÁLISE:\n{text}"
             
             # Identificar provider para logging
             if is_claude:
@@ -1189,9 +1301,14 @@ class ArticleAnalyzer:
             else:
                 provider_name = "OpenAI"
             
+            # Truncar textos absurdamente longos (guidelines com 100k+ chars travam o Gemini)
+            MAX_CHARS = 100_000
+            if len(text) > MAX_CHARS:
+                print(f"   ⚠️  Texto muito longo ({len(text):,} chars) — truncando para {MAX_CHARS:,} chars")
+                text = text[:MAX_CHARS] + "\n\n[TEXTO TRUNCADO — documento muito extenso]"
+
             estimated_tokens = (len(text) + len(system_msg or '')) // 4
             print(f"   🤖 Enviando para {provider_name} (modelo: {analysis_model})...")
-            print(f"   🔑 Modo de prompt: {prompt_mode} (Prompt-Mestre {'no system' if prompt_mode != 'user' else 'no user'})")
             print(f"   📝 Tamanho do texto: {len(text):,} caracteres")
             print(f"   📊 Tokens estimados: ~{estimated_tokens:,}")
             
@@ -1201,11 +1318,11 @@ class ArticleAnalyzer:
             except ValueError:
                 env_max_tokens = 16000
             
-            # Claude Sonnet suporta até 8192 output tokens, Gemini até 32k
+            # Gemini suporta 32k output — não limitar pelo OPENAI_MAX_TOKENS
             if is_claude:
-                safe_max_tokens = max(256, min(env_max_tokens, 8000))
+                safe_max_tokens = max(256, min(env_max_tokens, 16000))
             elif self.use_gemini:
-                safe_max_tokens = max(256, min(env_max_tokens, 32000))
+                safe_max_tokens = 32000  # Gemini 2.5 Pro: usar máximo disponível
             else:
                 safe_max_tokens = max(256, min(env_max_tokens, 16000))
 
@@ -1253,13 +1370,66 @@ class ArticleAnalyzer:
                 analysis_text = draft
             
             print(f"   ✅ Análise gerada: {len(analysis_text):,} caracteres")
-            
-            # Extrair score da análise
-            score = self._extract_score(analysis_text)
-            
+
+            # Tentar parsear como JSON estruturado (novo formato de prompt)
+            analysis_json_data = None
+            try:
+                # 1. Tentar extrair de bloco ```json ... ```
+                code_block = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', analysis_text, re.DOTALL)
+                if code_block:
+                    analysis_json_data = json.loads(code_block.group(1))
+                else:
+                    # 2. Fallback: primeiro { até último }
+                    json_match = re.search(r'\{.*\}', analysis_text, re.DOTALL)
+                    if json_match:
+                        analysis_json_data = json.loads(json_match.group(0))
+                if analysis_json_data:
+                    print(f"   ✅ JSON estruturado parseado com sucesso")
+            except Exception:
+                analysis_json_data = None
+
+            # Extrair score de aplicabilidade clínica — campo que vai para o Supabase
+            if analysis_json_data:
+                score = float(
+                    analysis_json_data.get('nota_aplicabilidade_clinica') or
+                    analysis_json_data.get('nota_relevancia_pratica') or
+                    analysis_json_data.get('nota_aplicabilidade') or
+                    0
+                )
+                if not score:
+                    score = self._extract_score(analysis_text)
+            else:
+                score = self._extract_score(analysis_text)
+
+            # Extrair nota metodológica (exclusiva de meta-análises, Seção 7)
+            nota_metodologica = None
+            m = re.search(r'NOTA METODOL[ÓO]GICA:\s*\[?(\d+(?:\.\d+)?)\]?(?:/10)?', analysis_text, re.IGNORECASE)
+            if m:
+                nota_metodologica = float(m.group(1))
+
+            # Extrair keywords da Seção 6/7 (pode estar em múltiplas linhas dentro do bloco)
+            keywords_raw = []
+            kw_match = re.search(
+                r'KEYWORDS:\s*\[?(.+?)(?=\n\s*\n|\nAPLICABILIDADE|\nQUALIDADE|\nMUDA|\Z)',
+                analysis_text, re.IGNORECASE | re.DOTALL
+            )
+            if kw_match:
+                kw_block = kw_match.group(1).replace('\n', ' ').replace(']', '')
+                keywords_raw = [k.strip() for k in kw_block.split(',') if k.strip()]
+
+            # Extrair flag "muda conduta"
+            muda_conduta = None
+            mc_match = re.search(r'MUDA CONDUTA HOJE\?\s*(SIM|N[ÃA]O|POTENCIALMENTE)', analysis_text, re.IGNORECASE)
+            if mc_match:
+                muda_conduta = mc_match.group(1).upper()
+
             return {
                 'analysis': analysis_text,
+                'analysis_structured': analysis_json_data,
                 'score': score,
+                'nota_metodologica': nota_metodologica,
+                'keywords_extracted': keywords_raw,
+                'muda_conduta': muda_conduta,
                 'article_type': article_type,
                 'model_used': analysis_model,
             }
@@ -1416,14 +1586,18 @@ class ArticleAnalyzer:
           - "║  APLICABILIDADE: 7/10"  (caixa de resumo Gemini)
         """
         # Padrões em ordem de especificidade — param no primeiro match válido.
+        # Prioridade: APLICABILIDADE CLÍNICA (valor que vai para o Supabase)
+        # Para meta-análises: NOTA METODOLÓGICA é campo separado, não usar aqui.
         patterns = [
+            # Seção 7 revisões/meta-análises: "APLICABILIDADE CLÍNICA: 8/10 — justificativa"
+            r'APLICABILIDADE CL[ÍI]NICA:\s*\[?(\d+(?:\.\d+)?)\]?(?:/10)?',
             # Formato padrão: "Nota de aplicabilidade clínica: 8/10"
             r'Nota de aplicabilidade cl[ií]nica[^0-9]{0,40}\*{0,2}(\d+)\*{0,2}/10',
             r'Aplicabilidade cl[ií]nica[^0-9]{0,40}\*{0,2}(\d+)\*{0,2}/10',
             r'Nota de aplicabilidade[^0-9]{0,40}\*{0,2}(\d+)\*{0,2}/10',
-            # Formato metanálises Gemini: "## Nota de Aplicabilidade Clínica\n**Nota:** [ 7 ] /10"
+            # Formato Gemini: "## Nota de Aplicabilidade Clínica\n**Nota:** [ 7 ] /10"
             r'Nota de Aplicabilidade\s+Cl[ií]nica[^0-9]{0,120}\[\s*(\d+)\s*\]',
-            # Caixa de resumo: "║  APLICABILIDADE: 7/10"
+            # Caixa de resumo legada: "║  APLICABILIDADE: 7/10"
             r'APLICABILIDADE:\s*(\d+)/10',
         ]
 
@@ -1709,7 +1883,11 @@ class ArticleAnalyzer:
             
             score = result['score']
             analysis = result['analysis']
+            analysis_structured = result.get('analysis_structured')
             analysis_model = result.get('model_used')
+            nota_metodologica = result.get('nota_metodologica')
+            keywords_extracted = result.get('keywords_extracted') or []
+            muda_conduta = result.get('muda_conduta')
             
             print(f"   ✅ Nota de aplicabilidade clínica: {score}/10")
             
@@ -1740,8 +1918,11 @@ class ArticleAnalyzer:
             if _is_in_press and not _pub_date:
                 _pub_date = analysis_dt[:10]  # YYYY-MM-DD da análise
                 print(f"   📅 Article in Press — usando data da análise: {_pub_date}")
-            # Extrair título real do artigo (do texto da análise ou do PDF)
-            _titulo_real = extract_podcast_article_title(analysis, filename)
+            # Extrair título real: prioriza JSON estruturado, depois heurística sobre o texto
+            if analysis_structured and analysis_structured.get('titulo'):
+                _titulo_real = analysis_structured['titulo']
+            else:
+                _titulo_real = extract_podcast_article_title(analysis, filename)
             with open(md_path, 'w', encoding='utf-8') as f:
                 f.write("---\n")
                 f.write(f"doc_id: \"{doc_id}\"\n")
@@ -1768,7 +1949,292 @@ class ArticleAnalyzer:
                 f.write(f"**Data de Publicação:** {_pub_date}\n\n")
                 f.write(f"**Data da Análise:** {analysis_dt}\n\n")
                 f.write("---\n\n")
-                f.write(analysis)
+
+                # Novo formato: gerar Markdown legível a partir do JSON estruturado
+                if analysis_structured:
+                    s = analysis_structured
+                    is_guideline_schema = bool(s.get('por_que_importa') or s.get('principais_recomendacoes'))
+
+                    if is_guideline_schema:
+                        # ── GUIDELINE / REVISÃO / META-ANÁLISE / PONTO DE VISTA ──
+                        f.write(f"# {s.get('titulo') or _titulo_real}\n\n")
+                        pub = s.get('publicacao') or ""
+                        if pub:
+                            f.write(f"*{pub}*\n\n")
+                        elif s.get('ano'):
+                            f.write(f"*{s['ano']}*\n\n")
+                        if s.get('departamento'):
+                            f.write(f"**{s['departamento']}**\n\n")
+                        f.write("---\n\n")
+                        nota = s.get('nota_relevancia_pratica')
+                        if nota is not None:
+                            f.write(f"**Nota de Relevância Prática:** {int(nota)}/10\n\n")
+                        if s.get('justificativa_nota'):
+                            f.write(f"{s['justificativa_nota']}\n\n")
+                        f.write("---\n\n")
+
+                        pqi = s.get('por_que_importa') or {}
+                        if pqi:
+                            f.write("## Por Que Importa\n\n")
+                            if pqi.get('problema_clinico'):
+                                f.write(f"**Problema Clínico:** {pqi['problema_clinico']}\n\n")
+                            if pqi.get('lacuna'):
+                                f.write(f"**Lacuna:** {pqi['lacuna']}\n\n")
+                            if pqi.get('relevancia_brasil'):
+                                f.write(f"**Relevância no Brasil:** {pqi['relevancia_brasil']}\n\n")
+
+                        dc = s.get('definicao_criterios') or {}
+                        if dc.get('definicao') or dc.get('criterios_diagnosticos'):
+                            f.write("## Definição e Critérios\n\n")
+                            if dc.get('definicao'):
+                                f.write(f"{dc['definicao']}\n\n")
+                            for c in (dc.get('criterios_diagnosticos') or []):
+                                f.write(f"- {c}\n")
+                            f.write("\n")
+
+                        fisio = s.get('fisiopatologia_essencial') or []
+                        if fisio:
+                            f.write("## Fisiopatologia Essencial\n\n")
+                            for item in fisio:
+                                f.write(f"- {item}\n")
+                            f.write("\n")
+
+                        recs = s.get('principais_recomendacoes') or []
+                        if recs:
+                            f.write("## Principais Recomendações\n\n")
+                            for rec in recs:
+                                titulo_rec = rec.get('titulo') or ""
+                                if titulo_rec:
+                                    f.write(f"### {titulo_rec}\n\n")
+                                if rec.get('recomendacao'):
+                                    f.write(f"{rec['recomendacao']}\n\n")
+                                if rec.get('forca_evidencia'):
+                                    f.write(f"**Força da Evidência:** {rec['forca_evidencia']}\n\n")
+                                if rec.get('aplicabilidade'):
+                                    f.write(f"**Aplicabilidade:** {rec['aplicabilidade']}\n\n")
+                                if rec.get('nota_pratica'):
+                                    f.write(f"**Nota Prática:** {rec['nota_pratica']}\n\n")
+
+                        algo = (s.get('algoritmo_principal') or "").strip()
+                        if algo:
+                            f.write("## Algoritmo Principal\n\n")
+                            f.write(f"```\n{algo}\n```\n\n")
+
+                        for tab in (s.get('tabelas_essenciais') or []):
+                            if tab.get('titulo') or tab.get('conteudo'):
+                                f.write(f"## {tab.get('titulo') or 'Tabela'}\n\n")
+                                f.write(f"{tab.get('conteudo', '')}\n\n")
+
+                        sit = s.get('situacoes_especiais') or []
+                        if sit:
+                            f.write("## Situações Especiais\n\n")
+                            for se in sit:
+                                cenario = se.get('cenario') or ""
+                                conduta = se.get('conduta') or ""
+                                if cenario:
+                                    f.write(f"**{cenario}:** {conduta}\n\n")
+
+                        muda = s.get('o_que_muda') or []
+                        if muda:
+                            f.write("## O Que Muda\n\n")
+                            f.write("| Antes | Agora | Impacto |\n")
+                            f.write("|-------|-------|--------|\n")
+                            for m in muda:
+                                antes = (m.get('antes') or "").replace("|", "\\|")
+                                agora = (m.get('agora') or "").replace("|", "\\|")
+                                impacto = m.get('impacto') or ""
+                                f.write(f"| {antes} | {agora} | {impacto} |\n")
+                            f.write("\n")
+
+                        incert = s.get('incertezas_limitacoes') or []
+                        if incert:
+                            f.write("## Incertezas e Limitações\n\n")
+                            for item in incert:
+                                f.write(f"- {item}\n")
+                            f.write("\n")
+
+                        nums = s.get('numeros_memorizar') or []
+                        if nums:
+                            f.write("## Números para Memorizar\n\n")
+                            for n in nums:
+                                f.write(f"- {n}\n")
+                            f.write("\n")
+
+                        refs = s.get('referencias_chave') or []
+                        if refs:
+                            f.write("## Referências-Chave\n\n")
+                            for r in refs:
+                                f.write(f"- {r}\n")
+                            f.write("\n")
+
+                    else:
+                        # ── ARTIGOS ORIGINAIS ──
+                        f.write(f"# {s.get('titulo') or _titulo_real}\n\n")
+                        if s.get('autores_principais'):
+                            f.write(f"*{s['autores_principais']}*\n\n")
+                        if s.get('revista') or s.get('ano'):
+                            f.write(f"**{s.get('revista','')}** {'· ' + s['ano'] if s.get('ano') else ''}\n\n")
+                        f.write("---\n\n")
+                        f.write(f"**Nota de Aplicabilidade:** {int(score)}/10")
+                        stat = s.get('nota_trabalho_estatistico')
+                        if stat:
+                            f.write(f" | **Rigor Estatístico:** {int(float(stat))}/10")
+                        f.write("\n\n")
+                        if s.get('justificativa_notas'):
+                            f.write(f"{s['justificativa_notas']}\n\n")
+                        f.write("---\n\n")
+                        if s.get('contexto_tema'):
+                            f.write(f"## Contexto do Tema\n\n{s['contexto_tema']}\n\n")
+                            nc = s.get('nucleo_comum') or {}
+                        if nc:
+                            f.write("## Análise do Núcleo Comum\n\n")
+                            labels = {
+                                'pergunta_clinica_importa': 'Por que esta pergunta clínica importa?',
+                                'desenho_confiavel': 'Desenho do Estudo',
+                                'calculo_amostra': 'Cálculo Amostral e Poder Estatístico',
+                                'desfecho_primario_relevante': 'Desfecho Primário',
+                                'tamanho_beneficio': 'Tamanho do Benefício',
+                                'aplicabilidade_pratica': 'Aplicabilidade Prática',
+                                'vieses_limitacoes': 'Vieses e Limitações',
+                                'impacto_conduta': 'Impacto na Conduta',
+                                'interesses_envolvidos': 'Conflitos de Interesse',
+                                'conclusao_geral': 'Conclusão Geral',
+                            }
+                            for key, label in labels.items():
+                                val = nc.get(key) or ""
+                                if val.strip():
+                                    f.write(f"### {label}\n\n{val.strip()}\n\n")
+                        ae = s.get('analise_especifica') or {}
+                        if ae:
+                            modulo = ae.get('modulo') or ""
+                            f.write(f"## Análise Específica{' — ' + modulo if modulo else ''}\n\n")
+                            # Novo formato: sub-objetos por módulo (rct, diagnostico, prescricao, prognostico)
+                            modulo_labels = {
+                                'rct': ('RCT', [
+                                    ('desenho', 'Desenho'),
+                                    ('randomizacao', 'Randomização'),
+                                    ('seguimento', 'Seguimento'),
+                                    ('intention_to_treat', 'Análise por Intenção de Tratar'),
+                                    ('adjudicacao', 'Adjudicação Independente'),
+                                    ('erro_tipo1', 'Controle de Erro Tipo 1'),
+                                    ('revisao_amostral', 'Revisão Amostral'),
+                                ]),
+                                'diagnostico': ('Diagnóstico', [
+                                    ('como_pedir', 'Como Solicitar'),
+                                    ('para_quem', 'Para Quem'),
+                                    ('quando_pedir', 'Quando Solicitar'),
+                                    ('como_interpretar', 'Como Interpretar'),
+                                    ('acuracia', 'Acurácia — Sensibilidade, Especificidade, VPP, VPN'),
+                                ]),
+                                'prescricao': ('Intervenção / Como Prescrever', [
+                                    ('problema_tratado', 'O Que Tratamos'),
+                                    ('opcoes_disponiveis', 'Opções Disponíveis'),
+                                    ('opcao_convencional', 'Padrão Atual'),
+                                    ('o_que_muda', 'O Que Este Estudo Muda'),
+                                    ('disponibilidade_brasil', 'Disponibilidade no Brasil'),
+                                    ('custo', 'Custo'),
+                                    ('posologia', 'Posologia'),
+                                    ('forma_uso', 'Forma de Uso'),
+                                    ('riscos_interacoes', 'Riscos e Interações'),
+                                    ('contraindicacoes', 'Contraindicações'),
+                                    ('efeitos_colaterais', 'Efeitos Colaterais'),
+                                    ('monitoramento', 'Como Monitorar'),
+                                ]),
+                                'prognostico': ('Prognóstico', [
+                                    ('problema', 'O Problema'),
+                                    ('grupos_risco', 'Grupos de Risco'),
+                                    ('sequencia_diagnostica', 'Sequência Diagnóstica'),
+                                    ('o_que_fazer', 'O Que Fazer com Essa Informação'),
+                                ]),
+                                'meta_analise': ('Meta-análise', [
+                                    ('tipo', 'Tipo'),
+                                    ('registro_prospero', 'Registro PROSPERO'),
+                                    ('estrategia_busca', 'Estratégia de Busca'),
+                                    ('risco_vies', 'Risco de Viés'),
+                                    ('heterogeneidade', 'Heterogeneidade'),
+                                    ('vies_publicacao', 'Viés de Publicação'),
+                                    ('grade_qualidade', 'Qualidade GRADE'),
+                                ]),
+                                'doenca_sindrome': ('Doença / Síndrome', [
+                                    ('apresentacao_clinica', 'Apresentação Clínica'),
+                                    ('diagnostico', 'Diagnóstico'),
+                                    ('tratamento', 'Tratamento'),
+                                    ('prognostico', 'Prognóstico'),
+                                ]),
+                                'tratamento': ('Intervenção / Tratamento', [
+                                    ('problema_tratado', 'O Que Tratamos'),
+                                    ('opcoes_e_evidencia', 'Opções e Evidência'),
+                                    ('o_que_muda', 'O Que Esta Revisão Muda'),
+                                    ('posologia_pratica', 'Posologia Prática'),
+                                    ('riscos_monitoramento', 'Riscos e Monitoramento'),
+                                ]),
+                                'guideline': ('Guideline', [
+                                    ('sociedade_ano', 'Sociedade e Ano'),
+                                    ('recomendacoes_principais', 'Recomendações Principais'),
+                                    ('o_que_mudou', 'O Que Mudou'),
+                                    ('recomendacoes_fracas', 'Recomendações com Base Fraca'),
+                                    ('aplicabilidade_brasil', 'Aplicabilidade no Brasil'),
+                                ]),
+                                'ponto_de_vista': ('Ponto de Vista', [
+                                    ('tese_central', 'Tese Central'),
+                                    ('evidencias_citadas', 'Evidências Citadas'),
+                                    ('o_que_contesta_ou_propoe', 'O Que Contesta ou Propõe'),
+                                    ('nivel_especulacao', 'Nível de Especulação'),
+                                ]),
+                            }
+                            rendered_any = False
+                            for mod_key, (mod_label, fields) in modulo_labels.items():
+                                mod_data = ae.get(mod_key) or {}
+                                if not mod_data:
+                                    continue
+                                if not mod_data.get('aplicavel', False):
+                                    continue
+                                rendered_any = True
+                                f.write(f"### {mod_label}\n\n")
+                                for field_key, field_label in fields:
+                                    val = (mod_data.get(field_key) or "").strip()
+                                    if val:
+                                        f.write(f"**{field_label}:** {val}\n\n")
+                            # Fallback: formato antigo com pontos_chave
+                            if not rendered_any:
+                                for pt in (ae.get('pontos_chave') or []):
+                                    f.write(f"- {pt}\n")
+                            f.write("\n")
+                        rf = s.get('reflexao_final') or {}
+                        if rf:
+                            f.write("## Reflexão Final\n\n")
+                            # Novo formato: 6 dimensões do take-home
+                            take_home_fields = [
+                                ('por_que', 'Por quê'),
+                                ('como', 'Como'),
+                                ('quando', 'Quando'),
+                                ('em_quem', 'Em quem'),
+                                ('o_que_fazer', 'O que fazer'),
+                                ('de_que_maneira', 'De que maneira'),
+                            ]
+                            rendered_take_home = False
+                            for field_key, field_label in take_home_fields:
+                                val = (rf.get(field_key) or "").strip()
+                                if val:
+                                    f.write(f"**{field_label}:** {val}\n\n")
+                                    rendered_take_home = True
+                            # Fallback: formato antigo
+                            if not rendered_take_home:
+                                if rf.get('conclusao'):
+                                    f.write(f"{rf['conclusao']}\n\n")
+                                bullets = rf.get('bullets_praticos') or []
+                                if bullets:
+                                    f.write("**O que levo para a prática:**\n\n")
+                                    for b in bullets:
+                                        f.write(f"- {b}\n")
+                                    f.write("\n")
+                                if rf.get('relevancia'):
+                                    f.write(f"**Relevância:** {rf['relevancia']}\n\n")
+                                if rf.get('reflexao_pessoal'):
+                                    f.write(f"**Reflexão Pessoal:** {rf['reflexao_pessoal']}\n\n")
+                else:
+                    # Formato legado: escrever o texto bruto retornado pelo LLM
+                    f.write(analysis)
 
             # Export organizado por tipo (atalho para leitura humana)
             self._export_analysis_to_markdown_folder(
@@ -1808,9 +2274,11 @@ class ArticleAnalyzer:
                 if self.podcast_script_generator and self.audio_enabled:
                     # Gerar script de podcast
                     print("   🎤 Gerando script de podcast...")
-                    podcast_title = extract_podcast_article_title(analysis, filename)
+                    podcast_title = (analysis_structured.get('titulo') if analysis_structured else None) or extract_podcast_article_title(analysis, filename)
+                    # Novo formato: passar JSON estruturado para o gerador de podcast
+                    podcast_analysis_input = analysis_structured if analysis_structured else analysis
                     podcast_script = self.podcast_script_generator.generate_podcast_script(
-                        analysis_text=analysis,
+                        analysis_text=podcast_analysis_input if isinstance(podcast_analysis_input, str) else json.dumps(podcast_analysis_input, ensure_ascii=False),
                         article_title=podcast_title,
                         doi=doi_clean if doi_clean else "N/A",
                         score=score
@@ -1870,41 +2338,9 @@ class ArticleAnalyzer:
                 else:
                     audio_status = "skipped"
             
-            # 7b. Extrair mapa mental do analysis.md
-            mindmap_path_abs = None
-            try:
-                import re as _re
-                mm_pattern = r'## 🗺️ SCRIPT PARA MAPA MENTAL.*?```(?:markdown)?\s*\n(.*?)\n```'
-                mm_match = _re.search(mm_pattern, analysis, _re.DOTALL)
-                if mm_match:
-                    mindmap_content = mm_match.group(1).strip()
-                    mindmap_file = os.path.join(article_dir, "mindmap.md")
-                    with open(mindmap_file, 'w', encoding='utf-8') as f:
-                        f.write(mindmap_content)
-                    mindmap_path_abs = mindmap_file
-                    print(f"   🗺️  Mapa mental extraído: mindmap.md")
-            except Exception as e:
-                print(f"   ⚠️  Erro ao extrair mapa mental: {e}")
-
-            # 7b2. Gerar mapa mental visual (PNG) via Playwright
+            # 7b. Mapa mental removido do pipeline (prompt v2 não gera mapa mental)
             mindmap_image_path = None
-            mindmap_render_status = "not_generated"
-            if mindmap_path_abs and self.mindmap_enabled:
-                print(f"\n7️⃣🗺️ Gerando mapa mental visual (PNG)...")
-                try:
-                    mindmap_result = self.mindmap_generator.generate(article_dir)
-                    if mindmap_result:
-                        mindmap_image_path = mindmap_result
-                        mindmap_render_status = "rendered"
-                    else:
-                        mindmap_render_status = "failed"
-                except Exception as e:
-                    print(f"   ⚠️  Erro ao gerar mapa mental visual: {e}")
-                    mindmap_render_status = "failed"
-            elif not mindmap_path_abs:
-                mindmap_render_status = "no_mindmap_md"
-            elif not self.mindmap_enabled:
-                mindmap_render_status = "disabled"
+            mindmap_render_status = "disabled"
 
             # 7c. InfographicPortrait DESATIVADO — Visual Abstract é o gerador oficial
             infographic_status = "disabled"
@@ -1961,7 +2397,17 @@ class ArticleAnalyzer:
                     "language": "pt-BR",
                     "scores": {
                         "aplicabilidade": int(score),
+                        "estatistico": int(analysis_structured.get('nota_trabalho_estatistico') or score)
+                            if analysis_structured else int(score),
+                        **({"nota_metodologica": nota_metodologica} if nota_metodologica is not None else {}),
                     },
+                    **({"keywords": keywords_extracted} if keywords_extracted else {}),
+                    **({"muda_conduta": muda_conduta} if muda_conduta else {}),
+                    # Campos do novo formato estruturado (presentes apenas em análises novas)
+                    **(
+                        _build_analysis_fields(analysis_structured, _titulo_real, _pub_date)
+                        if analysis_structured else {}
+                    ),
                 },
                 "media": {
                     "audio_status": audio_status,
@@ -1986,7 +2432,13 @@ class ArticleAnalyzer:
                 json.dump(analysis_json, jf, ensure_ascii=False, indent=2)
 
             # Alertar sobre metadados incompletos (título, data, revista)
-            _titulo_ok = bool(_titulo_real and len(_titulo_real.split()) >= 3 and not _titulo_parece_filename(_titulo_real, filename))
+            _titulo_parece_filename = bool(
+                _titulo_real and (
+                    _titulo_real.lower().replace(' ', '_') in filename.lower().replace('-', '_') or
+                    re.match(r'^(doi|pdf|artigo)_[a-f0-9]+', _titulo_real.lower())
+                )
+            )
+            _titulo_ok = bool(_titulo_real and len(_titulo_real.split()) >= 3 and not _titulo_parece_filename)
             _data_ok = bool(_pub_date and re.match(r'^\d{4}-\d{2}', _pub_date))
             _revista_ok = bool(analysis_json["source"].get("journal", "").strip())
             if not _titulo_ok or not _data_ok or not _revista_ok:
@@ -2002,6 +2454,26 @@ class ArticleAnalyzer:
                 print(f"      💡 Use: indexar_corpus_completo.py para corrigir após renomear o PDF")
 
             print(f"   ✅ Pacote salvo: outputs/corpus/{doc_id}/")
+
+            # 7e. Gerar PDF e publicar no Supabase Storage
+            print("\n7️⃣📄 Gerando PDF resumo...")
+            _pdf_url = None
+            try:
+                from pdf_generator import ArticlePDFGenerator as _PDFGen
+                _pdf_gen = _PDFGen()
+                _pdf_result = _pdf_gen.generate_pdf(article_dir)
+                if _pdf_result:
+                    _pdf_path = str(_pdf_result)
+                    print(f"   ✅ PDF gerado: {Path(_pdf_path).name} ({Path(_pdf_path).stat().st_size // 1024} KB)")
+                    _pdf_url = _upload_pdf_supabase(doc_id, _pdf_path)
+                    if _pdf_url:
+                        print(f"   ☁️  PDF publicado: {_pdf_url}")
+                    else:
+                        print(f"   ⚠️  Upload do PDF falhou (PDF local salvo)")
+                else:
+                    print(f"   ⚠️  PDF não gerado")
+            except Exception as _pdf_err:
+                print(f"   ⚠️  Erro ao gerar PDF: {_pdf_err}")
 
             # 8. Registrar no banco de dados
             print("\n8️⃣ Registrando no banco de dados...")
