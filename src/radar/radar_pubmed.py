@@ -958,28 +958,61 @@ class RadarPubMed:
 
     def _gerar_audio_elevenlabs(self, texto: str, output_path: str,
                                  voice_id: str = '', model_id: str = '') -> bool:
-        """ElevenLabs TTS (usado como fallback quando OpenAI não está disponível)."""
+        """ElevenLabs TTS com chunking por parágrafo (limite: 9500 chars/request)."""
         vid = voice_id or os.environ.get('ELEVENLABS_VOICE_ID') or self.ELEVENLABS_VOICE_ID
         mid = model_id or os.environ.get('ELEVENLABS_MODEL_ID') or self.ELEVENLABS_MODEL
-        url = f'https://api.elevenlabs.io/v1/text-to-speech/{vid}'
-        payload = {
-            'text': texto,
-            'model_id': mid,
-            'voice_settings': {
-                'stability': 0.5, 'similarity_boost': 0.75,
-                'style': 0.0, 'use_speaker_boost': True, 'speed': 1.1,
-            },
+        api_url = f'https://api.elevenlabs.io/v1/text-to-speech/{vid}'
+        headers = {'xi-api-key': self._elevenlabs_key, 'Content-Type': 'application/json'}
+        voice_settings = {
+            'stability': 0.5, 'similarity_boost': 0.75,
+            'style': 0.0, 'use_speaker_boost': True, 'speed': 1.1,
         }
-        resp = requests.post(
-            url,
-            headers={'xi-api-key': self._elevenlabs_key,
-                     'Content-Type': 'application/json'},
-            json=payload, timeout=300,
-        )
-        if resp.status_code != 200:
-            raise RuntimeError(f"ElevenLabs TTS HTTP {resp.status_code}: {resp.text[:300]}")
+
+        # Divide em chunks respeitando parágrafos, máx 9500 chars
+        MAX = 9500
+        chunks: list[str] = []
+        current = ""
+        for para in texto.split("\n\n"):
+            para = para.strip()
+            if not para:
+                continue
+            if len(current) + len(para) + 2 <= MAX:
+                current = (current + "\n\n" + para).strip()
+            else:
+                if current:
+                    chunks.append(current)
+                # Parágrafo maior que MAX: quebra por frase
+                if len(para) > MAX:
+                    sentences = re.split(r'(?<=[.!?])\s+', para)
+                    current = ""
+                    for sent in sentences:
+                        if len(current) + len(sent) + 1 <= MAX:
+                            current = (current + " " + sent).strip()
+                        else:
+                            if current:
+                                chunks.append(current)
+                            current = sent[:MAX]
+                    current = current
+                else:
+                    current = para
+        if current:
+            chunks.append(current)
+
+        audio_parts: list[bytes] = []
+        for i, chunk in enumerate(chunks, 1):
+            print(f"   🔊 ElevenLabs chunk {i}/{len(chunks)}…")
+            resp = requests.post(
+                api_url,
+                headers=headers,
+                json={'text': chunk, 'model_id': mid, 'voice_settings': voice_settings},
+                timeout=300,
+            )
+            if resp.status_code != 200:
+                raise RuntimeError(f"ElevenLabs TTS HTTP {resp.status_code}: {resp.text[:300]}")
+            audio_parts.append(resp.content)
+
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(output_path).write_bytes(resp.content)
+        Path(output_path).write_bytes(b"".join(audio_parts))
         print(f"   ✅ MP3 gerado via ElevenLabs ({Path(output_path).stat().st_size // 1024} KB)")
         return True
 
