@@ -557,7 +557,7 @@ def distribuir_radar():
     }
     tema_nome = TEMAS_PT.get(tema, tema)
     tema_safe = tema_nome.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    pergunta = radar.get("pergunta_socratica", "")
+    pergunta = radar.get("pergunta_socratica") or ""
     n_artigos = radar.get("artigos_analisados", "?")
     data_hoje = datetime.now().strftime("%d/%m/%Y")
 

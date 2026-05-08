@@ -915,20 +915,15 @@ class RadarPubMed:
 
     def gerar_audio(self, script: str, output_path: str,
                     voice_id: str = '', model_id: str = '') -> bool:
-        """Gera MP3 via OpenAI TTS HD (onyx). Fallback para ElevenLabs se configurado."""
+        """Gera MP3 via ElevenLabs TTS (PT-BR). Provedor exclusivo — sem fallback."""
         texto = limpar_para_audio(script).strip()
         if not texto:
             return False
 
-        openai_key = os.environ.get('OPENAI_API_KEY', '')
-        if openai_key:
-            return self._gerar_audio_openai(texto, output_path, openai_key)
-
-        # Fallback: ElevenLabs (se tiver créditos)
         if self._elevenlabs_key:
             return self._gerar_audio_elevenlabs(texto, output_path, voice_id, model_id)
 
-        raise RuntimeError("Nenhum provedor TTS configurado (OPENAI_API_KEY ou ELEVENLABS_API_KEY)")
+        raise RuntimeError("ELEVENLABS_API_KEY não configurada")
 
     def _gerar_audio_openai(self, texto: str, output_path: str, api_key: str) -> bool:
         """OpenAI TTS HD, voz onyx, chunks de 4096 chars com concatenação."""
