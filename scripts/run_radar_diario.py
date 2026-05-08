@@ -98,6 +98,7 @@ def _inserir_radar_supabase(
     resumo_texto: str,
     caminho_podcast: str,
     artigos_analisados: int,
+    script_podcast: str = "",
 ) -> bool:
     """Insere (ou atualiza via upsert) registro na tabela 'radar' do Supabase."""
     import requests
@@ -115,6 +116,7 @@ def _inserir_radar_supabase(
             "resumo_texto": resumo_texto,
             "caminho_podcast": caminho_podcast,
             "artigos_analisados": artigos_analisados,
+            "script_podcast": script_podcast or None,
         }
         url = f"{supabase_url}/rest/v1/radar"
         headers = {
@@ -275,7 +277,25 @@ def run(categoria: str | None = None, dry_run: bool = False):
         resumo_texto=resumo_texto,
         caminho_podcast=audio_url,
         artigos_analisados=len(artigos),
+        script_podcast=script,
     )
+
+    # ── 8b. Enviar script como documento no Telegram (Dr. Eduardo) ────────
+    tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    tg_chat = os.getenv("TELEGRAM_CHAT_ID", "")
+    if tg_token and tg_chat and not dry_run:
+        try:
+            import requests as _req
+            caption = f"📝 Script do Radar — {cat_nome} ({data_str})\nPronto para gravação."
+            _req.post(
+                f"https://api.telegram.org/bot{tg_token}/sendDocument",
+                data={"chat_id": tg_chat, "caption": caption},
+                files={"document": (script_path.name, script_path.read_bytes(), "text/plain")},
+                timeout=30,
+            )
+            print(f"   📨 Script enviado ao Telegram ({script_path.name})")
+        except Exception as e:
+            print(f"   ⚠️  Telegram script falhou: {e}")
 
     # ── 9. Enviar WhatsApp ────────────────────────────────────────────────
     print(f"\n📲 Enviando para usuários ativos…")
