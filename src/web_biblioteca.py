@@ -1117,6 +1117,30 @@ _PT_TO_EN = {
     "colchicina": ["colchicine"],
     "inflamacao": ["inflammation", "inflammatory"],
     "pcr": ["c-reactive protein", "inflammation"],
+    # Imagem cardiovascular
+    "imagem": ["imaging", "magnetic", "resonance", "echocardiography", "tomography"],
+    "ressonancia": ["magnetic resonance", "cmr", "cardiac mri"],
+    "ressonância": ["magnetic resonance", "cmr", "cardiac mri"],
+    "cmr": ["cardiac magnetic resonance", "cmr", "cardiac mri"],
+    "mri": ["magnetic resonance", "cmr", "mri"],
+    "stress cmr": ["stress cardiac magnetic", "cmr stress", "stress perfusion"],
+    "stress cardiac": ["stress cardiac magnetic", "cmr stress", "stress perfusion"],
+    "stress mri": ["stress cardiac magnetic", "cmr stress", "stress perfusion"],
+    "perfusao": ["perfusion", "cmr", "stress"],
+    "perfusão": ["perfusion", "cmr", "stress"],
+    "ecocardiograma": ["echocardiography", "echocardiogram"],
+    "ecocardiografia": ["echocardiography"],
+    "eco": ["echocardiography", "echocardiogram"],
+    "tc": ["computed tomography", "ct scan", "coronary cta"],
+    "tomografia": ["computed tomography", "ct scan", "coronary cta"],
+    "cta": ["coronary cta", "computed tomography"],
+    "spect": ["spect", "nuclear", "myocardial perfusion"],
+    "pet": ["pet scan", "positron emission", "nuclear"],
+    "calcio": ["calcium score", "coronary calcium"],
+    "cálcio": ["calcium score", "coronary calcium"],
+    "strain": ["strain", "speckle tracking", "deformation"],
+    "ivus": ["intravascular ultrasound", "ivus"],
+    "oct": ["optical coherence", "oct"],
 }
 
 _TIPO_DB = {
@@ -1317,6 +1341,7 @@ def buscar_api(q: str, tipo: str, nota: str, limite: str,
             s = t.replace("'", "''")
             q_or.append(f"doenca_principal.ilike.%{s}%")
             q_or.append(f"titulo.ilike.%{s}%")
+            q_or.append(f"resumo_markdown.ilike.%{s}%")
 
     # Combinar: se ambos, usar and(or(...),or(...)); se só um, usar or(...)
     if rev_or and q_or:
