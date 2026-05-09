@@ -72,7 +72,7 @@ def _upload_radar_storage(mp3_path: Path, filename: str) -> str | None:
         headers = {
             "apikey": supabase_key,
             "Authorization": f"Bearer {supabase_key}",
-            "Content-Type": "audio/mpeg",
+            "Content-Type": "audio/wav" if filename.endswith(".wav") else "audio/mpeg",
             "x-upsert": "true",
         }
         with open(mp3_path, "rb") as f:
@@ -202,7 +202,7 @@ def run(categoria: str | None = None, dry_run: bool = False):
     data_file = hoje.strftime("%Y%m%d")          # para nome de arquivo
     periodo_fim   = hoje.strftime("%Y-%m-%d")
     periodo_inicio = (hoje - timedelta(days=DIAS_JANELA)).strftime("%Y-%m-%d")
-    mp3_filename  = f"{cat_key}_{data_file}.mp3"  # padrão: {tema}_{data}.mp3
+    mp3_filename  = f"{cat_key}_{data_file}.wav"  # Cartesia gera WAV (ElevenLabs fallback: MP3)
 
     print(f"\n{'='*55}")
     print(f"📡 Radar CardioDaily — Diário Automático")
@@ -220,6 +220,7 @@ def run(categoria: str | None = None, dry_run: bool = False):
     radar.configure(
         gemini_key=os.getenv("GEMINI_API_KEY", ""),
         anthropic_key=os.getenv("ANTHROPIC_API_KEY", ""),
+        cartesia_key=os.getenv("CARTESIA_API_KEY", ""),
         elevenlabs_key=os.getenv("ELEVENLABS_API_KEY", ""),
         email=os.getenv("ENTREZ_EMAIL", "cardiodaily@cardiodaily.com.br"),
     )

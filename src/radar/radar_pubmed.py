@@ -492,7 +492,7 @@ TAMANHO ALVO: 5 a 7 minutos de áudio — aproximadamente 800 a 1000 palavras no
 ESTRUTURA DO ROTEIRO:
 
 1. Abertura (2 frases):
-"Olá! Eu sou Eduardo Castro e este é o Radar PubMed do CardioDaily. Fatos à mesa, sem firulas!"
+"Olá! Eu sou o assistente virtual do Dr. Eduardo Castro e este é o Radar PubMed do CardioDaily. Fatos à mesa, sem firulas!"
 
 2. Destaques da semana — máximo 3 artigos de alta relevância. Para cada um:
    - 1 frase de contexto clínico: qual o problema que este estudo resolve?
@@ -507,7 +507,7 @@ ESTRUTURA DO ROTEIRO:
 4. Descartados — 1 frase agrupando o que foi ignorado e por quê.
 
 5. Encerramento (1 frase):
-"Eu sou o Dr. Eduardo Castro. Fatos à mesa. Até amanhã!"
+"Este foi o Radar PubMed CardioDaily, assistente virtual do Dr. Eduardo Castro. Fatos à mesa. Até amanhã!"
 
 REGRAS:
 - Tom direto, acadêmico, sem eufemismos. Rasga o verbo.
@@ -553,15 +553,21 @@ REGRAS: SEMPRE cite números. NUNCA coloque marcadores no texto narrado.
 # ─── Classe principal ─────────────────────────────────────────────────────────
 
 class RadarPubMed:
-    """Radar CardioDaily — busca PubMed + análise Gemini + áudio ElevenLabs TTS (PT-BR)."""
+    """Radar CardioDaily — busca PubMed + análise Gemini + áudio Cartesia TTS (PT-BR)."""
 
-    # Voz padrão ElevenLabs: Adam (multilingual, masculina profissional)
+    # Cartesia — Bruno (PT-BR masculino, corporativo)
+    CARTESIA_VOICE_ID = "b603811e-54c2-4a0a-8854-09eab9ffa63f"
+    CARTESIA_MODEL    = "sonic-3.5"
+    CARTESIA_SPEED    = 1.1
+
+    # ElevenLabs — fallback
     ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFmaJgB"
     ELEVENLABS_MODEL    = "eleven_multilingual_v2"
 
     def __init__(self):
         self._gemini = None
         self._claude = None
+        self._cartesia_key = None
         self._elevenlabs_key = None
         self._ncbi_key = None
         self._email = None
@@ -570,10 +576,12 @@ class RadarPubMed:
 
     def configure(self, gemini_key: str = '', email: str = '', ncbi_key: str = '',
                   elevenlabs_key: str = '', modelo: str = 'gemini-2.5-pro',
-                  openai_key: str = '', anthropic_key: str = ''):
+                  openai_key: str = '', anthropic_key: str = '',
+                  cartesia_key: str = ''):
         """Configura APIs. Deve ser chamado antes de usar."""
         self._email = email
         self._ncbi_key = ncbi_key
+        self._cartesia_key = cartesia_key or os.environ.get('CARTESIA_API_KEY', '')
         self._elevenlabs_key = elevenlabs_key
         self._modelo = modelo
 
@@ -913,15 +921,112 @@ class RadarPubMed:
 
     def gerar_audio(self, script: str, output_path: str,
                     voice_id: str = '', model_id: str = '') -> bool:
-        """Gera MP3 via ElevenLabs TTS (PT-BR). Provedor exclusivo — sem fallback."""
+        """Gera WAV via Cartesia TTS (primário) ou ElevenLabs (fallback)."""
         texto = limpar_para_audio(script).strip()
         if not texto:
             return False
 
+        # Cartesia — primário
+        if self._cartesia_key:
+            try:
+                return self._gerar_audio_cartesia(texto, output_path, voice_id)
+            except Exception as e:
+                print(f"   ⚠️  Cartesia falhou: {e} — tentando ElevenLabs…")
+
+        # ElevenLabs — fallback
         if self._elevenlabs_key:
             return self._gerar_audio_elevenlabs(texto, output_path, voice_id, model_id)
 
-        raise RuntimeError("ELEVENLABS_API_KEY não configurada")
+        raise RuntimeError("Nenhum TTS configurado (CARTESIA_API_KEY ou ELEVENLABS_API_KEY)")
+
+    def _gerar_audio_cartesia(self, texto: str, output_path: str,
+                               voice_id: str = '') -> bool:
+        """Cartesia sonic-3.5, voz Bruno PT-BR, chunking por parágrafo (máx 9000 chars)."""
+        vid = voice_id or self.CARTESIA_VOICE_ID
+        MAX = 9000
+        chunks: list[str] = []
+        current = ""
+        for para in texto.split("\n\n"):
+            para = para.strip()
+            if not para:
+                continue
+            if len(current) + len(para) + 2 <= MAX:
+                current = (current + "\n\n" + para).strip()
+            else:
+                if current:
+                    chunks.append(current)
+                if len(para) > MAX:
+                    sentences = re.split(r'(?<=[.!?])\s+', para)
+                    current = ""
+                    for sent in sentences:
+                        if len(current) + len(sent) + 1 <= MAX:
+                            current = (current + " " + sent).strip()
+                        else:
+                            if current:
+                                chunks.append(current)
+                            current = sent[:MAX]
+                else:
+                    current = para
+        if current:
+            chunks.append(current)
+
+        audio_parts: list[bytes] = []
+        for i, chunk in enumerate(chunks, 1):
+            if len(chunks) > 1:
+                print(f"   🔊 Cartesia chunk {i}/{len(chunks)} ({len(chunk)} chars)…")
+            resp = requests.post(
+                "https://api.cartesia.ai/tts/bytes",
+                headers={
+                    "Cartesia-Version": "2026-03-01",
+                    "X-API-Key": self._cartesia_key,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model_id": self.CARTESIA_MODEL,
+                    "transcript": chunk,
+                    "voice": {"mode": "id", "id": vid},
+                    "output_format": {
+                        "container": "wav",
+                        "encoding": "pcm_s16le",
+                        "sample_rate": 44100,
+                    },
+                    "language": "pt",
+                    "generation_config": {
+                        "speed": self.CARTESIA_SPEED,
+                        "volume": 1.1,
+                    },
+                },
+                timeout=120,
+            )
+            if resp.status_code != 200:
+                raise RuntimeError(f"Cartesia TTS HTTP {resp.status_code}: {resp.text[:300]}")
+            audio_parts.append(resp.content)
+
+        # Concatenar WAVs: manter header do primeiro, dados dos demais
+        if not audio_parts:
+            return False
+
+        out_bytes = self._concat_wavs(audio_parts)
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_bytes(out_bytes)
+        print(f"   ✅ WAV gerado via Cartesia Bruno ({Path(output_path).stat().st_size // 1024} KB)")
+        return True
+
+    @staticmethod
+    def _concat_wavs(parts: list[bytes]) -> bytes:
+        """Concatena múltiplos WAV PCM mantendo header correto."""
+        import struct
+        if len(parts) == 1:
+            return parts[0]
+        # Extrair dados PCM de cada chunk (pular header 44 bytes padrão WAV)
+        HEADER_SIZE = 44
+        pcm_data = b"".join(p[HEADER_SIZE:] for p in parts)
+        # Reconstruir header do primeiro WAV com tamanho total correto
+        header = bytearray(parts[0][:HEADER_SIZE])
+        total_data_size = len(pcm_data)
+        struct.pack_into("<I", header, 4, total_data_size + 36)   # ChunkSize
+        struct.pack_into("<I", header, 40, total_data_size)        # Subchunk2Size
+        return bytes(header) + pcm_data
 
     def _gerar_audio_openai(self, texto: str, output_path: str, api_key: str) -> bool:
         """OpenAI TTS HD, voz onyx, chunks de 4096 chars com concatenação."""
