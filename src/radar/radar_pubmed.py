@@ -507,7 +507,7 @@ ESTRUTURA DO ROTEIRO:
 4. Descartados — 1 frase agrupando o que foi ignorado e por quê.
 
 5. Encerramento (1 frase):
-"Este foi o Radar PubMed CardioDaily, assistente virtual do Dr. Eduardo Castro. Fatos à mesa. Até amanhã!"
+"Este foi o seu Radar PubMed CardioDaily de hoje. Fatos à mesa para um bom aprendizado. Até a próxima!"
 
 REGRAS:
 - Tom direto, acadêmico, sem eufemismos. Rasga o verbo.
@@ -544,7 +544,7 @@ ARTIGOS FRACOS: agrupe brevemente
 EDITORIAIS RELEVANTES: mencione o ponto central brevemente
 
 Termine sempre com:
-"Eu sou o Dr. Eduardo Castro e este foi o Radar {REVISTA} de hoje. Fatos à mesa para um bom aprendizado. Até a próxima!"
+"Este foi o seu Radar {REVISTA} de hoje. Fatos à mesa para um bom aprendizado. Até a próxima!"
 
 REGRAS: SEMPRE cite números. NUNCA coloque marcadores no texto narrado.
 """
