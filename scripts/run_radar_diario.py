@@ -154,6 +154,10 @@ def _extrair_resumo_triagem(triagem: str, max_chars: int = 600) -> str:
 def _enviar_whatsapp(audio_url: str, tema_nome: str, dry_run: bool = False) -> int:
     """Envia o radar para todos os usuários ativos. Retorna nº de envios."""
     try:
+        import sys as _sys
+        _src = str(_ROOT / "src")
+        if _src not in _sys.path:
+            _sys.path.insert(0, _src)
         from whatsapp.user_manager import get_all_active
         from whatsapp import zapi_client as zapi
     except ImportError as e:
