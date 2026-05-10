@@ -1398,6 +1398,14 @@ class ArticleAnalyzer:
                 )
                 if not score:
                     score = self._extract_score(analysis_text)
+
+                # Regra de consistência: metodologia fraca → aplicabilidade limitada
+                # Se nota_trabalho_estatistico < 8, nota_aplicabilidade não pode passar de 7
+                nota_estat = float(analysis_json_data.get('nota_trabalho_estatistico') or 0)
+                if nota_estat and nota_estat < 8 and score > 7:
+                    print(f"   ⚠️  Nota clínica ({score}) limitada a 7 — rigor estatístico insuficiente ({nota_estat}/10)")
+                    score = 7.0
+                    analysis_json_data['nota_aplicabilidade_clinica'] = 7.0
             else:
                 score = self._extract_score(analysis_text)
 
@@ -2411,7 +2419,7 @@ class ArticleAnalyzer:
                 },
                 "media": {
                     "audio_status": audio_status,
-                    "mindmap_status": mindmap_render_status if mindmap_render_status == "rendered" else ("extracted" if mindmap_path_abs else "not_found"),
+                    "mindmap_status": "disabled",
                     "infographic_status": infographic_status,
                     "visual_abstract_status": visual_abstract_status,
                 },
@@ -2482,7 +2490,7 @@ class ArticleAnalyzer:
             summary_relative = f"outputs/corpus/{doc_id}/analysis.md"
             audio_relative = os.path.relpath(audio_path, os.path.dirname(self.output_base_dir)) if audio_path else None
             image_relative = None  # Geração de imagens DALL-E removida (v9.1)
-            mindmap_relative = f"outputs/corpus/{doc_id}/mindmap.md" if mindmap_path_abs else None
+            mindmap_relative = None
             mindmap_image_relative = f"outputs/corpus/{doc_id}/assets/mindmap.png" if mindmap_image_path else None
 
             skip_db_write = os.environ.get('CARDIODAILY_SKIP_DB_WRITE', '0') == '1'
