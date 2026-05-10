@@ -154,13 +154,23 @@ def _extrair_resumo_triagem(triagem: str, max_chars: int = 600) -> str:
 def _enviar_whatsapp(audio_url: str, tema_nome: str, dry_run: bool = False) -> int:
     """Envia o radar para todos os usuários ativos. Retorna nº de envios."""
     try:
-        import sys as _sys
-        _src = str(_ROOT / "src")
-        if _src not in _sys.path:
-            _sys.path.insert(0, _src)
-        from whatsapp.user_manager import get_all_active
-        from whatsapp import zapi_client as zapi
-    except ImportError as e:
+        import importlib.util as _ilu, sys as _sys
+        # Importar diretamente pelo caminho para evitar conflito com pacote elevenlabs/whatsapp
+        def _load(name, path):
+            if name in _sys.modules:
+                return _sys.modules[name]
+            spec = _ilu.spec_from_file_location(name, path)
+            mod = _ilu.module_from_spec(spec)
+            _sys.modules[name] = mod
+            spec.loader.exec_module(mod)
+            return mod
+
+        _wh_dir = _ROOT / "src" / "whatsapp"
+        _load("whatsapp", _wh_dir / "__init__.py")
+        user_manager = _load("whatsapp.user_manager", _wh_dir / "user_manager.py")
+        zapi = _load("whatsapp.zapi_client", _wh_dir / "zapi_client.py")
+        get_all_active = user_manager.get_all_active
+    except Exception as e:
         print(f"   ⚠️  WhatsApp não disponível: {e}")
         return 0
 
