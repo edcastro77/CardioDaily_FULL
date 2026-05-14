@@ -1,4 +1,4 @@
-name: Radar Gerar Podcast (07:30 BRT)
+name: Radar CardioDaily (07:30 BRT)
 
 on:
   schedule:
@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  gerar:
+  radar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
@@ -17,11 +17,13 @@ jobs:
       GEMINI_API_KEY:       ${{ secrets.GEMINI_API_KEY }}
       OPENAI_API_KEY:       ${{ secrets.OPENAI_API_KEY }}
       ENTREZ_EMAIL:         ${{ secrets.ENTREZ_EMAIL }}
-      CARTESIA_API_KEY:      ${{ secrets.CARTESIA_API_KEY }}
       ELEVENLABS_API_KEY:   ${{ secrets.ELEVENLABS_API_KEY }}
       ELEVENLABS_VOICE_ID:  ${{ secrets.ELEVENLABS_VOICE_ID }}
+      ZAPI_BASE:            ${{ secrets.ZAPI_BASE }}
+      ZAPI_CLIENT_TOKEN:    ${{ secrets.ZAPI_CLIENT_TOKEN }}
       TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
+      BETA_PAUSADO:         ${{ secrets.BETA_PAUSADO }}
 
     steps:
       - uses: actions/checkout@v4
@@ -36,3 +38,6 @@ jobs:
 
       - name: Gerar podcast do radar
         run: python scripts/run_radar_diario.py
+
+      - name: Enviar radar via WhatsApp e Telegram
+        run: python distribuidor.py radar
