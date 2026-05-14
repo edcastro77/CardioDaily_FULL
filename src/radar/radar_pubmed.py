@@ -465,56 +465,76 @@ CLASSIFICAÇÃO:
 🟡 BAIXA PRIORIDADE (3-4): Retrospectivo, N pequeno, nicho específico
 ⚪ DESCARTAR (1-2): Pré-clínico, case report, muito específico
 
+FILTRO OBRIGATÓRIO — BRASIL:
+Descarte imediatamente qualquer artigo sobre medicamento, dispositivo ou procedimento
+NÃO disponível no Brasil. Marque como ⚪ com a nota "indisponível no Brasil".
+Exemplos de drogas indisponíveis: torasemida, piretanida, ivabradina IV, sacubitril oral isolado.
+Se tiver dúvida sobre disponibilidade, mencione na classificação.
+
 PARA CADA ARTIGO:
 1. Classificação (emoji + nota)
 2. Por que chamou atenção (1-2 frases)
-3. Potencial de impacto clínico
+3. Potencial de impacto clínico para o cardiologista clínico brasileiro
 
 NO FINAL:
-- Liste os 🔴 que merecem análise completa
-- Resuma tendências da semana
-- Sugira temas para Radar
+- Liste apenas os 🔴 que merecem análise completa no podcast
+- Resuma em 2-3 frases as tendências da semana
 
 LEMBRE: Você trabalha apenas com RESUMOS. Use "pode mudar", "sugere", não afirme certezas.
 """
 
 PROMPT_PODCAST_PUBMED = """
-Você é o roteirista do Radar PubMed CardioDaily — podcast de atualização em cardiologia.
+Você é o roteirista do Radar PubMed CardioDaily — podcast semanal de atualização em cardiologia para o médico brasileiro.
 
 TEMA DO DIA: {TEMA}
 
-CURADORIA — regra absoluta:
-Comente APENAS artigos diretamente sobre o tema. Ignore artigos onde o tema aparece como subgrupo ou comorbidade.
-Se a semana foi fraca, diga isso em uma frase e encerre. Não preencha com artigos tangenciais.
+PÚBLICO: cardiologista clínico, 30-60 anos, centro urbano, fora da academia. Quer saber o que fazer amanhã no ambulatório ou na beira do leito. Não tem paciência para burocracia.
 
-TAMANHO ALVO: 5 a 7 minutos de áudio — aproximadamente 800 a 1000 palavras no total. Seja cirúrgico.
+DURAÇÃO ALVO: 5 minutos. Máximo absoluto: 7 minutos. Isso significa 600 a 800 palavras no total. Seja cirúrgico — menos é mais.
 
-ESTRUTURA DO ROTEIRO:
+FILTRO BRASIL — REGRA INVIOLÁVEL:
+Jamais comente artigo sobre droga, dispositivo ou procedimento indisponível no Brasil.
+Se um artigo passou da triagem mas trata de algo inacessível na prática brasileira, ignore-o silenciosamente.
 
-1. Abertura (2 frases):
+QUANTOS ARTIGOS:
+Máximo 3 artigos com tratamento completo. Se a semana foi fraca, comente 1 ou 2 com profundidade.
+Prefira profundidade a volume. Nenhuma "menção rápida". Nenhum "artigo descartado".
+Se não há nada relevante, diga isso em 2 frases e encerre.
+
+ABERTURA — OBRIGATÓRIA, EXATAMENTE ASSIM:
 "Olá! Eu sou o assistente virtual do Dr. Eduardo Castro e este é o Radar PubMed do CardioDaily. Fatos à mesa, sem firulas!"
 
-2. Destaques da semana — máximo 3 artigos de alta relevância. Para cada um:
-   - 1 frase de contexto clínico: qual o problema que este estudo resolve?
-   - Resultado principal com número (HR, NNT, redução absoluta, p-valor)
-   - TAKE-HOME PRÁTICO — obrigatório, em tom direto:
-     "Na prática: prescreva X na dose Y para pacientes com Z."
-     "Peça esse exame quando ver tal achado — e atenção: resultado positivo significa isso."
-     "Antes era assim. Agora, com esse dado, muda para assim."
+PARA CADA ARTIGO — estrutura obrigatória, sem anunciar que está começando:
+1. Frase de gancho: uma pergunta, uma provocação ou um dado que incomoda. Algo que faça o ouvinte se sentar direito.
+   Exemplos de gancho bom:
+   - "Quantos dos seus pacientes com IC saíram do hospital sem iSGLT2 na última semana?"
+   - "Você ainda troca furosemida por outro diurético sem pensar duas vezes? Pode parar."
+   - "Existe um fenótipo de hipertensão pulmonar que você provavelmente está subdiagnosticando."
+   NÃO use: "O primeiro destaque é...", "Temos um estudo...", "Vamos falar sobre..."
 
-3. Menções rápidas — artigos medianos em 1 frase cada, só o dado principal.
+2. O que o estudo fez — em 1-2 frases: tipo de estudo, tamanho, pergunta clínica central.
+   NÃO cite PMID, DOI, número de registro ou qualquer identificador numérico.
 
-4. Descartados — 1 frase agrupando o que foi ignorado e por quê.
+3. O que encontrou — tamanho do efeito em linguagem humana:
+   CORRETO: "reduziu o risco de morte em um terço", "não fez diferença alguma", "dobrou a chance de recuperação renal"
+   ERRADO: "HR 0,66 IC95% 0,54-0,81 p=0,0003"
+   Se o resultado foi estatisticamente sólido, diga "com significância estatística robusta". Se não foi, diga "sem diferença significativa".
 
-5. Encerramento (1 frase):
+4. O que você faz com isso — obrigatório, concreto, acionável:
+   "Prescreva X na dose Y para pacientes com Z."
+   "Antes de indicar esse procedimento, peça este exame — resultado acima de tal valor muda a conduta."
+   "Esse dado ainda não muda sua prática, mas é o que você vai citar quando o residente te perguntar por quê."
+
+ENCERRAMENTO — OBRIGATÓRIO, EXATAMENTE ASSIM:
 "Este foi o seu Radar PubMed CardioDaily de hoje. Fatos à mesa para um bom aprendizado. Até a próxima!"
 
-REGRAS:
-- Tom direto, acadêmico, sem eufemismos. Rasga o verbo.
-- SEMPRE inclua o take-home prático nos destaques — prescrição, exame, interpretação, mudança de conduta.
-- NUNCA use marcadores, títulos, numeração ou qualquer formatação no texto — apenas texto corrido para TTS.
-- NUNCA inclua artigos fora do tema {TEMA}.
-- NUNCA ultrapasse 1000 palavras no total.
+REGRAS ABSOLUTAS:
+- NUNCA cite PMID, DOI ou qualquer número de identificação de artigo
+- NUNCA use HR, OR, RR, IC 95%, p-valor no texto falado — traduza para linguagem humana
+- NUNCA use marcadores, títulos, numeração ou qualquer formatação — apenas texto corrido
+- NUNCA diga "vamos ao próximo", "o próximo destaque", "menção rápida", "artigos descartados"
+- NUNCA inclua artigos fora do tema {TEMA}
+- NUNCA ultrapasse 800 palavras
 """
 
 PROMPT_NUMERO = """
@@ -921,23 +941,15 @@ class RadarPubMed:
 
     def gerar_audio(self, script: str, output_path: str,
                     voice_id: str = '', model_id: str = '') -> bool:
-        """Gera WAV via Cartesia TTS (primário) ou ElevenLabs (fallback)."""
+        """Gera áudio via ElevenLabs TTS (radar usa exclusivamente ElevenLabs)."""
         texto = limpar_para_audio(script).strip()
         if not texto:
             return False
 
-        # Cartesia — primário
-        if self._cartesia_key:
-            try:
-                return self._gerar_audio_cartesia(texto, output_path, voice_id)
-            except Exception as e:
-                print(f"   ⚠️  Cartesia falhou: {e} — tentando ElevenLabs…")
-
-        # ElevenLabs — fallback
         if self._elevenlabs_key:
             return self._gerar_audio_elevenlabs(texto, output_path, voice_id, model_id)
 
-        raise RuntimeError("Nenhum TTS configurado (CARTESIA_API_KEY ou ELEVENLABS_API_KEY)")
+        raise RuntimeError("ELEVENLABS_API_KEY não configurada")
 
     def _gerar_audio_cartesia(self, texto: str, output_path: str,
                                voice_id: str = '') -> bool:

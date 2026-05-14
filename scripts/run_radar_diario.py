@@ -5,7 +5,8 @@ CardioDaily — Radar Diário Automático
 Roda 1 tema por dia, ciclando os 13 temas a cada 13 dias.
 Busca no PubMed: últimos 14 dias, máximo 50 artigos.
 Gera script Gemini + MP3 TTS, faz upload ao bucket 'radar_podcasts',
-insere registro na tabela 'radar' do Supabase e envia via WhatsApp.
+insere registro na tabela 'radar' do Supabase.
+O envio WhatsApp/Telegram fica exclusivamente a cargo do distribuidor.py radar (08:00 BRT).
 
 Uso:
     python3 scripts/run_radar_diario.py             # roda tema do dia
@@ -17,7 +18,6 @@ Uso:
 import argparse
 import os
 import sys
-import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -72,7 +72,7 @@ def _upload_radar_storage(mp3_path: Path, filename: str) -> str | None:
         headers = {
             "apikey": supabase_key,
             "Authorization": f"Bearer {supabase_key}",
-            "Content-Type": "audio/wav" if filename.endswith(".wav") else "audio/mpeg",
+            "Content-Type": "audio/mpeg",
             "x-upsert": "true",
         }
         with open(mp3_path, "rb") as f:
@@ -151,59 +151,6 @@ def _extrair_resumo_triagem(triagem: str, max_chars: int = 600) -> str:
     return triagem[-max_chars:].strip()
 
 
-def _enviar_whatsapp(audio_url: str, tema_nome: str, dry_run: bool = False) -> int:
-    """Envia o radar para todos os usuários ativos. Retorna nº de envios."""
-    try:
-        import importlib.util as _ilu, sys as _sys
-        # Importar diretamente pelo caminho para evitar conflito com pacote elevenlabs/whatsapp
-        def _load(name, path):
-            if name in _sys.modules:
-                return _sys.modules[name]
-            spec = _ilu.spec_from_file_location(name, path)
-            mod = _ilu.module_from_spec(spec)
-            _sys.modules[name] = mod
-            spec.loader.exec_module(mod)
-            return mod
-
-        _wh_dir = _ROOT / "src" / "whatsapp"
-        _load("whatsapp", _wh_dir / "__init__.py")
-        user_manager = _load("whatsapp.user_manager", _wh_dir / "user_manager.py")
-        zapi = _load("whatsapp.zapi_client", _wh_dir / "zapi_client.py")
-        get_all_active = user_manager.get_all_active
-    except Exception as e:
-        print(f"   ⚠️  WhatsApp não disponível: {e}")
-        return 0
-
-    usuarios = get_all_active()
-    if not usuarios:
-        print("   ℹ️  Nenhum usuário ativo cadastrado.")
-        return 0
-
-    msg = (
-        f"🎙️ *Radar CardioDaily — {tema_nome}*\n"
-        f"📅 {datetime.now().strftime('%d/%m/%Y')}\n\n"
-        f"Ouça as principais novidades de *{tema_nome}* publicadas nos últimos 14 dias."
-    )
-
-    enviados = 0
-    for user in usuarios:
-        phone = user["phone"]
-        nome  = user.get("nome") or phone
-        print(f"   📱 {nome} ({phone})", end=" ")
-        if dry_run:
-            print("[dry-run]")
-            continue
-        ok_txt   = zapi.send_text(phone, msg)
-        time.sleep(1)
-        ok_audio = zapi.send_audio(phone, audio_url)
-        if ok_txt and ok_audio:
-            print("✅")
-            enviados += 1
-        else:
-            print(f"⚠️  txt={ok_txt} audio={ok_audio}")
-        time.sleep(2)
-
-    return enviados
 
 
 def run(categoria: str | None = None, dry_run: bool = False):
@@ -216,7 +163,7 @@ def run(categoria: str | None = None, dry_run: bool = False):
     data_file = hoje.strftime("%Y%m%d")          # para nome de arquivo
     periodo_fim   = hoje.strftime("%Y-%m-%d")
     periodo_inicio = (hoje - timedelta(days=DIAS_JANELA)).strftime("%Y-%m-%d")
-    mp3_filename  = f"{cat_key}_{data_file}.wav"  # Cartesia gera WAV (ElevenLabs fallback: MP3)
+    mp3_filename  = f"{cat_key}_{data_file}.mp3"  # ElevenLabs gera MP3
 
     print(f"\n{'='*55}")
     print(f"📡 Radar CardioDaily — Diário Automático")
@@ -229,12 +176,31 @@ def run(categoria: str | None = None, dry_run: bool = False):
         print("✅ Dry-run: nada será executado.")
         return
 
+    # ── 0. Guard anti-duplo-disparo ───────────────────────────────────────
+    # Se já existe registro para (tema, hoje) no Supabase, abortar imediatamente.
+    # Isso evita que cron do GitHub + crontab local gerem dois episódios.
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
+    if supabase_url and supabase_key:
+        import requests as _req
+        _check = _req.get(
+            f"{supabase_url}/rest/v1/radar",
+            headers={
+                "apikey": supabase_key,
+                "Authorization": f"Bearer {supabase_key}",
+            },
+            params={"tema": f"eq.{cat_key}", "data_varredura": f"eq.{data_str}", "select": "id"},
+            timeout=10,
+        )
+        if _check.status_code == 200 and _check.json():
+            print(f"⏭️  Radar {cat_nome} já gerado hoje ({data_str}) — abortando para evitar duplicata.")
+            return
+
     # ── 1. Inicializar radar ───────────────────────────────────────────────
     radar = RadarPubMed()
     radar.configure(
         gemini_key=os.getenv("GEMINI_API_KEY", ""),
         anthropic_key=os.getenv("ANTHROPIC_API_KEY", ""),
-        cartesia_key=os.getenv("CARTESIA_API_KEY", ""),
         elevenlabs_key=os.getenv("ELEVENLABS_API_KEY", ""),
         email=os.getenv("ENTREZ_EMAIL", "cardiodaily@cardiodaily.com.br"),
     )
@@ -311,11 +277,6 @@ def run(categoria: str | None = None, dry_run: bool = False):
             print(f"   📨 Script enviado ao Telegram ({script_path.name})")
         except Exception as e:
             print(f"   ⚠️  Telegram script falhou: {e}")
-
-    # ── 9. Enviar WhatsApp ────────────────────────────────────────────────
-    print(f"\n📲 Enviando para usuários ativos…")
-    n = _enviar_whatsapp(audio_url, cat_nome, dry_run=dry_run)
-    print(f"   {n} usuário(s) notificado(s)")
 
     print(f"\n{'='*55}")
     print(f"✅ Radar {cat_nome} concluído!")
