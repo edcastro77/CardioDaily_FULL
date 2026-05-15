@@ -1,6 +1,199 @@
 # CADERNO DE EXECUÇÃO — CARDIODAILY
-## Versão 16.2 | 30/Abril/2026
-### Histórico: v13.2 (20/Fev) → v15.0 (05/Abr) → v16.0 (29/Abr) → v16.1 (29/Abr) → v16.2 (30/Abr)
+## Versão 19.0 | 15/Maio/2026
+### Histórico: v13.2 (20/Fev) → v15.0 (05/Abr) → v16.0 (29/Abr) → v17.0 (02/Mai) → v18.0 (02/Mai) → v19.0 (15/Mai)
+
+---
+
+## MUDANÇAS v19.0 (13–15/Maio/2026) — Briefing Cri-Cri + Radar fix + Compactador Diretrizes
+
+### 1. Briefing de Curadoria (Eduardo Cri-Cri) — NOVO ✅
+
+**Propósito:** ao final de cada lote de análise, gerar um áudio ácido/irreverente com todos os artigos do dia — para o Dr. Eduardo usar no sábado/domingo de curadoria para selecionar o conteúdo da semana.
+
+**Arquivo principal:** `src/briefing_semanal.py`
+
+**Pipeline:**
+1. Busca artigos no Supabase (`created_at >= N horas atrás`), ordenados por nota DESC
+2. Enriquece com `analysis.md` (primeiros 4000 chars) e `analysis.json` (nota estatística, keywords, título real)
+3. Gera script via **Claude Sonnet 4.6** (temp=0.7, max_tokens=16000) com persona Eduardo Cri-Cri
+4. Salva script em `outputs/briefing/briefing_YYYYMMDD_HHMM.txt`
+5. Gera áudio via **Cartesia Luana PT-BR** (voz `700d1ee3-a641-4018-ba6e-899dcadc9e2b`, speed=1.05)
+6. Converte WAV → MP3 via ffmpeg (121 MB → ~15 MB)
+7. Upload para bucket Supabase `briefing_audio`
+8. Envia texto + áudio ao WhatsApp do Dr. Eduardo via Z-API
+9. Envia script (documento) + áudio ao Telegram
+
+**Voz:** Cartesia Luana PT-BR — `700d1ee3-a641-4018-ba6e-899dcadc9e2b`
+- Isabella foi testada e rejeitada ("rapariga de Portugal")
+- Luana — "Public Speaker" — aprovada pelo Dr. Eduardo
+
+**Fix crítico de WAV corrompido:**
+- A Cartesia gera WAV RF64 (chunk `data` com `size=0xFFFFFFFF`)
+- A concatenação antiga assumia PCM no offset 44 — errado (há chunk `LIST/INFO` variável entre `fmt` e `data`)
+- Solução: `_find_data_chunk()` localiza o chunk `data` dinamicamente; `_concat_wavs()` monta header WAV limpo do zero; saída convertida para MP3 via ffmpeg
+- Arquivos antigos `.wav` corrompidos podem ser recuperados extraindo PCM bruto a partir do offset 78
+
+**Auto-trigger:** `article_analyzer.py` chama `rodar_briefing()` automaticamente ao final de cada lote com `processados > 0`. Desativar com env var `CARDIODAILY_SKIP_BRIEFING=1`.
+
+**App macOS:** duplo clique em `Briefing Curadoria.app` ou `Briefing Curadoria.command`
+
+**CLI:**
+```bash
+./cardiodaily briefing              # últimas 24h
+./cardiodaily briefing --horas 48   # janela maior
+./cardiodaily briefing --dry-run    # só script, sem áudio
+```
+
+**Env vars necessárias** (já configuradas no `.env`):
+- `CARTESIA_API_KEY` — TTS
+- `EDUARDO_PHONE=5527996089248` — WhatsApp do Dr. Eduardo
+- `TELEGRAM_CHAT_ID=237863636` — Telegram
+- `ZAPI_INSTANCE_ID`, `ZAPI_TOKEN`, `ZAPI_CLIENT_TOKEN` — Z-API
+- `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` — upload + busca artigos
+- Bucket `briefing_audio` — criar no Supabase Dashboard (Storage → New bucket → público)
+
+---
+
+### 2. Radar — fixes de qualidade + arquitetura ✅
+
+#### Prompt reescrito (radar_pubmed.py)
+Problemas identificados no script de produção e corrigidos:
+- **PMIDs no áudio** → regra absoluta: nunca citar PMID, DOI ou qualquer identificador
+- **HR/IC 95%/p-valor** → traduzir sempre para linguagem humana ("reduziu o risco em um terço")
+- **Abertura burocrática** ("A semana trouxe volume expressivo...") → substituída por gancho provocador por artigo
+- **"Menções rápidas" e "artigos descartados"** → seções eliminadas — máx 3 artigos com tratamento completo
+- **Filtro Brasil** → artigo sobre droga/dispositivo/procedimento indisponível no Brasil: ignorar silenciosamente
+- **Duração** → alvo 5 min (600–800 palavras); nunca ultrapassar 7 min
+- **Abertura fixa:** `"Olá! Eu sou o assistente virtual do Dr. Eduardo Castro e este é o Radar PubMed do CardioDaily. Fatos à mesa, sem firulas!"`
+- **Encerramento fixo:** `"Este foi o seu Radar PubMed CardioDaily de hoje. Fatos à mesa para um bom aprendizado. Até a próxima!"`
+
+#### TTS: Cartesia removido do radar
+- Radar usa **ElevenLabs exclusivamente** (decisão de produto — sem fallback)
+- `gerar_audio()` em `radar_pubmed.py`: apenas `_gerar_audio_elevenlabs()`, sem Cartesia
+- Código do Cartesia mantido na classe mas não chamado pelo radar
+
+#### Arquitetura: dois workflows → um único (radar.yml)
+- **Antes:** `radar-gerar.yml` (07:30 BRT) gerava + enviava WhatsApp; `radar-enviar.yml` (08:00 BRT) enviava de novo → **duplicata diária**
+- **Depois:** `radar.yml` — um único job em sequência:
+  1. `python scripts/run_radar_diario.py` → gera MP3 + registra Supabase (zero WhatsApp)
+  2. `python distribuidor.py radar` → único responsável pelo envio WhatsApp + Telegram
+- `run_radar_diario.py`: função `_enviar_whatsapp` removida; `import time` removido
+- **Guard anti-duplo-disparo** mantido: se registro `(tema, data)` já existe no Supabase, aborta imediatamente
+
+---
+
+### 3. Compactador de Diretrizes SBC-PI — NOVO ✅
+
+**Propósito:** compactar diretrizes/guidelines/reviews em peças no formato CardioDaily SBC-PI para publicação.
+
+**Módulo:** `src/compactador_diretrizes/`
+- `compactador_diretriz.py` — lógica principal (Claude Sonnet 4.6, streaming, max_tokens=32000)
+- `web_compactador.py` — interface Flask na porta 5002
+- `prompts/system_compactador.md` — prompt do sistema
+- `prompts/user_compactador.md` — template do usuário
+- `schemas/schema_diretriz_cardiodaily.json` — schema JSON de validação
+- `fewshots/fewshot_trc_jama2026.json` — exemplo few-shot
+
+**CLI:** `./cardiodaily diretriz --input arquivo.pdf --autores "..." --titulo "..." --revista EHJ --ano 2024`
+**Web:** `./cardiodaily diretriz-web` → `http://localhost:5002`
+
+**Fix crítico de template:** `str.replace()` em vez de `str.format()` — o template contém `{}` literais do schema JSON que quebram o `format()`
+
+**Tabela Supabase:** `diretrizes_compactas` — criar com SQL em `scripts/supabase/`
+
+---
+
+## MUDANÇAS v18.0 (02/Maio/2026) — Correção Supabase: PDFs + Áudios
+
+### Diagnóstico de integridade (auditoria executada)
+- **Total:** 3.275 artigos no Supabase
+- **Sem `caminho_pdf`:** 2.661 (81%) — PDF gerado localmente mas nunca subido ao Storage
+- **Sem `caminho_audio`:** 3.181 (97%) — apenas 94 artigos com URL de áudio
+- **Nota ≥ 8 em 2026 sem áudio:** 60 artigos (24 originais, 26 revisões, 10 meta-análises)
+- **Causa raiz dos PDFs:** `pdf_generator.py` gerava `assets/resumo.pdf` local mas nunca subia ao bucket `resumos_pdf` nem atualizava `caminho_pdf`
+
+### Correções implementadas
+
+#### 1. `article_analyzer.py` — PDF gerado + publicado após cada análise (step 7e)
+- Adicionada função `_upload_pdf_supabase(doc_id, pdf_path)` — análoga ao `_upload_podcast_supabase()` já existente
+- Adicionado step 7e no pipeline de análise: chama `ArticlePDFGenerator`, faz upload ao bucket `resumos_pdf`, atualiza `caminho_pdf` no Supabase
+- **Resultado:** toda nova análise gera PDF + publica automaticamente — nunca mais ficará sem `caminho_pdf`
+
+#### 2. `scripts/gerar_audios_lote.py` — migrado OpenAI TTS → ElevenLabs
+- TTS: `eleven_multilingual_v2`, `language_code: pt-BR`, voz `ELEVENLABS_VOICE_ID`, `speed: 1.1`
+- **Consistente com a decisão de 29/Abr:** ElevenLabs exclusivamente (sem OpenAI TTS em nenhum ponto)
+
+#### 3. `scripts/auditoria_supabase.py` — script de monitoramento periódico (novo)
+- Executa diagnóstico completo: total, sem PDF, sem áudio, nota≥8 sem áudio, corpus local vs. Supabase
+- Exibe status com semáforo (✅/🟡/🔴) e comando exato de correção quando detecta problema
+- **Uso:** `python3 scripts/auditoria_supabase.py`
+- **Recomendação:** rodar semanalmente (pode adicionar ao cron)
+
+### Scripts de backfill (já existiam, prontos para uso)
+- `scripts/upload_pdfs_supabase.py` — backfill de PDFs (gera local + sobe ao Storage + atualiza DB)
+  ```
+  python3 scripts/upload_pdfs_supabase.py --dry-run --since 2020-01-01  # preview
+  python3 scripts/upload_pdfs_supabase.py --since 2020-01-01             # executar
+  ```
+- `scripts/gerar_audios_lote.py` — backfill de áudios (GPT-4o script + ElevenLabs TTS + upload)
+  ```
+  python3 scripts/gerar_audios_lote.py --dry-run   # preview
+  python3 scripts/gerar_audios_lote.py             # executar
+  ```
+
+### Prevenção de recorrência
+| Ação | Onde | Status |
+|------|------|--------|
+| Upload PDF automático após análise | `article_analyzer.py` step 7e | ✅ Implementado |
+| Upload áudio automático após análise | `article_analyzer.py` `_upload_podcast_supabase()` | ✅ Já existia |
+| Script de auditoria periódica | `scripts/auditoria_supabase.py` | ✅ Implementado |
+| Backfill PDFs histórico | `scripts/upload_pdfs_supabase.py --since 2020-01-01` | ⏳ Pendente execução |
+| Backfill áudio 2026 | `scripts/gerar_audios_lote.py` | ⏳ Pendente execução |
+
+---
+
+## MUDANÇAS v17.0 (02/Maio/2026) — Novo formato de análise + PDF
+
+### Prompt de análise de artigos originais — reescrito
+- **Arquivo:** `src/prompts/prompt_artigo_original_v2.md`
+- **O que mudou:** Prompt reescrito no estilo do Replete (sistema de referência aprovado pelo Dr. Eduardo). Estrutura idêntica ao `ARTICLE_ANALYSIS_PROMPT` do Replete, com 3 adições do CardioDaily:
+  1. Regra de endpoint DURO/SURROGATE com teto de nota explícito
+  2. Análise obrigatória de poder estatístico para RCTs (taxa assumida vs. real, classificação BEM POWERED / UNDERPOWERED)
+  3. Instrução explícita: todos os campos de análise em **prosa fluida** — sem tabelas, checklists ou marcações Markdown dentro dos valores JSON
+- **O que foi removido:** 15 seções com tabelas, emojis, checklists, análise de poder estatístico em tabela separada, seção PÉROLAS em tabela, CHECKLIST FINAL — tudo substituído por instrução narrativa
+- **Output:** JSON com campos `titulo`, `revista`, `ano`, `autores_principais`, `nota_aplicabilidade_clinica`, `nota_trabalho_estatistico`, `justificativa_notas`, `contexto_tema`, `nucleo_comum` (10 subcampos), `analise_especifica`, `reflexao_final`, `mapa_mental`
+- **Mapa mental:** mantido — campo `mapa_mental` como string Markdown dentro do JSON (não mais bloco ```markdown``` no texto bruto)
+
+### Envio ao Gemini — correção crítica de qualidade
+- **Problema:** prompt estava sendo enviado em `system_instruction` separado do artigo (`system_only` mode) com max 16.000 tokens — isso degradava significativamente a qualidade da análise
+- **Solução:** para Gemini, prompt + artigo juntos num único `contents` (`system_msg=None`), max_output_tokens fixo em 32.000
+- **Para Claude:** mantido `system_message` separado (comportamento correto para Claude)
+- **Arquivo:** `src/article_analyzer.py` — bloco de preparação de mensagens (~linha 1170)
+- **Regra permanente:** nunca separar prompt do artigo para Gemini. O Replete usa tudo junto — é o modelo de referência.
+
+### article_analyzer.py — suporte ao novo formato JSON
+- LLM retorna JSON estruturado → parser extrai e valida
+- `analysis.json` agora inclui: `titulo`, `revista`, `ano`, `autores_principais`, `justificativa_notas`, `contexto_tema`, `nucleo_comum`, `analise_especifica`, `reflexao_final` (quando análise nova)
+- `analysis.md` gerado a partir dos campos JSON estruturados (não mais dump bruto do LLM)
+- Mapa mental extraído do campo `mapa_mental` do JSON (fallback: bloco ```markdown``` legado)
+- Título real extraído do campo `titulo` do JSON (fallback: heurística sobre o texto)
+- Backward compatible: artigos antigos com analysis.md legado continuam funcionando
+
+### PDF Generator v2 — formato Replete aprovado ✅
+- **Arquivo:** `src/pdf_generator.py` (reescrito)
+- **Templates:** `src/templates/article_report.html` + `article_report.css` (reescritos)
+- **Layout:** capa azul (página 1) + informações + notas + contexto (página 2) + núcleo comum (páginas 3-4) + análise específica + reflexão final (página 5)
+- **Fix crítico de páginas em branco:** capa usa `@page cover` com margin zero; `report-body` usa `page-break-before: always`. Nunca usar `<div class="page-break">` manual entre seções do corpo — a paginação é automática pelo WeasyPrint
+- **Markdown renderizado:** campos do nucleo_comum convertidos de Markdown → HTML via `python-markdown` antes de injetar no template (`| safe` no Jinja2). Sem `white-space: pre-wrap` — causava páginas em branco quando havia blocos grandes de texto
+- **Backward compat:** lê `nucleo_comum` do `analysis.json` (novo); fallback extrai seções do `analysis.md` legado
+
+### Outros fixes da sessão
+- `import time` adicionado em `src/article_analyzer.py` (estava faltando)
+- Gemini 503/UNAVAILABLE adicionado ao retry em `classificador_artigos.py`, `robust_classifier.py`, `article_analyzer.py`
+- `indexar_corpus_completo.py`: bug `md_content` usado antes de ser lido — corrigido
+- Mac crontab de distribuição desativado — GitHub Actions é o único dispatcher
+- ElevenLabs `speed: 1.1` adicionado em `radar_pubmed.py`
+- "firula" → "firulas" corrigido em todos os prompts e scripts
 
 ---
 
@@ -217,6 +410,10 @@ pip install supabase httpx python-telegram-bot
 ## CHECKLIST BETA (atualizado 29/Abril/2026)
 
 ### Concluído
+- [x] Novo prompt de análise (formato Replete) aprovado pelo Dr. Eduardo (02/Mai)
+- [x] PDF Generator v2 — layout clean aprovado (02/Mai)
+- [x] Gemini: prompt + artigo juntos, 32k tokens (02/Mai)
+- [x] article_analyzer.py: suporte ao novo formato JSON estruturado (02/Mai)
 - [x] Diagnóstico completo do Supabase (3.100+ artigos)
 - [x] Reclassificação completa — artigos corrigidos, categoria `Não Cardiológico` criada
 - [x] n8n cancelado, `distribuidor.py` criado e funcional
@@ -265,6 +462,51 @@ pip install supabase httpx python-telegram-bot
 2. **Atualizar `docs/CADERNO_EXECUCAO.md` ao final de cada sessão** com mudanças relevantes
 3. **Nunca criar arquivos temporários na pasta raiz** — usar `archive/logs_operacionais/` ou `outputs/`
 4. **Arquivo canônico único:** `docs/CADERNO_EXECUCAO.md` — não criar versões paralelas
+5. **Modelo de referência para prompts:** o Replete (`/Users/edcastro77/Downloads/cardiodaily_export/prompts.py`) é o padrão de qualidade aprovado. Antes de reescrever qualquer prompt, ler o equivalente no Replete e usar como base — nunca partir do zero
+6. **Gemini: sempre prompt + artigo juntos.** Para Gemini, `system_msg=None` e todo o conteúdo (prompt + texto do artigo) em `contents`. Separar em `system_instruction` degrada a qualidade. Para Claude: `system_message` separado é correto
+7. **PDF sem page-break manual:** nunca adicionar `<div class="page-break">` entre seções do corpo do relatório — causa páginas em branco. Paginação é automática pelo WeasyPrint. A capa usa `@page cover` isolada
+
+---
+
+## COMO FORNECER CONTEXTO AO CLAUDE EM SESSÕES FUTURAS
+
+Para ajustar prompts, PDFs ou qualquer componente do CardioDaily com máxima eficiência, forneça:
+
+### Para ajustar um prompt de análise
+```
+1. O arquivo de referência: /Users/edcastro77/Downloads/cardiodaily_export/prompts.py
+   (ou cole o trecho relevante diretamente)
+2. Um PDF ou screenshot do resultado atual (o que está ruim)
+3. Um PDF ou screenshot do resultado desejado (o modelo a seguir)
+4. O artigo PDF que usou para testar (ou o nome do arquivo em ARTIGOS/)
+```
+
+### Para ajustar o layout do PDF
+```
+1. Screenshot do PDF atual com anotações do que está errado
+2. Screenshot ou descrição do layout desejado (ex: "igual ao PDF do Replete")
+3. Dizer se o problema é visual (CSS/HTML) ou de conteúdo (o que o LLM gera)
+```
+
+### Para adicionar novo componente ao pipeline
+```
+1. O que entra (input: tipo de arquivo, formato, fonte)
+2. O que sai (output: onde salva, formato, nome do arquivo)
+3. Quando dispara (manual / cron / gatilho automático)
+4. Qual modelo usar (Gemini / Claude / GPT-4o)
+5. Exemplo do resultado esperado (PDF, texto, JSON)
+```
+
+### Para corrigir um bug
+```
+1. Comando exato que falhou
+2. Mensagem de erro completa (copiar do terminal)
+3. O que deveria ter acontecido
+4. Quando o bug começou (antes/depois de qual mudança)
+```
+
+### Regra geral
+> **Mostrar é melhor que descrever.** Um screenshot do problema + um screenshot do esperado vale mais do que um parágrafo de texto. Sempre que possível, arraste o PDF ou imagem direto na conversa.
 
 ---
 
@@ -280,4 +522,4 @@ pip install supabase httpx python-telegram-bot
 
 ---
 
-*Versão 16.2 — 30/Abril/2026 — atualizado por Claude ao final da sessão*
+*Versão 17.0 — 02/Maio/2026 — atualizado por Claude ao final da sessão*

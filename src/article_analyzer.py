@@ -1895,6 +1895,12 @@ class ArticleAnalyzer:
             analysis_model = result.get('model_used')
             nota_metodologica = result.get('nota_metodologica')
             keywords_extracted = result.get('keywords_extracted') or []
+            # Complementar com keywords do JSON estruturado (prompt v2)
+            if not keywords_extracted and result.get('analysis_structured'):
+                _s = result['analysis_structured']
+                _kw = _s.get('keywords') or _s.get('analysis', {}).get('keywords') or []
+                if isinstance(_kw, list):
+                    keywords_extracted = [str(k) for k in _kw if k]
             muda_conduta = result.get('muda_conduta')
             
             print(f"   ✅ Nota de aplicabilidade clínica: {score}/10")
@@ -2774,7 +2780,28 @@ if __name__ == "__main__":
         print("💡 Dica: Use 'python article_analyzer.py 5' ou '--limit 5' para processar apenas 5 artigos")
     
     # Processar artigos
+    _t_inicio = datetime.now()
     stats = analyzer.process_all_articles(max_articles=max_articles, skip_first=skip_first)
-    
+
     print("\n✅ Processamento concluído!")
+
+    # ── Briefing de curadoria automático (Eduardo Cri-Cri) ────────────────
+    _processados = (stats or {}).get("processed", 0)
+    _skip_briefing = os.environ.get("CARDIODAILY_SKIP_BRIEFING", "").lower() in ("1", "true", "yes")
+    if _processados > 0 and not _skip_briefing:
+        print("\n" + "─" * 55)
+        print("🎙️  Iniciando briefing de curadoria…")
+        try:
+            from datetime import timezone as _tz
+            import importlib.util as _ilu
+            _bf_path = Path(__file__).parent / "briefing_semanal.py"
+            _spec = _ilu.spec_from_file_location("briefing_semanal", _bf_path)
+            _bf = _ilu.module_from_spec(_spec)
+            _spec.loader.exec_module(_bf)
+            # Janela = tempo desde o início do lote + 5 min de margem, mín 1h
+            _minutos = max(60, int((datetime.now() - _t_inicio).total_seconds() / 60) + 5)
+            _horas_janela = max(1, _minutos // 60 + 1)
+            _bf.rodar_briefing(horas=_horas_janela)
+        except Exception as _e:
+            print(f"⚠️  Briefing falhou (não crítico): {_e}")
 

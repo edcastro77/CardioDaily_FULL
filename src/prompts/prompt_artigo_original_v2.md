@@ -106,7 +106,11 @@ RETORNE UM JSON COM A SEGUINTE ESTRUTURA:
     "bullets_praticos": ["Como este estudo pode me ajudar na prática - bullet 1", "bullet 2", "bullet 3"],
     "relevancia": "relevância para discussões científicas atuais ou aplicação no mundo real",
     "reflexao_pessoal": "Pontos fortes, fracos e áreas potenciais para pesquisas futuras"
-  }
+  },
+
+  "keywords": ["termo clínico 1", "termo clínico 2", "termo clínico 3", "termo clínico 4", "termo clínico 5"]
 }
+
+O campo "keywords" deve conter 5-10 termos específicos e clinicamente relevantes para indexação, em inglês.
 
 Garanta que sua análise seja coerente e mantenha um tom acadêmico crítico do começo ao fim.
