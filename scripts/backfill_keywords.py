@@ -18,7 +18,9 @@ import json
 import os
 import re
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
@@ -43,37 +45,34 @@ HDRS_SB = lambda: {
     "Content-Type": "application/json",
 }
 
-PROMPT_KW = """Você é um indexador de literatura médica cardiovascular.
+PROMPT_KW = """Generate 5-8 specific clinical keywords for indexing this cardiology article. Return ONLY a JSON array, no other text.
 
-Dado o título e o resumo de um artigo científico, gere de 5 a 10 keywords em inglês, específicas e clinicamente relevantes para indexação.
+Example: ["heart failure", "SGLT2 inhibitors", "ejection fraction", "mortality"]
 
-Retorne APENAS um array JSON. Nenhum texto antes ou depois. Exemplo:
-["heart failure", "SGLT2 inhibitors", "ejection fraction", "hospitalization", "mortality"]
+Title: {titulo}
 
-Título: {titulo}
-
-Resumo: {resumo}
-"""
+Abstract: {resumo}"""
 
 
 def _gerar_keywords_gemini(titulo: str, resumo: str) -> list[str]:
-    """Chama Gemini Flash para gerar keywords."""
-    prompt = PROMPT_KW.replace("{titulo}", titulo[:300]).replace("{resumo}", resumo[:2000])
+    """Chama Gemini Flash para gerar keywords (thinking desativado para velocidade)."""
+    prompt = PROMPT_KW.replace("{titulo}", titulo[:300]).replace("{resumo}", resumo[:800])
     resp = requests.post(
         f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}",
         json={"contents": [{"parts": [{"text": prompt}]}],
-              "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1024}},
+              "generationConfig": {
+                  "temperature": 0,
+                  "maxOutputTokens": 300,
+                  "thinkingConfig": {"thinkingBudget": 0},
+              }},
         timeout=30,
     )
     if resp.status_code != 200:
         raise RuntimeError(f"Gemini {resp.status_code}: {resp.text[:200]}")
 
     raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-    # Limpar markdown e thinking tags
-    raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
     raw = re.sub(r'```json\s*', '', raw)
     raw = re.sub(r'```\s*', '', raw).strip()
-    # Extrair o array JSON
     m = re.search(r'\[.*\]', raw, re.DOTALL)
     if m:
         raw = m.group(0)
@@ -108,17 +107,32 @@ def _atualizar_supabase(doc_id: str, keywords: list[str]) -> bool:
 
 
 def _buscar_sem_keywords(ano: str | None, limit: int) -> list[dict]:
-    params = {
-        "select": "doc_id,titulo,resumo_markdown,tipo_estudo,data_publicacao",
-        "keywords": "is.null",
-        "resumo_markdown": "not.is.null",  # precisa ter resumo para gerar
-        "order": "nota_aplicabilidade.desc.nullslast",
-        "limit": str(limit),
-    }
-    if ano:
-        params["data_publicacao"] = f"gte.{ano}-01-01"
-    r = requests.get(f"{SUPABASE_URL}/rest/v1/artigos", headers=HDRS_SB(), params=params, timeout=30)
-    return r.json() if r.status_code == 200 and isinstance(r.json(), list) else []
+    """Busca com paginação — Supabase retorna máx 1000 por request."""
+    todos = []
+    page_size = 1000
+    offset = 0
+    while len(todos) < limit:
+        params = {
+            "select": "doc_id,titulo,resumo_markdown,tipo_estudo,nota_aplicabilidade,data_publicacao",
+            "keywords": "is.null",
+            "resumo_markdown": "not.is.null",
+            "order": "nota_aplicabilidade.desc.nullslast",
+            "limit": str(min(page_size, limit - len(todos))),
+            "offset": str(offset),
+        }
+        if ano:
+            params["data_publicacao"] = f"gte.{ano}-01-01"
+        r = requests.get(f"{SUPABASE_URL}/rest/v1/artigos", headers=HDRS_SB(), params=params, timeout=30)
+        if r.status_code != 200 or not isinstance(r.json(), list):
+            break
+        batch = r.json()
+        if not batch:
+            break
+        todos.extend(batch)
+        offset += len(batch)
+        if len(batch) < page_size:
+            break
+    return todos
 
 
 def main():
@@ -158,58 +172,86 @@ def main():
         return
 
     artigos = _buscar_sem_keywords(args.ano, args.limit)
-    print(f"📥 {len(artigos)} artigos para processar\n")
+    total_artigos = len(artigos)
+    print(f"📥 {total_artigos} artigos para processar (8 workers paralelos)\n")
 
-    ok = 0
-    disco = 0
-    api = 0
-    erros = 0
+    counters = {"ok": 0, "disco": 0, "api": 0, "erros": 0}
+    lock = threading.Lock()
+    done_count = [0]
 
-    for i, a in enumerate(artigos, 1):
+    def processar(a):
         doc_id  = a["doc_id"]
         titulo  = a.get("titulo") or ""
         resumo  = a.get("resumo_markdown") or ""
-        tipo    = a.get("tipo_estudo", "?")
-        nota    = a.get("nota_aplicabilidade", "?")
+        tipo    = (a.get("tipo_estudo") or "?")[:12]
+        nota    = a.get("nota_aplicabilidade") if a.get("nota_aplicabilidade") is not None else "?"
 
-        print(f"[{i:>4}/{len(artigos)}] {doc_id} | {tipo:<12} | nota={nota}", end=" ")
-
-        # 1. Tentar do disco primeiro (grátis)
+        # 1. Disco primeiro (grátis)
         kw = _gerar_keywords_do_disco(doc_id)
         fonte = "disco"
 
-        # 2. Fallback: Gemini Flash
+        # 2. Gemini Flash
         if not kw:
             if not titulo and not resumo:
-                print("⏭️  sem título/resumo")
-                continue
-            try:
-                kw = _gerar_keywords_gemini(titulo, resumo)
-                fonte = "gemini"
-                time.sleep(0.3)  # rate limit gentil
-            except Exception as e:
-                print(f"❌ {e}")
-                erros += 1
-                continue
+                return "skip", "sem título/resumo"
+            for tentativa in range(3):
+                try:
+                    kw = _gerar_keywords_gemini(titulo, resumo)
+                    fonte = "gemini"
+                    break
+                except json.JSONDecodeError:
+                    if tentativa < 2:
+                        time.sleep(1)
+                    else:
+                        return "erro", "JSON inválido"
+                except Exception as e:
+                    return "erro", str(e)[:80]
 
         if not kw:
-            print("⏭️  sem resultado")
-            continue
+            return "skip", "sem resultado"
 
-        # 3. Salvar no Supabase
         if _atualizar_supabase(doc_id, kw):
-            print(f"✅ {fonte} → {kw[:3]}{'...' if len(kw) > 3 else ''}")
-            ok += 1
-            if fonte == "disco":
-                disco += 1
-            else:
-                api += 1
-        else:
-            print("❌ falha no update")
-            erros += 1
+            return "ok", (fonte, kw)
+        return "erro", "falha no update Supabase"
 
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(processar, a): a for a in artigos}
+        for fut in as_completed(futures):
+            a = futures[fut]
+            doc_id = a["doc_id"]
+            tipo   = (a.get("tipo_estudo") or "?")[:12]
+            nota   = a.get("nota_aplicabilidade") if a.get("nota_aplicabilidade") is not None else "?"
+            with lock:
+                done_count[0] += 1
+                i = done_count[0]
+            try:
+                status, payload = fut.result()
+            except Exception as e:
+                print(f"[{i:>4}/{total_artigos}] {doc_id} | {tipo:<12} | nota={nota} ❌ {e}")
+                with lock:
+                    counters["erros"] += 1
+                continue
+
+            if status == "ok":
+                fonte, kw = payload
+                preview = kw[:3]
+                suffix = "..." if len(kw) > 3 else ""
+                print(f"[{i:>4}/{total_artigos}] {doc_id} | {tipo:<12} | nota={nota} ✅ {fonte} → {preview}{suffix}")
+                with lock:
+                    counters["ok"] += 1
+                    counters["disco" if fonte == "disco" else "api"] += 1
+            elif status == "erro":
+                print(f"[{i:>4}/{total_artigos}] {doc_id} | {tipo:<12} | nota={nota} ❌ {payload}")
+                with lock:
+                    counters["erros"] += 1
+            else:
+                print(f"[{i:>4}/{total_artigos}] {doc_id} | {tipo:<12} | nota={nota} ⏭️  {payload}")
+
+    elapsed = time.time() - t0
     print(f"\n{'='*55}")
-    print(f"✅ Concluído: {ok} atualizados ({disco} do disco + {api} via Gemini) | {erros} erros")
+    print(f"✅ Concluído em {elapsed/60:.1f}min: {counters['ok']} atualizados "
+          f"({counters['disco']} do disco + {counters['api']} via Gemini) | {counters['erros']} erros")
     print(f"{'='*55}\n")
 
 
