@@ -1,0 +1,31 @@
+name: Auditoria Semanal Supabase (Segunda 09:00 BRT)
+
+on:
+  schedule:
+    - cron: '0 12 * * 1'  # 12:00 UTC = 09:00 BRT, toda segunda-feira
+  workflow_dispatch:       # permite rodar manualmente quando quiser
+
+jobs:
+  auditoria:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Instalar dependências
+        run: pip install requests python-dotenv
+
+      - name: Rodar auditoria
+        run: python3 scripts/auditoria_supabase.py
