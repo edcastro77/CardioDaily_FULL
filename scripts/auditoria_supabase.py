@@ -126,12 +126,14 @@ def check_artigos(quick: bool) -> tuple[str, list[str]]:
     s = _semaforo(sem_kw, 50, 200)
     linhas.append(f"   {s} Sem keywords:         {sem_kw:,} ({_pct(sem_kw, total)})")
 
-    # Sem titulo
-    sem_titulo = _count("artigos", {"titulo": "is.null"})
-    s = _semaforo(sem_titulo, 5, 20)
-    linhas.append(f"   {s} Sem titulo:           {sem_titulo:,}")
+    # Sem titulo (null ou string vazia)
+    sem_titulo_null  = _count("artigos", {"titulo": "is.null"})
+    sem_titulo_vazio = _count("artigos", {"titulo": "eq."})
+    sem_titulo = sem_titulo_null + sem_titulo_vazio
+    s = _semaforo(sem_titulo, 5, 50)
+    linhas.append(f"   {s} Sem titulo:           {sem_titulo:,} (null={sem_titulo_null}, vazio={sem_titulo_vazio})")
     if sem_titulo > 0:
-        comandos.append(f"Títulos nulos ({sem_titulo}): inspecionar manualmente no Supabase")
+        comandos.append(f"Títulos ausentes ({sem_titulo}): python3 scripts/backfill_titulos.py")
 
     # Sem doenca_principal
     sem_doenca = _count("artigos", {"doenca_principal": "is.null"})

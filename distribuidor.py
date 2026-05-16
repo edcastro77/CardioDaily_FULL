@@ -128,10 +128,23 @@ def conectar_supabase():
 
 
 def buscar_assinantes_ativos(sb):
-    result = sb.table("whatsapp_users").select("*").eq("ativo", True).execute()
-    assinantes = [u for u in result.data if u.get("temas") and len(u["temas"]) > 0]
-    log.info(f"Assinantes ativos com temas: {len(assinantes)}")
-    return assinantes
+    for tentativa in range(3):
+        try:
+            result = sb.table("whatsapp_users").select("*").eq("ativo", True).execute()
+            assinantes = [u for u in result.data if u.get("temas") and len(u["temas"]) > 0]
+            log.info(f"Assinantes ativos com temas: {len(assinantes)}")
+            return assinantes
+        except Exception as e:
+            log.warning(f"  Tentativa {tentativa+1}/3 buscar_assinantes_ativos falhou: {e}")
+            if tentativa < 2:
+                import time; time.sleep(3)
+    log.error("  buscar_assinantes_ativos: todas as tentativas falharam — usando lista mínima")
+    # Fallback: Dr. Eduardo direto do env para não travar o envio do radar
+    import os
+    phone = os.getenv("EDUARDO_PHONE", "")
+    if phone:
+        return [{"phone": phone, "nome": "Dr. Eduardo", "temas": ["coronaria","arritmia","miocardiopatias","prevencao","valvulopatias","uti","imagem","cardiometabolico"], "ativo": True}]
+    return []
 
 
 def resolver_doencas(temas):
@@ -529,13 +542,22 @@ def distribuir_radar():
 
     sb = conectar_supabase()
     hoje = datetime.now().strftime("%Y-%m-%d")  # horário local (Brasil)
-    result = sb.table("radar").select("*").eq("data_varredura", hoje).limit(1).execute()
 
-    if not result.data:
+    radar = None
+    for tentativa in range(3):
+        try:
+            result = sb.table("radar").select("*").eq("data_varredura", hoje).limit(1).execute()
+            if result.data:
+                radar = result.data[0]
+            break
+        except Exception as e:
+            log.warning(f"  Tentativa {tentativa+1}/3 buscar radar falhou: {e}")
+            if tentativa < 2:
+                import time; time.sleep(3)
+
+    if not radar:
         log.warning("Nenhum radar para hoje.")
         return
-
-    radar = result.data[0]
     tema = radar.get("tema", "")
     podcast_url = radar.get("caminho_podcast", "")
 
