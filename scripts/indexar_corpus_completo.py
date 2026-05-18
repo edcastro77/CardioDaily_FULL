@@ -18,7 +18,7 @@ CORPUS_DIR = "/Users/edcastro77/CardioDaily_FULL/outputs/corpus"
 LOG_FILE = "/Users/edcastro77/CardioDaily_FULL/logs/indexacao.log"
 CHECKPOINT_FILE = "/Users/edcastro77/CardioDaily_FULL/data/checkpoint.txt"
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 if not all([SUPABASE_URL, SUPABASE_KEY, ANTHROPIC_KEY]):
@@ -202,6 +202,55 @@ def _extract_titulo(md_content, pdf_filename):
         return " ".join(parts[3:]).replace("_", " ")[:300]
     return None
 
+def _extrair_resumo_markdown(md_content: str) -> str | None:
+    """Extrai resumo do analysis.md para popular resumo_markdown no Supabase.
+    Prioriza TAKE-HOME MESSAGE, depois REFLEXÃO FINAL / APLICAÇÃO PRÁTICA.
+    Preserva tabelas markdown (não remove linhas com |).
+    """
+    # 1. Seção TAKE-HOME MESSAGE
+    m = re.search(
+        r'#{1,4}[^\n]*TAKE.HOME[^\n]*\n(.*?)(?=\n#{1,4}|\Z)',
+        md_content, re.IGNORECASE | re.DOTALL
+    )
+    if m:
+        texto = m.group(1).strip()
+        if len(texto) > 50:
+            return _limpar_resumo(texto)
+
+    # 2. Seção REFLEXÃO FINAL / APLICAÇÃO PRÁTICA / BULLETS PRÁTICOS
+    m = re.search(
+        r'#{1,4}[^\n]*(?:REFLEX[ÃA]O FINAL|APLICA[ÇC][ÃA]O PR[ÁA]TICA|BULLETS|PR[ÁA]TICO)[^\n]*\n(.*?)(?=\n#{1,4}|\Z)',
+        md_content, re.IGNORECASE | re.DOTALL
+    )
+    if m:
+        texto = m.group(1).strip()
+        if len(texto) > 50:
+            return _limpar_resumo(texto)
+
+    # 3. Fallback: última seção do MD (geralmente a conclusão)
+    if "já foi analisado anteriormente" not in md_content and len(md_content) > 2000:
+        partes = re.split(r'\n## ', md_content)
+        if len(partes) > 1:
+            ultima = partes[-1].strip()
+            if len(ultima) > 100:
+                return _limpar_resumo(ultima[:1500])
+
+    return None
+
+
+def _limpar_resumo(texto: str) -> str:
+    """Remove apenas ruído estrutural, preserva tabelas e bullets."""
+    # Remover linhas com só hifens/iguais (separadores)
+    texto = re.sub(r'^[-=]{3,}\s*$', '', texto, flags=re.MULTILINE)
+    # Normalizar espaços em excesso
+    texto = re.sub(r'\n{3,}', '\n\n', texto)
+    texto = texto.strip()
+    # Limitar a 3000 chars
+    if len(texto) > 3000:
+        texto = texto[:3000].rsplit('\n', 1)[0]
+    return texto
+
+
 def extract_metadata(folder):
     json_path = folder / "analysis.json"
     md_path   = folder / "analysis.md"
@@ -213,15 +262,26 @@ def extract_metadata(folder):
 
         # Nota de aplicabilidade — pré-requisito mínimo
         scores    = data.get("analysis", {}).get("scores", {})
-        nota_geral = scores.get("aplicabilidade") or scores.get("overall")
+        nota_geral = (scores.get("aplicabilidade")
+                      or scores.get("overall")
+                      or scores.get("nota_relevancia_pratica"))
+        # Fallback: extrair do MD via regex (novo prompt Markdown livre)
+        if nota_geral is None:
+            with open(md_path, "r", encoding="utf-8") as _f:
+                _mc = _f.read()
+            _m = re.search(r'APLICABILIDADE\s+CL[IÍ]NICA[^\d]*(\d+)\s*/\s*10', _mc, re.IGNORECASE)
+            if not _m:
+                _m = re.search(r'RELEV[AÂ]NCIA\s+PR[AÁ]TICA[^\d]*(\d+)\s*/\s*10', _mc, re.IGNORECASE)
+            if _m:
+                nota_geral = int(_m.group(1))
         if nota_geral is None or nota_geral < 5:
             return None
 
-        # Impacto na prática clínica — extraído do MD se não estiver no JSON
-        impacto_pratica = data.get("analysis", {}).get("impacto_pratica") or _extract_impacto_pratica(md_content)
-
         with open(md_path, "r", encoding="utf-8") as f:
             md_content = f.read()
+
+        # Impacto na prática clínica — extraído do MD se não estiver no JSON
+        impacto_pratica = data.get("analysis", {}).get("impacto_pratica") or _extract_impacto_pratica(md_content)
 
         pdf_filename          = data.get("source", {}).get("pdf_filename", "")
         revista, data_pub_fn  = _parse_date_from_filename(pdf_filename)
@@ -269,6 +329,24 @@ def extract_metadata(folder):
         if va_png.exists() and supabase_url and doc_id_val:
             caminho_va = f"{supabase_url}/storage/v1/object/public/visual_abstracts/{doc_id_val}.png"
 
+        # Extrair resumo_markdown do analysis.md (take-home / reflexão final)
+        resumo_markdown = _extrair_resumo_markdown(md_content)
+
+        # Extrair campos clínicos ricos do analysis.json
+        analise       = data.get("analysis", {})
+        nucleo        = analise.get("nucleo_comum", {})
+        reflexao      = analise.get("reflexao_final", {})
+
+        contexto_tema           = analise.get("contexto_tema")
+        aplicabilidade_pratica  = nucleo.get("aplicabilidade_pratica")
+        impacto_conduta         = nucleo.get("impacto_conduta")
+        tamanho_beneficio       = nucleo.get("tamanho_beneficio")
+        conclusao_geral         = nucleo.get("conclusao_geral")
+        bullets_praticos        = reflexao.get("bullets_praticos")  # lista → JSONB
+        # Schema guideline/revisão
+        por_que_importa             = analise.get("por_que_importa")
+        principais_recomendacoes    = analise.get("principais_recomendacoes")
+
         return {
             "doc_id":                   data.get("doc_id"),
             "doi":                      data.get("source", {}).get("doi"),
@@ -283,6 +361,19 @@ def extract_metadata(folder):
             "intervencao":              intervencao,
             "caminho_visual_abstract":  caminho_va,
             "impacto_pratica":          impacto_pratica,
+            "nota_metodologica":        analise.get("scores", {}).get("nota_metodologica"),
+            "keywords":                 analise.get("keywords") or [],
+            "muda_conduta":             analise.get("muda_conduta"),
+            "resumo_markdown":          resumo_markdown,
+            # Campos clínicos ricos
+            "contexto_tema":            contexto_tema,
+            "aplicabilidade_pratica":   aplicabilidade_pratica,
+            "impacto_conduta":          impacto_conduta,
+            "tamanho_beneficio":        tamanho_beneficio,
+            "conclusao_geral":          conclusao_geral,
+            "bullets_praticos":         bullets_praticos,
+            "por_que_importa":          por_que_importa,
+            "principais_recomendacoes": principais_recomendacoes,
             # resumo_md só enviado ao Claude se doenca_principal estiver faltando
             "_resumo_md":               md_content[:2500] if not doenca_principal else None,
             "caminho_pasta":            str(folder),
@@ -442,8 +533,22 @@ def importar_supabase(metadata):
         # Incluir URL do visual abstract se existir localmente
         if metadata.get("caminho_visual_abstract"):
             data["caminho_visual_abstract"] = metadata["caminho_visual_abstract"]
-        if metadata.get("impacto_pratica"):
-            data["impacto_pratica"] = metadata["impacto_pratica"]
+        if metadata.get("nota_metodologica") is not None:
+            data["nota_metodologica"] = metadata["nota_metodologica"]
+        if metadata.get("keywords"):
+            data["keywords"] = metadata["keywords"]
+        if metadata.get("muda_conduta"):
+            data["muda_conduta"] = metadata["muda_conduta"]
+        if metadata.get("resumo_markdown"):
+            data["resumo_markdown"] = metadata["resumo_markdown"]
+        # Campos clínicos ricos (knowledge base acionável)
+        for campo in ["contexto_tema", "aplicabilidade_pratica", "impacto_conduta",
+                      "tamanho_beneficio", "conclusao_geral",
+                      "por_que_importa", "principais_recomendacoes"]:
+            if metadata.get(campo):
+                data[campo] = metadata[campo]
+        if metadata.get("bullets_praticos"):
+            data["bullets_praticos"] = metadata["bullets_praticos"]  # JSONB
         response = requests.post(url, headers=headers, json=data)
         if response.status_code not in [200, 201, 204]:
             log(f"❌ importar {metadata['doc_id']}: HTTP {response.status_code} — {response.text[:300]}")

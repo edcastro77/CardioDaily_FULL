@@ -1,6 +1,128 @@
 # CADERNO DE EXECUÇÃO — CARDIODAILY
-## Versão 19.0 | 15/Maio/2026
-### Histórico: v13.2 (20/Fev) → v15.0 (05/Abr) → v16.0 (29/Abr) → v17.0 (02/Mai) → v18.0 (02/Mai) → v19.0 (15/Mai)
+## Versão 20.0 | 18/Maio/2026
+### Histórico: v13.2 (20/Fev) → v15.0 (05/Abr) → v16.0 (29/Abr) → v17.0 (02/Mai) → v18.0 (02/Mai) → v19.0 (15/Mai) → v20.0 (18/Mai)
+
+---
+
+## MUDANÇAS v20.0 (18/Maio/2026) — Supabase como Cérebro Acionável + Backfill Campos Clínicos
+
+### Conceito central — por que estamos reanalisando os artigos
+
+O Supabase não é apenas um índice de artigos — é o **cérebro mobilizável do CardioDaily**. Cada campo estruturado no banco (`aplicabilidade_pratica`, `impacto_conduta`, `bullets_praticos`, etc.) é uma unidade de conhecimento clínico que o assistente WhatsApp pode consultar e entregar ao médico em tempo real.
+
+A reanálise não é manutenção técnica. É construção do ativo principal do produto.
+
+> "O resumo_markdown responde 'o que foi publicado'. Os campos JSON respondem 'o que eu faço com isso agora'."
+
+### 1. Novos campos clínicos no Supabase — IMPLEMENTADO ✅
+
+8 colunas adicionadas à tabela `artigos`:
+
+| Campo | Tipo | Origem | Conteúdo |
+|---|---|---|---|
+| `contexto_tema` | TEXT | `analysis.json → analysis.contexto_tema` | Contexto clínico do tema |
+| `aplicabilidade_pratica` | TEXT | `analysis.json → nucleo_comum.aplicabilidade_pratica` | Aplicabilidade direta na prática |
+| `impacto_conduta` | TEXT | `analysis.json → nucleo_comum.impacto_conduta` | Como muda a conduta |
+| `tamanho_beneficio` | TEXT | `analysis.json → nucleo_comum.tamanho_beneficio` | Magnitude do efeito em linguagem humana |
+| `conclusao_geral` | TEXT | `analysis.json → nucleo_comum.conclusao_geral` | Conclusão do estudo |
+| `bullets_praticos` | JSONB | `analysis.json → reflexao_final.bullets_praticos` | Lista de bullets acionáveis |
+| `por_que_importa` | TEXT | `analysis.json → analysis.por_que_importa` | Para revisões/guidelines: por que este estudo importa |
+| `principais_recomendacoes` | TEXT | `analysis.json → analysis.principais_recomendacoes` | Para revisões/guidelines: recomendações principais |
+
+**SQL rodado no Supabase:**
+```sql
+ALTER TABLE artigos
+  ADD COLUMN IF NOT EXISTS contexto_tema TEXT,
+  ADD COLUMN IF NOT EXISTS aplicabilidade_pratica TEXT,
+  ADD COLUMN IF NOT EXISTS impacto_conduta TEXT,
+  ADD COLUMN IF NOT EXISTS tamanho_beneficio TEXT,
+  ADD COLUMN IF NOT EXISTS conclusao_geral TEXT,
+  ADD COLUMN IF NOT EXISTS bullets_praticos JSONB,
+  ADD COLUMN IF NOT EXISTS por_que_importa TEXT,
+  ADD COLUMN IF NOT EXISTS principais_recomendacoes TEXT;
+```
+
+### 2. Backfill — 408 artigos populados, zero tokens ✅
+
+**Script:** `scripts/backfill_campos_clinicos.py`
+
+Lê `analysis.json` local de cada artigo, extrai os 8 campos e faz PATCH no Supabase. Zero tokens — só leitura de arquivo local.
+
+```bash
+python3 scripts/backfill_campos_clinicos.py --dry-run          # preview
+python3 scripts/backfill_campos_clinicos.py                    # todos
+python3 scripts/backfill_campos_clinicos.py --nota-min 8       # só nota≥8
+```
+
+**Resultado da primeira execução (18/Mai/2026):**
+- 3191 pastas com `analysis.json` analisadas
+- **408 artigos atualizados** (reanalisados com novo schema — notas 8, 9, 10 + parte 2026)
+- 2783 artigos sem campos (schema antigo — serão preenchidos conforme reanálise da nota-7)
+- Tempo: 21 segundos, 0 erros
+
+### 3. indexar_corpus_completo.py — inclui campos clínicos no upsert ✅
+
+`importar_supabase()` agora envia os 8 campos clínicos no payload. Toda nova indexação (ou re-indexação) popula automaticamente os campos a partir do `analysis.json`.
+
+```python
+# Campos clínicos ricos (knowledge base acionável)
+for campo in ["contexto_tema", "aplicabilidade_pratica", "impacto_conduta",
+              "tamanho_beneficio", "conclusao_geral",
+              "por_que_importa", "principais_recomendacoes"]:
+    if metadata.get(campo):
+        data[campo] = metadata[campo]
+if metadata.get("bullets_praticos"):
+    data["bullets_praticos"] = metadata["bullets_praticos"]  # JSONB
+```
+
+### 4. sync_resumo_markdown.py — bug de tabelas corrigido ✅
+
+`_limpar()` tinha linha `re.sub(r'\|.*\|', '', texto)` que destruía todo conteúdo do TAKE-HOME MESSAGE (formatado como tabela Markdown). Removida.
+
+**Impacto:** o campo `resumo_markdown` agora preserva tabelas — conteúdo do take-home chega íntegro ao banco.
+
+### 5. Plano de reanálise — nota-7 (568 artigos)
+
+| Nota | Total | Status |
+|---|---|---|
+| 10 | 6 | ✅ Concluído |
+| 9 | 110 | ✅ Concluído |
+| 8 | 182 | ✅ Concluído |
+| 7 | 568 | ⏳ 100/fim de semana (~6 fins de semana) |
+| 6 | 253 | 🔴 Stubs — precisam reanálise real |
+| 5 | 192 | 🔴 Stubs — precisam reanálise real |
+
+**Protocolo por sessão:**
+1. Claude prepara bloco de 100 PDFs em `tmp_nota7/`
+2. Dr. Eduardo roda no Terminal: `caffeinate -dims python3 src/article_analyzer.py --local-dir tmp_nota7`
+3. Ao terminar: `python3 scripts/backfill_campos_clinicos.py --nota-min 7`
+4. Claude faz sync e prepara próximo bloco
+
+**Regra:** nunca rodar o `article_analyzer.py` em background pelo Claude Code — trava. Sempre no Terminal interativo do Dr. Eduardo.
+
+### 6. RLS no Supabase — status e plano
+
+O Supabase alerta "RLS Disabled in Public" para todas as tabelas — é um aviso de segurança, não erro operacional. Scripts Python usam `SUPABASE_SERVICE_KEY` que bypass RLS por design.
+
+**Plano antes do lançamento (tabelas prioritárias):**
+```sql
+-- Tabelas sensíveis: habilitar RLS + política service_role
+ALTER TABLE public.whatsapp_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversas_whatsapp ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_sends ENABLE ROW LEVEL SECURITY;
+
+-- Política: scripts (service_role) têm acesso total
+CREATE POLICY "service_role_full_access" ON public.whatsapp_users
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
+-- (repetir para cada tabela)
+
+-- Tabelas de conteúdo público (artigos, taxonomia): leitura livre, escrita restrita
+ALTER TABLE public.artigos ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "read_public" ON public.artigos FOR SELECT USING (true);
+CREATE POLICY "write_service_only" ON public.artigos FOR ALL
+  USING (auth.role() = 'service_role');
+```
 
 ---
 
@@ -426,21 +548,23 @@ pip install supabase httpx python-telegram-bot
 - [x] GitHub Actions identificado como distribuidor real (30/Abr — roda `ubuntu-latest` independente do Mac)
 - [x] Bug crítico de áudio: `UNIFIED_AUDIO_AVAILABLE` ausente em `audio_generator.py` — pipeline nunca gerou áudio desde fevereiro (975 artigos sem áudio). Corrigido + provider trocado para ElevenLabs (30/Abr)
 
+### Concluído v20.0 (18/Mai/2026)
+- [x] 8 novos campos clínicos criados no Supabase (`contexto_tema`, `aplicabilidade_pratica`, `impacto_conduta`, `tamanho_beneficio`, `conclusao_geral`, `bullets_praticos`, `por_que_importa`, `principais_recomendacoes`)
+- [x] `indexar_corpus_completo.py` — upsert inclui campos clínicos ricos
+- [x] `scripts/backfill_campos_clinicos.py` criado — 408 artigos populados, 0 erros, 21s
+- [x] `sync_resumo_markdown.py` — bug de strip de tabelas Markdown corrigido
+
 ### Pendente imediato
-- [ ] Backfill de áudio: ~975 artigos com VA mas sem áudio — Dr. Eduardo vai gravar os scripts manualmente (voz própria, sem custo de API). Precisamos de interface para listar e acessar os scripts facilmente.
-- [ ] Lista semanal de artigos por revista — formato e frequência a definir
-- [x] Radar: gerado e enviado (30/Abr) — tema Insuficiência Cardíaca
-- [x] Bug ElevenLabs `language_code` removido (eleven_multilingual_v2 não suporta)
-- [x] Bug curadoria do Radar: Gemini incluía artigos de outras doenças. Prompt agora injeta o tema e proíbe artigos tangenciais explicitamente (30/Abr)
-- [x] Caderno unificado em `docs/CADERNO_EXECUCAO.md`
-- [x] Pasta raiz limpa (51 arquivos → `archive/logs_operacionais/`)
-- [x] Lista semanal por revista implementada em `distribuidor.py lista_semanal()` + cron segunda 07:30 BRT + GitHub Actions `lista-semanal.yml` (30/Abr)
+- [ ] Reanálise nota-7: próxima sessão de fim de semana — `caffeinate -dims python3 src/article_analyzer.py --local-dir tmp_nota7` (100 artigos)
+- [ ] Após cada lote nota-7: `python3 scripts/backfill_campos_clinicos.py --nota-min 7`
+- [ ] Backfill de áudio: ~975 artigos com VA mas sem áudio — Dr. Eduardo vai gravar os scripts manualmente
+- [ ] Ativar RLS no Supabase antes do lançamento (SQL em v20.0 acima)
 
 ### Pendente — Prioridade ALTA
 - [ ] Preencher credenciais no distribuidor.py (SUPABASE_SERVICE_KEY, ZAPI_TOKEN, TELEGRAM_BOT_TOKEN)
 - [ ] Testar: `python3 distribuidor.py teste`
 - [ ] Conectar Radar ao Supabase (upload automático → bucket `radar_podcasts`)
-- [ ] Gerar PDFs no Administrador e subir ao Storage
+- [ ] Backfill PDFs histórico: `python3 scripts/upload_pdfs_supabase.py --since 2020-01-01`
 
 ### Pendente — Prioridade MÉDIA
 - [ ] Migrar telegram_bot.py (chatbot)
@@ -450,7 +574,6 @@ pip install supabase httpx python-telegram-bot
 ### Pendente — Limpeza técnica
 - [ ] Dropar coluna `nota_geral` do Supabase
 - [ ] Dropar coluna `resumo_json` do Supabase
-- [ ] Ativar RLS no Supabase
 - [ ] Limpar usuário duplicado em `whatsapp_users`
 - [ ] Cancelar plano n8n
 
@@ -522,4 +645,4 @@ Para ajustar prompts, PDFs ou qualquer componente do CardioDaily com máxima efi
 
 ---
 
-*Versão 17.0 — 02/Maio/2026 — atualizado por Claude ao final da sessão*
+*Versão 20.0 — 18/Maio/2026 — atualizado por Claude ao final da sessão*

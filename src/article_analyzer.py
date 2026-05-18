@@ -223,6 +223,61 @@ def _upload_pdf_supabase(doc_id: str, pdf_path: str) -> str | None:
         return None
 # ──────────────────────────────────────────────────────────────────────────────
 
+# ── Patch campos clínicos ricos no Supabase ───────────────────────────────────
+def _patch_campos_clinicos_supabase(doc_id: str, analysis_structured: dict) -> bool:
+    """
+    Faz PATCH dos campos clínicos ricos no Supabase imediatamente após a análise.
+    Extrai do analysis_structured (JSON do LLM) e salva nas colunas dedicadas.
+    Retorna True se PATCH bem-sucedido.
+    """
+    sb_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    sb_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
+    if not sb_url or not sb_key:
+        return False
+
+    nucleo   = analysis_structured.get("nucleo_comum", {})
+    reflexao = analysis_structured.get("reflexao_final", {})
+
+    payload = {}
+
+    # Schema originais
+    for campo in ["contexto_tema", "por_que_importa", "principais_recomendacoes"]:
+        v = analysis_structured.get(campo)
+        if v and isinstance(v, str) and len(v.strip()) > 10:
+            payload[campo] = v.strip()
+
+    for campo in ["aplicabilidade_pratica", "impacto_conduta", "tamanho_beneficio", "conclusao_geral"]:
+        v = nucleo.get(campo)
+        if v and isinstance(v, str) and len(v.strip()) > 10:
+            payload[campo] = v.strip()
+
+    # bullets_praticos — JSONB
+    bp = reflexao.get("bullets_praticos")
+    if isinstance(bp, list) and bp:
+        payload["bullets_praticos"] = bp
+    elif isinstance(bp, str) and bp.strip():
+        payload["bullets_praticos"] = [bp.strip()]
+
+    if not payload:
+        return False
+
+    try:
+        h = {
+            "apikey": sb_key,
+            "Authorization": f"Bearer {sb_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        }
+        r = _requests.patch(
+            f"{sb_url}/rest/v1/artigos?doc_id=eq.{doc_id}",
+            headers=h, json=payload, timeout=20
+        )
+        return r.status_code in (200, 204)
+    except Exception as e:
+        print(f"   ⚠️  Patch campos clínicos falhou: {e}")
+        return False
+# ──────────────────────────────────────────────────────────────────────────────
+
 # Importar SDK da Anthropic (Claude)
 try:
     import anthropic
@@ -2517,7 +2572,13 @@ class ArticleAnalyzer:
                     )
                 else:
                     print("   ℹ️  DOI ausente após sanitização: não registrando no DOITracker (mas pacote foi salvo)")
-            
+
+                # Patch campos clínicos ricos no Supabase (knowledge base acionável)
+                if analysis_structured:
+                    _campos_ok = _patch_campos_clinicos_supabase(doc_id, analysis_structured)
+                    if _campos_ok:
+                        print("   🧠 Campos clínicos salvos no Supabase")
+
             # 9. Notificar beta testers no Telegram
             _titulo_notif = _titulo_real if '_titulo_real' in dir() else filename
             _revista_notif = analysis_json.get("source", {}).get("journal", "") or ""
