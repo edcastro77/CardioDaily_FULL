@@ -2445,7 +2445,9 @@ class ArticleAnalyzer:
                     "pdf_filename": filename,
                     "pdf_sha256": pdf_sha256,
                     "doi": doi_clean,
-                    "journal": extract_journal(pdf_filename=filename),
+                    "journal": (extract_journal(pdf_filename=filename)
+                                or (analysis_structured.get('revista') if analysis_structured else None)
+                                or ""),
                     "titulo": _titulo_real,
                     "publication_date": _pub_date,
                 },
@@ -2509,7 +2511,8 @@ class ArticleAnalyzer:
             )
             _titulo_ok = bool(_titulo_real and len(_titulo_real.split()) >= 3 and not _titulo_parece_filename)
             _data_ok = bool(_pub_date and re.match(r'^\d{4}-\d{2}', _pub_date))
-            _revista_ok = bool(analysis_json["source"].get("journal", "").strip())
+            _revista_ok = bool(analysis_json["source"].get("journal", "").strip()
+                               or (analysis_structured.get('revista') if analysis_structured else None))
             if not _titulo_ok or not _data_ok or not _revista_ok:
                 print(f"\n   ⚠️  METADADOS INCOMPLETOS — artigo indexado com dados parciais:")
                 if not _titulo_ok:

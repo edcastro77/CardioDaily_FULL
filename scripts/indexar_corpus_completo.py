@@ -286,8 +286,15 @@ def extract_metadata(folder):
         pdf_filename          = data.get("source", {}).get("pdf_filename", "")
         revista, data_pub_fn  = _parse_date_from_filename(pdf_filename)
 
-        # Fallback: extrair revista e ano da referência Vancouver no MD
-        # (para PDFs com nomes genéricos sem padrão YYYY-MM-JOURNAL)
+        # Fallback 1: source.journal (preenchido pelo article_analyzer com fallback do LLM)
+        if not revista:
+            revista = data.get("source", {}).get("journal") or None
+
+        # Fallback 2: campo analysis.revista extraído pelo LLM (novo schema)
+        if not revista:
+            revista = data.get("analysis", {}).get("revista") or None
+
+        # Fallback 2: referência Vancouver no analysis.md
         if not revista or not data_pub_fn:
             revista_md, data_pub_md = _extract_journal_date_from_md(md_content)
             revista    = revista    or revista_md
