@@ -278,6 +278,179 @@ def _patch_campos_clinicos_supabase(doc_id: str, analysis_structured: dict) -> b
         return False
 # ──────────────────────────────────────────────────────────────────────────────
 
+# ── Upsert completo do artigo no Supabase ─────────────────────────────────────
+def _upsert_artigo_supabase(doc_id: str, article_dir: str,
+                             analysis_json_data: dict,
+                             analysis_structured: dict | None) -> bool:
+    """
+    Upsert completo na tabela artigos — todos os campos de uma vez.
+    Consolida a lógica do indexar_corpus_completo.py para que cada nova análise
+    chegue ao Supabase completa, sem precisar de script separado.
+
+    Extrai: titulo, revista, data_publicacao, tipo_estudo, nota, doenca_principal,
+    keywords, palavras_chave, muda_conduta, resumo_markdown e todos os 8 campos
+    clínicos ricos.
+    """
+    import re as _re
+
+    sb_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    sb_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
+    if not sb_url or not sb_key:
+        return False
+
+    try:
+        folder      = Path(article_dir)
+        source      = analysis_json_data.get("source", {})
+        classif     = analysis_json_data.get("classification", {})
+        analise     = analysis_json_data.get("analysis", {})
+        nucleo      = analise.get("nucleo_comum", {})
+        reflexao    = analise.get("reflexao_final", {})
+        scores      = analise.get("scores", {})
+
+        # ── Nota ──────────────────────────────────────────────────────────────
+        nota = (scores.get("aplicabilidade")
+                or scores.get("overall")
+                or scores.get("nota_relevancia_pratica"))
+
+        # ── Revista (cadeia de fallbacks) ─────────────────────────────────────
+        def _parse_revista_filename(fn):
+            parts = fn.split("-")
+            y = parts[0] if len(parts) >= 1 and parts[0].isdigit() and len(parts[0]) == 4 else None
+            m = parts[1] if len(parts) >= 2 and parts[1].isdigit() and 1 <= int(parts[1]) <= 12 else None
+            rev = parts[2] if len(parts) >= 3 and y and m else None
+            data = f"{y}-{m.zfill(2)}-01" if y and m else None
+            return rev, data
+
+        pdf_filename = source.get("pdf_filename", "")
+        revista, data_pub_fn = _parse_revista_filename(pdf_filename)
+
+        if not revista:
+            revista = source.get("journal") or None
+        if not revista and analysis_structured:
+            revista = analysis_structured.get("revista") or None
+        if not revista:
+            # Fallback Vancouver no analysis.md
+            md_path = folder / "analysis.md"
+            if md_path.exists():
+                mc = md_path.read_text(errors="ignore")
+                m_van = _re.search(
+                    r'\.\s+([A-Z][A-Za-z\s\(\)&/\-]+?)\.\s+(\d{4});\d+', mc)
+                if m_van:
+                    revista = m_van.group(1).strip()
+
+        # ── Data publicação ───────────────────────────────────────────────────
+        def _norm_date(d):
+            if not d: return None
+            d = str(d).strip()
+            if _re.match(r'^\d{4}-\d{2}-\d{2}$', d): return d
+            if _re.match(r'^\d{4}-\d{2}$', d): return d + "-01"
+            if _re.match(r'^\d{4}$', d): return d + "-01-01"
+            return None
+
+        data_pub = _norm_date(source.get("publication_date") or data_pub_fn)
+
+        # ── Título ────────────────────────────────────────────────────────────
+        titulo = source.get("titulo") or ""
+        # Se parece nome de arquivo (sem espaços, curto), tentar MD
+        if not titulo or (" " not in titulo and len(titulo) < 40):
+            md_path = folder / "analysis.md"
+            if md_path.exists():
+                mc = md_path.read_text(errors="ignore")
+                for pat in [
+                    r'\|\s*\*\*Título(?:\s+do\s+artigo)?\*\*\s*\|\s*(.+?)\s*\|',
+                    r'\|\s*Título(?:\s+do\s+artigo)?\s*\|\s*(.+?)\s*\|',
+                ]:
+                    m_t = _re.search(pat, mc, _re.IGNORECASE)
+                    if m_t and len(m_t.group(1).strip().split()) >= 3:
+                        titulo = m_t.group(1).strip()[:300]
+                        break
+        if analysis_structured and (not titulo or len(titulo.split()) < 3):
+            titulo = analysis_structured.get("titulo") or titulo
+
+        # ── Resumo markdown ───────────────────────────────────────────────────
+        resumo_markdown = None
+        md_path = folder / "analysis.md"
+        if md_path.exists():
+            mc = md_path.read_text(errors="ignore")
+            for pat in [
+                r'#{1,4}[^\n]*TAKE.HOME[^\n]*\n(.*?)(?=\n#{1,4}|\Z)',
+                r'#{1,4}[^\n]*(?:REFLEX[ÃA]O FINAL|APLICA[ÇC][ÃA]O PR[ÁA]TICA|BULLETS|PR[ÁA]TICO)[^\n]*\n(.*?)(?=\n#{1,4}|\Z)',
+            ]:
+                m_r = _re.search(pat, mc, _re.IGNORECASE | _re.DOTALL)
+                if m_r and len(m_r.group(1).strip()) > 50:
+                    texto = m_r.group(1).strip()
+                    texto = _re.sub(r'^[-=]{3,}\s*$', '', texto, flags=_re.MULTILINE)
+                    texto = _re.sub(r'\n{3,}', '\n\n', texto).strip()
+                    resumo_markdown = texto[:3000]
+                    break
+
+        # ── Visual abstract URL ───────────────────────────────────────────────
+        va_png = folder / "assets" / "visual_abstract.png"
+        caminho_va = (f"{sb_url}/storage/v1/object/public/visual_abstracts/{doc_id}.png"
+                      if va_png.exists() else None)
+
+        # ── Campos clínicos ricos ─────────────────────────────────────────────
+        s = analysis_structured or {}
+        campos_clinicos = {}
+        for campo in ["contexto_tema", "por_que_importa", "principais_recomendacoes"]:
+            v = s.get(campo)
+            if v and isinstance(v, str) and len(v.strip()) > 10:
+                campos_clinicos[campo] = v.strip()
+        for campo in ["aplicabilidade_pratica", "impacto_conduta", "tamanho_beneficio", "conclusao_geral"]:
+            v = nucleo.get(campo)
+            if v and isinstance(v, str) and len(v.strip()) > 10:
+                campos_clinicos[campo] = v.strip()
+        bp = reflexao.get("bullets_praticos")
+        if isinstance(bp, list) and bp:
+            campos_clinicos["bullets_praticos"] = bp
+        elif isinstance(bp, str) and bp.strip():
+            campos_clinicos["bullets_praticos"] = [bp.strip()]
+
+        # ── Montar payload ────────────────────────────────────────────────────
+        payload = {
+            "doc_id":              doc_id,
+            "doi":                 source.get("doi"),
+            "titulo":              titulo or "",
+            "revista":             revista or "",
+            "data_publicacao":     data_pub,
+            "tipo_estudo":         classif.get("type"),
+            "nota_aplicabilidade": nota,
+            "doenca_principal":    classif.get("doenca_principal"),
+            "palavras_chave":      classif.get("palavras_chave") or [],
+            "populacao":           classif.get("populacao") or [],
+            "intervencao":         classif.get("intervencao") or [],
+            "caminho_pasta":       str(folder),
+        }
+        if caminho_va:
+            payload["caminho_visual_abstract"] = caminho_va
+        if scores.get("nota_metodologica") is not None:
+            payload["nota_metodologica"] = scores["nota_metodologica"]
+        if analise.get("keywords"):
+            payload["keywords"] = analise["keywords"]
+        if analise.get("muda_conduta"):
+            payload["muda_conduta"] = analise["muda_conduta"]
+        if resumo_markdown:
+            payload["resumo_markdown"] = resumo_markdown
+        payload.update(campos_clinicos)
+
+        # ── Upsert ────────────────────────────────────────────────────────────
+        h = {
+            "apikey": sb_key,
+            "Authorization": f"Bearer {sb_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal,resolution=merge-duplicates",
+        }
+        r = _requests.post(
+            f"{sb_url}/rest/v1/artigos?on_conflict=doc_id",
+            headers=h, json=payload, timeout=30
+        )
+        return r.status_code in (200, 201, 204)
+
+    except Exception as e:
+        print(f"   ⚠️  Upsert Supabase falhou: {e}")
+        return False
+# ──────────────────────────────────────────────────────────────────────────────
+
 # Importar SDK da Anthropic (Claude)
 try:
     import anthropic
@@ -2576,11 +2749,15 @@ class ArticleAnalyzer:
                 else:
                     print("   ℹ️  DOI ausente após sanitização: não registrando no DOITracker (mas pacote foi salvo)")
 
-                # Patch campos clínicos ricos no Supabase (knowledge base acionável)
-                if analysis_structured:
-                    _campos_ok = _patch_campos_clinicos_supabase(doc_id, analysis_structured)
-                    if _campos_ok:
-                        print("   🧠 Campos clínicos salvos no Supabase")
+                # Upsert completo no Supabase — título, revista, nota, keywords, campos clínicos
+                _upsert_ok = _upsert_artigo_supabase(
+                    doc_id=doc_id,
+                    article_dir=article_dir,
+                    analysis_json_data=analysis_json,
+                    analysis_structured=analysis_structured,
+                )
+                if _upsert_ok:
+                    print("   🧠 Supabase atualizado (título, revista, campos clínicos)")
 
             # 9. Notificar beta testers no Telegram
             _titulo_notif = _titulo_real if '_titulo_real' in dir() else filename
