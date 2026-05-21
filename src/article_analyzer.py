@@ -138,6 +138,11 @@ def _upload_podcast_supabase(doc_id: str, mp3_path: str) -> str | None:
     url_publica = f"{sb_url}/storage/v1/object/public/{bucket}/{objeto}"
 
     try:
+        mp3_size = os.path.getsize(mp3_path)
+        if mp3_size < 50_000:
+            print(f"   ⚠️  MP3 inválido ({mp3_size} bytes < 50KB) — upload cancelado")
+            return None
+
         with open(mp3_path, "rb") as f:
             dados = f.read()
         h = {

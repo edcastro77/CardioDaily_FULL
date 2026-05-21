@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 CardioDaily — Geração de Áudios em Lote
-Busca no Supabase artigos elegíveis sem áudio e gera MP3 via OpenAI TTS.
+Busca no Supabase artigos elegíveis sem áudio e gera MP3 via ElevenLabs.
 
 Elegíveis: nota_aplicabilidade >= 8, data_publicacao >= 2026-02-01,
            tipo_estudo in (original, metanalise, revisao), caminho_audio IS NULL
@@ -19,6 +19,7 @@ import os
 import sys
 import time
 import json
+import re as _re
 import requests
 from datetime import datetime
 from pathlib import Path
@@ -33,15 +34,17 @@ except ImportError:
     pass
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-SUPABASE_URL  = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
-OPENAI_KEY    = os.getenv("OPENAI_API_KEY", "")
-CORPUS_DIR    = _ROOT / "outputs" / "corpus"
-AUDIO_DIR     = _ROOT / "outputs" / "audio_lote"
-BUCKET        = "podcasts"
-NOTA_MIN      = 8
-DATA_DESDE    = "2026-02-01"
-TIPOS_VALIDOS = ("original", "metanalise", "revisao", "meta_analise", "revisao_geral")
+SUPABASE_URL      = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_KEY      = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
+OPENAI_KEY        = os.getenv("OPENAI_API_KEY", "")
+ELEVENLABS_KEY    = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE  = os.getenv("ELEVENLABS_VOICE_ID", "iKcBfmBSyO9Mrvg8MRRd")
+CORPUS_DIR        = _ROOT / "outputs" / "corpus"
+AUDIO_DIR         = _ROOT / "outputs" / "audio_lote"
+BUCKET            = "podcasts"
+NOTA_MIN          = 8
+DATA_DESDE        = "2026-02-01"
+TIPOS_VALIDOS     = ("original", "metanalise", "revisao", "meta_analise", "revisao_geral")
 
 # ─── Supabase helpers ─────────────────────────────────────────────────────────
 
@@ -73,7 +76,6 @@ def buscar_elegíveis(desde: str, limite: int) -> list[dict]:
         print(f"❌ Erro Supabase: {r.status_code} — {r.text[:300]}")
         return []
     artigos = r.json()
-    # Filtrar por tipo_estudo (Supabase não tem IN fácil via params simples)
     return [a for a in artigos if (a.get("tipo_estudo") or "").lower() in TIPOS_VALIDOS]
 
 
@@ -99,6 +101,11 @@ def atualizar_caminho_audio(doc_id: str, url: str) -> bool:
 
 def upload_mp3(doc_id: str, mp3_path: Path) -> str | None:
     """Faz upload do MP3 ao bucket 'podcasts'. Retorna URL pública ou None."""
+    mp3_size = mp3_path.stat().st_size
+    if mp3_size < 50_000:
+        print(f"   ⚠️  MP3 inválido ({mp3_size} bytes < 50KB) — upload cancelado")
+        return None
+
     objeto = f"{doc_id}.mp3"
     url_upload = f"{SUPABASE_URL}/storage/v1/object/{BUCKET}/{objeto}"
     url_publica = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}/{objeto}"
@@ -172,16 +179,10 @@ Crie o script agora:"""
     )
     return response.choices[0].message.content
 
-# ─── TTS ──────────────────────────────────────────────────────────────────────
+# ─── TTS OpenAI (podcasts de artigos individuais — mais econômico) ────────────
 
 def gerar_mp3(script: str, output_path: Path) -> bool:
-    """Gera MP3 via OpenAI TTS-HD, com chunking se necessário."""
-    import re as _re
-
-    voice = os.getenv("OPENAI_TTS_VOICE", "onyx")
-    model = os.getenv("OPENAI_TTS_MODEL", "tts-1-hd")
-    speed = float(os.getenv("OPENAI_TTS_SPEED", "1.0"))
-
+    """Gera MP3 via OpenAI TTS-HD voz onyx (podcasts de artigos)."""
     # Limpar markdown para áudio
     texto = _re.sub(r'#{1,6}\s+.*$', '', script, flags=_re.MULTILINE)
     texto = _re.sub(r'\*\*([^*]+)\*\*', r'\1', texto)
@@ -189,52 +190,16 @@ def gerar_mp3(script: str, output_path: Path) -> bool:
     texto = _re.sub(r'\n{3,}', '\n\n', texto)
     texto = texto.strip()
 
-    max_chars = 4096
-    headers = {
-        "Authorization": f"Bearer {OPENAI_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    if len(texto) <= max_chars:
-        chunks = [texto]
-    else:
-        # Dividir por parágrafos
-        paragrafos = texto.split('\n\n')
-        chunks, atual = [], ''
-        for p in paragrafos:
-            p = p.strip()
-            if not p:
-                continue
-            if len(atual) + len(p) + 2 <= max_chars:
-                atual = (atual + '\n\n' + p).strip()
-            else:
-                if atual:
-                    chunks.append(atual)
-                atual = p
-        if atual:
-            chunks.append(atual)
-
-    all_bytes = []
-    for i, chunk in enumerate(chunks, 1):
-        r = requests.post(
-            "https://api.openai.com/v1/audio/speech",
-            headers=headers,
-            json={"model": model, "input": chunk, "voice": voice,
-                  "response_format": "mp3", "speed": speed},
-            timeout=300,
-        )
-        if r.status_code != 200:
-            print(f"   ❌ TTS chunk {i}: HTTP {r.status_code} — {r.text[:200]}")
-            return False
-        all_bytes.append(r.content)
-        if len(chunks) > 1:
-            time.sleep(0.5)
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "wb") as f:
-        for b in all_bytes:
-            f.write(b)
-    return True
+    try:
+        from openai_audio_generator import OpenAIAudioGenerator
+        gen = OpenAIAudioGenerator()
+        print(f"   ⏳ Processando OpenAI TTS ({len(texto):,} chars)…")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        result = gen.generate_audio(texto, str(output_path))
+        return bool(result)
+    except Exception as e:
+        print(f"   ❌ Erro OpenAI TTS: {e}")
+        return False
 
 # ─── Processador de artigo ────────────────────────────────────────────────────
 
@@ -286,8 +251,8 @@ def processar_artigo(artigo: dict, dry_run: bool) -> str:
         script_path.parent.mkdir(parents=True, exist_ok=True)
         script_path.write_text(script, encoding="utf-8")
 
-        # ── 4. Gerar MP3 ──────────────────────────────────────────────────
-        print(f"   🔊 Gerando MP3 (TTS-HD)…")
+        # ── 4. Gerar MP3 via ElevenLabs ───────────────────────────────────
+        print(f"   🔊 Gerando MP3 (ElevenLabs)…")
         ok = gerar_mp3(script, mp3_path)
         if not ok or not mp3_path.exists():
             print(f"   ❌ Falha na geração do MP3")
@@ -322,14 +287,18 @@ def main():
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("❌ SUPABASE_URL / SUPABASE_SERVICE_KEY não configurados no .env")
         sys.exit(1)
-    if not OPENAI_KEY and not args.dry_run:
-        print("❌ OPENAI_API_KEY não configurada no .env")
+    if not args.dry_run and not ELEVENLABS_KEY:
+        print("❌ ELEVENLABS_API_KEY não configurada no .env")
+        sys.exit(1)
+    if not args.dry_run and not OPENAI_KEY:
+        print("❌ OPENAI_API_KEY não configurada no .env (necessária para gerar scripts)")
         sys.exit(1)
 
     print(f"\n{'='*55}")
     print(f"🎙️  CardioDaily — Geração de Áudios em Lote")
     print(f"   📅 {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     print(f"   📆 Desde: {args.desde} | Nota ≥ {NOTA_MIN} | Limite: {args.limite}")
+    print(f"   🔊 TTS: ElevenLabs (voz {ELEVENLABS_VOICE[:12]}…, velocidade 1.1x)")
     print(f"   {'[DRY-RUN]' if args.dry_run else 'MODO REAL — gerando MP3s'}")
     print(f"{'='*55}\n")
 

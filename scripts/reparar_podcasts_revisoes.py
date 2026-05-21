@@ -81,6 +81,11 @@ def upload_podcast(doc_id: str, mp3_path: str) -> str | None:
     url_publica = f"{SUPABASE_URL}/storage/v1/object/public/{bucket}/{objeto}"
 
     try:
+        mp3_size = os.path.getsize(mp3_path)
+        if mp3_size < 50_000:
+            print(f"   ⚠️  MP3 inválido ({mp3_size} bytes < 50KB) — upload cancelado")
+            return None
+
         with open(mp3_path, "rb") as f:
             dados = f.read()
         h = {
@@ -122,17 +127,13 @@ def _init_generators():
 
     audio_gen = None
     try:
+        # Podcasts de artigos individuais usam OpenAI TTS
         from audio_generator import UnifiedAudioGenerator
-        audio_gen = UnifiedAudioGenerator()
-        print("✅ UnifiedAudioGenerator inicializado")
-    except Exception:
-        try:
-            from elevenlabs_audio_generator import ElevenLabsAudioGenerator
-            audio_gen = ElevenLabsAudioGenerator()
-            print("✅ ElevenLabsAudioGenerator inicializado")
-        except Exception as e:
-            print(f"❌ Gerador de áudio: {e}")
-            sys.exit(1)
+        audio_gen = UnifiedAudioGenerator(provider='openai')
+        print("✅ UnifiedAudioGenerator inicializado (OpenAI TTS)")
+    except Exception as e:
+        print(f"❌ Gerador de áudio: {e}")
+        sys.exit(1)
 
     return script_gen, audio_gen
 

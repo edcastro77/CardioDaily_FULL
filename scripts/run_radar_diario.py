@@ -68,6 +68,11 @@ def _upload_radar_storage(mp3_path: Path, filename: str) -> str | None:
         print("   ⚠️  SUPABASE_URL / SUPABASE_SERVICE_KEY não configurados — upload ignorado.")
         return None
     try:
+        mp3_size = mp3_path.stat().st_size
+        if mp3_size < 50_000:
+            print(f"   ⚠️  MP3 inválido ({mp3_size} bytes < 50KB) — upload cancelado")
+            return None
+
         url = f"{supabase_url}/storage/v1/object/radar_podcasts/{filename}"
         headers = {
             "apikey": supabase_key,
