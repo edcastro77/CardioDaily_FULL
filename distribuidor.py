@@ -349,6 +349,46 @@ def registrar_envio(sb, assinante_id, doc_ids, ja_enviados):
 # Z-API — WHATSAPP (todas as funções com Client-Token)
 # =============================================================================
 
+def zapi_check_connected() -> bool:
+    """
+    Verifica se a instância Z-API está conectada ao WhatsApp.
+    Retorna True se conectada, False caso contrário.
+    Em caso de desconexão, envia alerta imediato via Telegram para Dr. Eduardo.
+    """
+    try:
+        resp = httpx.get(f"{ZAPI_BASE}/status", headers=ZAPI_HEADERS, timeout=10)
+        data = resp.json()
+        connected = data.get("connected", False)
+        if not connected:
+            motivo = data.get("error", "Sem detalhes")
+            msg = (
+                f"🚨 *CardioDaily — Z-API DESCONECTADA*\n\n"
+                f"O WhatsApp está desconectado e os envios de hoje *não serão entregues*.\n\n"
+                f"*Motivo:* {motivo}\n\n"
+                f"*Ação necessária:*\n"
+                f"1. Acesse app.z-api.io\n"
+                f"2. Instância `3F0C22040662826CFF327E97F8598275`\n"
+                f"3. Clique em Conectar → escaneie o QR code\n"
+                f"4. Dispare manualmente: `gh workflow run artigos-diarios.yml`"
+            )
+            log.error(f"Z-API desconectada: {motivo}")
+            # Alerta Telegram (mesmo sem WhatsApp, Telegram funciona)
+            if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+                try:
+                    httpx.post(
+                        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                        json={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "Markdown"},
+                        timeout=15
+                    )
+                    log.info("  🔔 Alerta de desconexão enviado via Telegram")
+                except Exception as te:
+                    log.error(f"  Falha ao enviar alerta Telegram: {te}")
+        return connected
+    except Exception as e:
+        log.error(f"  Erro ao verificar status Z-API: {e}")
+        return False
+
+
 def zapi_send_text(phone, text):
     try:
         resp = httpx.post(f"{ZAPI_BASE}/send-text",
@@ -485,6 +525,12 @@ def distribuir_artigos():
     log.info(f"Janela: data_publicacao >= {_data_publicacao_inicio(JANELAS_FALLBACK[0])} ({JANELAS_FALLBACK[0]}d), piso {DATA_PUBLICACAO_PISO}")
     log.info("=" * 60)
 
+    # Verificar conexão Z-API antes de qualquer envio
+    if not zapi_check_connected():
+        log.error("❌ Z-API desconectada — distribuição abortada. Reconecte e dispare manualmente.")
+        sys.exit(1)
+    log.info("✅ Z-API conectada")
+
     sb = conectar_supabase()
     assinantes = buscar_assinantes_ativos(sb)
     total = 0
@@ -539,6 +585,12 @@ def distribuir_radar():
     log.info("=" * 60)
     log.info("RADAR CARDIODAILY — 08:00")
     log.info("=" * 60)
+
+    # Verificar conexão Z-API antes de qualquer envio
+    if not zapi_check_connected():
+        log.error("❌ Z-API desconectada — radar abortado. Reconecte e dispare manualmente.")
+        sys.exit(1)
+    log.info("✅ Z-API conectada")
 
     sb = conectar_supabase()
     hoje = datetime.now().strftime("%Y-%m-%d")  # horário local (Brasil)
