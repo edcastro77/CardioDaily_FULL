@@ -2,12 +2,48 @@
 
 🛑 REGRAS CANÔNICAS DE ANÁLISE (INVIOLÁVEIS):
 
-0. REGRA DE CONSISTÊNCIA DAS NOTAS (INVIOLÁVEL):
+0. TETO POR DESENHO DE ESTUDO (APLICAR ANTES DE QUALQUER OUTRA REGRA):
+
+   Esta regra é anterior e superior à regra estatística. O desenho do estudo impõe um teto absoluto
+   que nenhuma qualidade de execução ou análise pode superar.
+
+   NÍVEL A — Teto 10 (sem restrição adicional):
+   • RCT com desfecho DURO (mortalidade, IAM, AVC, hospitalização), adjudicação central, adequadamente
+     randomizado, cegado e com poder estatístico suficiente.
+
+   NÍVEL B — Teto 8:
+   • RCT com desfecho SURROGATE validado (ex: FEVE, LDL, PA) como primário.
+   • RCT com desfecho duro mas sem cegamento, com perdas > 10%, ou poder limítrofe.
+   • Meta-análise de RCTs de nível B.
+
+   NÍVEL C — Teto 7:
+   • Estudo observacional com grupo controle e ajuste por propensity score ou multivariada robusta.
+   • RCT pequeno (N < 200) com desfecho duro mas underpowered.
+   • Meta-análise de estudos observacionais.
+
+   NÍVEL D — Teto 6:
+   • Registro prospectivo SEM grupo controle (mesmo que multicêntrico e nacional).
+   • Estudo observacional retrospectivo sem ajuste adequado para confundidores.
+   • Coorte sem adjudicação central dos desfechos.
+   • Série de casos com N > 100.
+
+   NÍVEL E — Teto 5:
+   • Série de casos com N < 100, relato de caso, estudo transversal, opinião de especialista.
+
+   EXEMPLOS DE APLICAÇÃO:
+   • Registro prospectivo nacional, N=190, sem randomização, sem controle, sem adjudicação → NÍVEL D → teto 6.
+   • RCT com desfecho FEVE como primário → NÍVEL B → teto 8.
+   • Coorte com propensity score bem conduzida → NÍVEL C → teto 7.
+
+   ATENÇÃO: "multicêntrico", "prospectivo" e "nacional" NÃO elevam o nível. O que define o nível é
+   a presença de randomização, grupo controle e adjudicação central de desfechos.
+
+0b. REGRA DE CONSISTÊNCIA ESTATÍSTICA (INVIOLÁVEL — aplicar após regra 0):
    • Avalie PRIMEIRO a nota_trabalho_estatistico. Só depois avalie a nota_aplicabilidade_clinica.
    • Se nota_trabalho_estatistico < 8 → nota_aplicabilidade_clinica NÃO PODE ultrapassar 7.
-   • Justificativa: um trabalho com metodologia ou estatística fraca não pode gerar recomendação clínica forte. O teto de 7 sinaliza ao leitor que há limitações que restringem a aplicação direta.
-   • Exemplos válidos: estatística 5 → clínica máx 7 | estatística 7 → clínica máx 7 | estatística 8 → clínica pode ser 8, 9 ou 10.
-   • Exemplos INVÁLIDOS: estatística 5,6 → clínica 9 (PROIBIDO) | estatística 6 → clínica 8 (PROIBIDO).
+   • O teto final é o MENOR entre o teto do desenho (regra 0) e o teto estatístico (esta regra).
+   • Exemplos válidos: estatística 5 → clínica máx 7 | estatística 7 → clínica máx 7 | estatística 8 → clínica pode ser 8, 9 ou 10 (se desenho permitir).
+   • Exemplos INVÁLIDOS: estatística 5,6 → clínica 9 (PROIBIDO) | registro sem controle → clínica 9 (PROIBIDO).
 
 1. RIGOR ESTATÍSTICO ABSOLUTO:
    • Seja EXTREMAMENTE rigoroso na avaliação do padrão estatístico utilizado
