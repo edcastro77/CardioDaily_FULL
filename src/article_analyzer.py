@@ -316,6 +316,10 @@ def _upsert_artigo_supabase(doc_id: str, article_dir: str,
         nota = (scores.get("aplicabilidade")
                 or scores.get("overall")
                 or scores.get("nota_relevancia_pratica"))
+        # Aplicar teto inviolável antes de salvar no Supabase
+        if nota and analysis_structured:
+            _tipo = classif.get("type") or ""
+            nota = aplicar_teto_nac(float(nota), analysis_structured, _tipo)
 
         # ── Revista (cadeia de fallbacks) ─────────────────────────────────────
         def _parse_revista_filename(fn):
@@ -666,6 +670,158 @@ def canonical_type_for(article_type: str) -> str:
         return 'metanalise'
     # guideline, revisao_geral, ponto_de_vista
     return 'revisao'
+
+
+# ─── REGRAS INVIOLÁVEIS DE PONTUAÇÃO (LEI 0 do CardioDaily) ─────────────────
+# Independente do que o LLM retornar, estas regras são aplicadas no código.
+# Nenhuma mudança de prompt pode contorná-las.
+
+_TETO_POR_DESENHO = {
+    # Nível A: RCT com desfecho DURO + adjudicação + randomização adequada → teto 10
+    # Nível B: RCT com desfecho surrogate ou limitações → teto 8
+    # Nível C: Observacional COM controle + propensity score → teto 7
+    # Nível D: Registro prospectivo SEM controle, coorte sem adjudicação → teto 6
+    # Nível E: Série de casos, transversal, opinião de especialista → teto 5
+    #
+    # Mapeamento: palavras-chave do campo desenho_confiavel/tipo_estudo → teto
+    # Usado por _aplicar_teto_nac() para inspecionar o JSON retornado pelo LLM.
+}
+
+_TETO_TIPO_ESTUDO = {
+    # Tipos que NUNCA ultrapassam determinados tetos, independente do LLM
+    # Revisões/guidelines/ponto_de_vista: não usam NAC — usam nota_relevancia_pratica
+    # Para artigos originais, o teto é determinado por _detectar_nivel_desenho()
+}
+
+
+def _detectar_nivel_desenho(analysis_json: dict) -> tuple[str, int]:
+    """
+    Detecta o nível de evidência (A-E) e retorna (nivel, teto_nac).
+    Analisa o campo 'nucleo_comum.desenho_confiavel' e 'justificativa_notas'.
+    Esta é a implementação da LEI 0 — Passo 1 do CardioDaily.
+    """
+    # Texto a inspecionar: desenho + justificativa
+    nucleo = analysis_json.get('nucleo_comum') or {}
+    textos = [
+        str(analysis_json.get('justificativa_notas') or ''),
+        str(nucleo.get('desenho_confiavel') or ''),
+        str(analysis_json.get('analise_especifica', {}).get('modulo') if isinstance(analysis_json.get('analise_especifica'), dict) else ''),
+    ]
+    texto = ' '.join(textos).lower()
+
+    # ── NÍVEL A: RCT com desfecho duro ──────────────────────────────────────
+    # Exige: (1) randomizad* E (2) desfecho duro (mortalidade/IAM/AVC/hospitalização)
+    # E NÃO é apenas surrogate
+    has_rct = any(t in texto for t in ['rct', 'randomizad', 'ensaio clínico randomizado', 'ensaio randomizado'])
+    has_desfecho_duro = any(t in texto for t in [
+        'mortalidade', 'mortality', 'iam ', 'infarto', 'avc ', 'stroke',
+        'hospitalização', 'hospitalization', 'morte ', 'óbito', 'death'
+    ])
+    has_surrogate_only = any(t in texto for t in [
+        'desfecho surrogate', 'desfecho substituto', 'feve ', 'ldl', 'pressão arterial como primário',
+        'pressão como primário', 'biomarcador como primário'
+    ])
+    has_sem_cegamento = any(t in texto for t in ['sem cegamento', 'aberto', 'open-label', 'perdas > 10', 'perdas >10', 'underpowered'])
+    has_adjudicacao = any(t in texto for t in ['adjudicação', 'adjudication', 'comitê de desfechos', 'endpoint committee'])
+
+    if has_rct and has_desfecho_duro and not has_surrogate_only and not has_sem_cegamento:
+        return ('A', 10)
+
+    # ── NÍVEL B: RCT com limitações ─────────────────────────────────────────
+    if has_rct and (has_surrogate_only or has_sem_cegamento or not has_adjudicacao):
+        return ('B', 8)
+    if has_rct:  # RCT sem informação clara → conservador
+        return ('B', 8)
+
+    # ── NÍVEL C: Observacional COM controle + propensity score ───────────────
+    has_propensity = any(t in texto for t in [
+        'propensity', 'propensão', 'escore de propensão', 'pareamento', 'matching',
+        'multivariada', 'multivariado', 'regressão multivariada', 'ajuste multivariado'
+    ])
+    has_grupo_controle = any(t in texto for t in [
+        'grupo controle', 'grupo de comparação', 'grupo comparador',
+        'com controle', 'versus controle', 'comparado com', 'compared with'
+    ])
+    has_observacional = any(t in texto for t in [
+        'observacional', 'coorte', 'cohort', 'caso-controle', 'case-control',
+        'retrospectivo', 'prospectivo'
+    ])
+
+    if has_observacional and has_grupo_controle and has_propensity:
+        return ('C', 7)
+
+    # ── NÍVEL D: Registro sem controle / coorte sem adjudicação ─────────────
+    has_registro = any(t in texto for t in [
+        'registro ', 'registry', 'registro prospectivo', 'registro nacional',
+        'banco de dados', 'database', 'coorte retrospectiva', 'retrospective cohort'
+    ])
+    has_sem_controle = any(t in texto for t in [
+        'sem grupo controle', 'without control', 'sem controle', 'não há grupo controle',
+        'ausência de controle', 'único braço', 'single arm', 'não randomizado', 'não-randomizado'
+    ])
+
+    if has_registro or (has_observacional and not has_grupo_controle):
+        return ('D', 6)
+    if has_observacional and has_sem_controle:
+        return ('D', 6)
+
+    # ── NÍVEL E: Série de casos, transversal, opinião ────────────────────────
+    has_nivel_e = any(t in texto for t in [
+        'série de casos', 'case series', 'relato de caso', 'case report',
+        'transversal', 'cross-sectional', 'opinião', 'opinion', 'editorial'
+    ])
+    if has_nivel_e:
+        return ('E', 5)
+
+    # ── Sem informação suficiente: conservador ────────────────────────────────
+    return ('?', 10)  # não penaliza quando não há texto suficiente para inferir
+
+
+def aplicar_teto_nac(score: float, analysis_json: dict, article_type: str = '') -> float:
+    """
+    Aplica as regras invioláveis de pontuação (LEI 0 do CardioDaily).
+    Chamada SEMPRE após extrair score do LLM — nunca salva score sem passar aqui.
+
+    Regras:
+      Passo 1: Teto por desenho de estudo (detectado do JSON do LLM)
+      Passo 2: Teto estatístico (nota_trabalho_estatistico < 8 → NAC ≤ 7)
+      Passo 3: Observacionais nunca atingem NAC 9+ (garantia extra)
+    """
+    if score <= 0:
+        return score
+
+    # Revisões/guidelines não usam NAC — retornar sem modificar
+    if article_type in ('revisao_geral', 'guideline', 'ponto_de_vista'):
+        return score
+
+    nivel, teto_desenho = _detectar_nivel_desenho(analysis_json)
+
+    # Passo 1: teto por desenho
+    score_original = score
+    if score > teto_desenho:
+        score = float(teto_desenho)
+        print(f"   🚨 NAC {score_original} → {score} (teto Nível {nivel}: desenho não permite score > {teto_desenho})")
+        analysis_json['nota_aplicabilidade_clinica'] = score
+
+    # Passo 2: teto estatístico
+    nota_estat = float(analysis_json.get('nota_trabalho_estatistico') or 0)
+    if nota_estat and nota_estat < 8 and score > 7:
+        print(f"   🚨 NAC {score} → 7 (teto estatístico: rigor metodológico {nota_estat}/10 < 8)")
+        score = 7.0
+        analysis_json['nota_aplicabilidade_clinica'] = 7.0
+
+    # Passo 3: garantia extra — observacionais nunca ≥ 9
+    nucleo = analysis_json.get('nucleo_comum') or {}
+    texto_desenho = str(nucleo.get('desenho_confiavel') or '').lower()
+    is_observacional = any(t in texto_desenho for t in [
+        'observacional', 'registro', 'coorte', 'retrospectivo', 'prospectivo não randomizado'
+    ])
+    if is_observacional and score >= 9:
+        print(f"   🚨 NAC {score} → 8 (garantia extra: estudos observacionais excluídos de NAC ≥ 9)")
+        score = 8.0
+        analysis_json['nota_aplicabilidade_clinica'] = 8.0
+
+    return score
 
 
 def extract_podcast_article_title(analysis_text: str, fallback_filename: str) -> str:
@@ -1632,13 +1788,10 @@ class ArticleAnalyzer:
                 if not score:
                     score = self._extract_score(analysis_text)
 
-                # Regra de consistência: metodologia fraca → aplicabilidade limitada
-                # Se nota_trabalho_estatistico < 8, nota_aplicabilidade não pode passar de 7
-                nota_estat = float(analysis_json_data.get('nota_trabalho_estatistico') or 0)
-                if nota_estat and nota_estat < 8 and score > 7:
-                    print(f"   ⚠️  Nota clínica ({score}) limitada a 7 — rigor estatístico insuficiente ({nota_estat}/10)")
-                    score = 7.0
-                    analysis_json_data['nota_aplicabilidade_clinica'] = 7.0
+                # ── LEI 0: REGRAS INVIOLÁVEIS DE PONTUAÇÃO (CardioDaily) ──────────
+                # Aplicar teto por desenho + teto estatístico — sempre, independente do prompt.
+                # O LLM pode sugerir qualquer nota; o código corrige antes de salvar.
+                score = aplicar_teto_nac(score, analysis_json_data, article_type or '')
             else:
                 score = self._extract_score(analysis_text)
 

@@ -88,12 +88,36 @@
    • Pesquisa com o paciente no centro
    • Preocupação com implementação real, sobretudo em países com limitações de acesso
 
-💡 Critérios de Notas:
+💡 Critérios Definitivos de Nota de Aplicabilidade Clínica (0–10):
 
-• Nota 10 (Disruptivo/Landmark): Muda a prática amanhã. Estabelece novo padrão de cuidado
-• Nota 8-9 (Modificador de Prática): Altamente relevante, modifica significativamente a conduta atual
-• Nota 6-7 (Relevante/Contextual): Confirma ou quantifica o que já suspeitávamos, dados de mundo real de alta qualidade
-• Nota ≤5 (Interesse Acadêmico/Gerador de Hipóteses): Foco fisiopatológico, limitações metodológicas importantes
+NOTA 10 — Disruptivo / Landmark:
+Muda a prática clínica amanhã. Grande RCT que estabelece novo e inequívoco padrão de cuidado, seja por benefício massivo ou pela demonstração definitiva de futilidade/dano. A resposta à pergunta clínica é tão clara que a conduta se torna um "deve fazer" ou "nunca fazer".
+Exemplos: 4S, RALES, EMPA-REG OUTCOME, DAPA-HF.
+
+NOTA 9 — Fortemente Modificador de Prática:
+Não é disruptivo, mas altera significativamente a conduta padrão. Valida nova classe terapêutica, estabelece superioridade de uma estratégia sobre outra, ou refina de forma robusta uma indicação. A prática deve mudar após este estudo.
+Tipos típicos: RCT de alta qualidade, meta-análise em rede de múltiplos RCTs de alta qualidade.
+ATENÇÃO: Estudos observacionais estão EXCLUÍDOS desta categoria.
+
+NOTA 8 — Potencialmente Modificador de Prática:
+Evidências fortes que influenciam mudança de prática, mas sem força de mandato. Pode ser RCT com algumas limitações (desfecho substituto, população muito selecionada), análise secundária pré-especificada de RCT landmark, ou estudo de acurácia diagnóstica de altíssima qualidade.
+Tipos típicos: RCTs com algumas limitações, grandes estudos prospectivos observacionais (onde RCT não é viável), meta-análises robustas.
+
+NOTA 7 — Altamente Relevante / Gerador de Confiança:
+TETO para estudos retrospectivos. Dados de mundo real em larga escala que quantificam e confirmam o que suspeitávamos ou o que os RCTs mostraram. Não muda a diretriz, mas dá confiança para aplicá-la em população mais ampla. Identifica lacunas e justifica a necessidade de um RCT.
+Tipos típicos: Grandes registros nacionais ou multicêntricos, análises de bancos de dados com métodos robustos (propensity score).
+
+NOTA 6 — Relevante / Contextual:
+Útil para a prática, mas não essencial. Explora hipótese com implicações clínicas, fornece dados de único centro ou população específica, ou é meta-análise de estudos observacionais. Ajuda no raciocínio, mas pouca força para mudar conduta.
+Tipos típicos: Coortes retrospectivas de boa qualidade, registros de centro único, estudos de caso-controle.
+
+NOTA 5 — Gerador de Hipóteses:
+Bem conduzido, mas com limitações que impedem ser clinicamente acionável. Foco mais fisiopatológico, amostra pequena, ou desenho transversal. Aponta associação interessante que merece investigação mais robusta.
+Tipos típicos: Estudos transversais, pequenas séries de casos, análises post-hoc exploratórias, estudos piloto.
+
+NOTA ≤4 — Interesse Acadêmico / Metodologicamente Falho:
+Foco primariamente em ciência básica ou fisiopatologia distante da clínica, ou falhas metodológicas tão significativas (viés de seleção grosseiro, controle de confundimento inadequado, N minúsculo) que as conclusões não são confiáveis para a prática.
+Tipos típicos: Relatos de caso, estudos pré-clínicos, observacionais com falhas metodológicas graves.
 
 ARTIGO PARA ANÁLISE:
 {article_text}

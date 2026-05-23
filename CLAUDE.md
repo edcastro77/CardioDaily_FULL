@@ -1,8 +1,58 @@
 # CLAUDE.md - Instrucoes do Projeto CardioDaily
+## Versão 2.0 | 22/Mai/2026
 
 ## LEIS INVIOLAVEIS DO PROJETO
 
 Estas regras sao ABSOLUTAS e nao podem ser quebradas em nenhuma circunstancia:
+
+### LEI 0: REGRA DE PONTUACAO DE ARTIGOS ORIGINAIS (PEDRA ANGULAR DO CARDIODAILY)
+
+Esta e a regra mais importante do sistema de analise. Qualquer sugestao de nota que viole estas
+regras deve ser imediatamente corrigida, independente do que o LLM retornou.
+
+**PASSO 1 — TETO POR DESENHO (aplicar antes de qualquer outra avaliacao):**
+
+| Nivel | Desenho | Teto NAC |
+|-------|---------|----------|
+| A | RCT com desfecho DURO + adjudicacao central + randomizacao adequada | 10 |
+| B | RCT com desfecho surrogate validado, ou RCT com limitacoes (sem cegamento, perdas >10%) | 8 |
+| C | Observacional COM grupo controle + propensity score ou multivariada robusta | 7 |
+| D | Registro prospectivo SEM grupo controle, coorte sem adjudicacao central | 6 |
+| E | Serie de casos, relato de caso, estudo transversal, opiniao de especialista | 5 |
+
+**ATENCAO:** "multicentrico", "prospectivo" e "nacional" NAO elevam o nivel. O que define o nivel
+e a presenca de: (1) randomizacao, (2) grupo controle, (3) adjudicacao central de desfechos.
+
+**PASSO 2 — TETO ESTATISTICO (aplicar apos passo 1):**
+- Se nota_trabalho_estatistico < 8 → nota_aplicabilidade_clinica NAO PODE ultrapassar 7
+- O teto final e o MENOR entre o teto do desenho e o teto estatistico
+
+**EXEMPLOS CORRETOS:**
+- Registro prospectivo nacional N=190, sem randomizacao, sem controle, sem adjudicacao → Nivel D → NAC maximo 6
+- RCT com desfecho FEVE como primario → Nivel B → NAC maximo 8
+- Coorte com propensity score bem conduzida → Nivel C → NAC maximo 7
+- RCT MORTALIDADE bem conduzido → Nivel A → NAC pode ser 10
+
+**EXEMPLOS PROIBIDOS:**
+- Registro sem controle recebendo NAC 9 → ERRADO (teto e 6)
+- Observacional sem propensity score recebendo NAC 8 → ERRADO (teto e 6 ou 7)
+- Estudo observacional recebendo NAC 9 → ERRADO (estudos observacionais estao excluidos de NAC >= 9)
+
+**CRITERIOS DEFINITIVOS DE NOTA (detalhamento completo):**
+
+| Nota | Classificacao | Definicao resumida | Tipos tipicos |
+|------|--------------|-------------------|---------------|
+| 10 | Disruptivo/Landmark | Muda pratica amanha; novo padrao de cuidado | Grande RCT multicentrico, desfecho duro |
+| 9 | Fortemente Modificador | Altera conduta padrao; prática deve mudar | RCT alta qualidade; meta-analise rede de RCTs. Observacionais EXCLUIDOS |
+| 8 | Potencialmente Modificador | Influencia mudanca de pratica, sem mandato | RCT com limitacoes, grandes prospectivos, meta-analises robustas |
+| 7 | Altamente Relevante | TETO retrospectivos; confirma e quantifica | Grandes registros com propensity score |
+| 6 | Relevante/Contextual | Util, pouca forca para mudar conduta | Coortes retrospectivas, registros de centro unico |
+| 5 | Gerador de Hipoteses | Bem conduzido, mas nao clinicamente acionavel | Transversais, pequenas series, post-hoc |
+| ≤4 | Academico/Falho | Falhas metodologicas graves ou pre-clinico | Relato de caso, estudos pre-clinicos |
+
+**Arquivo do prompt:** `src/prompts/prompt_artigo_original_v2.md` — regra 0 e 0b
+
+---
 
 ### LEI 1: NUNCA PROPOR ABANDONAR PARTE DO PROJETO
 - O Claude NUNCA deve sugerir abandonar, descontinuar, remover ou desistir de qualquer funcionalidade planejada ou em desenvolvimento do CardioDaily.
