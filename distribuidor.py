@@ -137,6 +137,36 @@ TEMA_PARA_DOENCAS = {
 # SUPABASE
 # =============================================================================
 
+CORPUS_DIR = os.path.join(os.path.dirname(__file__), "outputs", "corpus")
+
+def _gerar_e_subir_pdf(doc_id: str) -> str | None:
+    """
+    Tenta gerar o PDF resumo e publicar no Supabase Storage.
+    Retorna a URL pública ou None se falhar.
+    Usado como fallback quando caminho_pdf está vazio no Supabase.
+    """
+    article_dir = os.path.join(CORPUS_DIR, doc_id)
+    if not os.path.isdir(article_dir):
+        log.warning(f"  PDF fallback: pasta local não encontrada para {doc_id}")
+        return None
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+        from pdf_generator import ArticlePDFGenerator
+        from article_analyzer import _upload_pdf_supabase
+        gen = ArticlePDFGenerator()
+        pdf_path = gen.generate_pdf(article_dir)
+        if not pdf_path:
+            log.warning(f"  PDF fallback: geração falhou para {doc_id}")
+            return None
+        url = _upload_pdf_supabase(doc_id, str(pdf_path))
+        if url:
+            log.info(f"  PDF fallback: gerado e publicado → {url}")
+        return url
+    except Exception as e:
+        log.warning(f"  PDF fallback erro: {e}")
+        return None
+
+
 def conectar_supabase():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -198,10 +228,12 @@ def _buscar_tema(sb, tema, doencas, ja_set, ja_dois, dias):
         doi = (a.get("doi") or "").strip().lower()
         if doi and doi in ja_dois:
             continue
-        # Só artigos com VA e áudio — sem eles o envio é incompleto
+        # Pacote completo obrigatório: VA + áudio + PDF — sem qualquer um deles, não envia
         if not a.get("caminho_visual_abstract"):
             continue
         if not a.get("caminho_audio"):
+            continue
+        if not a.get("caminho_pdf"):
             continue
         filtrados.append(a)
     return filtrados[:PRE_SELECAO]
@@ -597,6 +629,13 @@ def distribuir_artigos():
         for artigo in selecionados:
             tema_tag = artigo.pop("_tema", "")
             log.info(f"  → [{tema_tag}] {artigo.get('titulo','')[:55]}...")
+            # Garantia: se caminho_pdf sumiu do Supabase, gera on-the-fly
+            if not artigo.get("caminho_pdf"):
+                url = _gerar_e_subir_pdf(artigo["doc_id"])
+                if url:
+                    artigo["caminho_pdf"] = url
+                else:
+                    log.warning(f"  ⚠️  PDF indisponível para {artigo['doc_id']} — envio sem link PDF")
             enviar_artigo(phone, artigo)
             doc_ids.append(artigo["doc_id"])
             total += 1
