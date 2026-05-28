@@ -185,6 +185,7 @@ def main():
            "--local-dir", str(TEMP_DIR)]
     env = os.environ.copy()
     env["CARDIODAILY_SKIP_BRIEFING"] = "1"
+    env["CARDIODAILY_FORCE_REANALYZE"] = "1"
 
     print(f"🚀 Iniciando article_analyzer.py com {len(com_pdf)} artigos...")
     print(f"   (pode demorar — ~{len(com_pdf)*4//60} minutos estimados)\n")

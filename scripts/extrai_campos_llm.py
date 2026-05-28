@@ -61,7 +61,7 @@ ARTIGOS_TESTE = [
     "doi_b06376a098656fd7",
 ]
 
-PROMPT_EXTRACAO = """Você é um assistente especializado em cardiologia clínica.
+PROMPT_EXTRACAO = """Você é um assistente especializado em cardiologia clínica prática.
 
 Abaixo está a análise completa de um artigo científico já realizada por um especialista.
 Sua tarefa é EXTRAIR — não reescrever — as informações já presentes nesta análise
@@ -85,17 +85,37 @@ Retorne APENAS um JSON válido com esta estrutura (sem markdown, sem explicaçã
   "tamanho_beneficio": "números concretos: HR, RR, NNT, p-valor, IC95%",
   "conclusao_geral": "1-2 frases: síntese da conclusão do estudo",
   "bullets_praticos": [
-    "bullet prático 1 — acionável na clínica",
+    "bullet prático 1",
     "bullet prático 2",
     "bullet prático 3"
   ]
 }}
 
-Regras:
+Regras gerais:
 - keywords: 5-10 termos clínicos específicos em INGLÊS (ex: "heart failure", "SGLT2 inhibitors")
 - Todos os outros campos em PORTUGUÊS
 - tamanho_beneficio: apenas números reais do estudo, não estimativas
 - bullets_praticos: máximo 5 bullets, cada um com 1 frase acionável
+
+REGRA CRÍTICA para bullets_praticos — PRESCRIÇÃO CONCRETA:
+Cada bullet deve ser específico o suficiente para o médico agir imediatamente.
+Quando o estudo permitir, inclua obrigatoriamente:
+  • Nome do fármaco/dispositivo/procedimento (nome genérico + comercial se relevante)
+  • Dose, via e frequência (ex: "dapagliflozina 10 mg VO 1x/dia")
+  • Critério de seleção do paciente (ex: "em pacientes com ICFEr FEVE<40%, já em uso de betabloqueador + IECA/BRA")
+  • O que NÃO fazer, quando aplicável (ex: "não usar se TFGe < 25 mL/min/1,73m²")
+
+Exemplos de bullet RUIM vs BOM:
+  ✗ RUIM: "Considere SGLT2i em pacientes com insuficiência cardíaca"
+  ✓ BOM: "Iniciar dapagliflozina 10 mg/dia em pacientes com ICFEr (FEVE ≤40%), mesmo sem DM2, independente do uso de diurético"
+
+  ✗ RUIM: "Use estatina de alta potência após SCA"
+  ✓ BOM: "Prescrever atorvastatina 80 mg/dia (ou rosuvastatina 40 mg/dia) na alta hospitalar pós-SCA, independente do LDL basal"
+
+  ✗ RUIM: "Anticoagular pacientes com FA e risco elevado"
+  ✓ BOM: "Iniciar apixabana 5 mg 2x/dia (ou 2,5 mg 2x/dia se ≥2 critérios de redução de dose) em FA não valvar com CHA₂DS₂-VASc ≥2 em homens ou ≥3 em mulheres"
+
+Se o estudo não fornece dados suficientes para prescrição concreta (ex: artigo diagnóstico, epidemiológico, fisiopatológico), o bullet deve ser acionável na conduta, não na prescrição.
 """
 
 
@@ -108,12 +128,13 @@ def _chamar_gemini_flash(text: str) -> dict | None:
     prompt = PROMPT_EXTRACAO.format(analysis_text=text[:15000])  # limite seguro
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_KEY)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        resp = model.generate_content(
-            prompt,
-            generation_config={"temperature": 0.1, "max_output_tokens": 2000},
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=GEMINI_KEY)
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=8000),
         )
         raw = resp.text.strip()
         # Remover markdown se presente
@@ -197,7 +218,28 @@ def _buscar_sem_contexto(nota_min: int, limit: int = 2000) -> list[str]:
         todos.extend(a["doc_id"] for a in batch)
         offset += len(batch)
         if len(batch) < 1000 or len(todos) >= limit: break
-    # Filtrar apenas os que têm analysis.md local
+    return [d for d in todos if (CORPUS_DIR / d / "analysis.md").exists()]
+
+
+def _buscar_todos_com_md(nota_min: int, limit: int = 5000) -> list[str]:
+    """Busca TODOS os doc_ids com nota >= nota_min que têm analysis.md local."""
+    todos = []
+    offset = 0
+    while True:
+        r = requests.get(f"{SUPABASE_URL}/rest/v1/artigos",
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
+            params={
+                "select": "doc_id",
+                "nota_aplicabilidade": f"gte.{nota_min}",
+                "order": "nota_aplicabilidade.desc",
+                "limit": "1000",
+                "offset": str(offset),
+            }, timeout=30)
+        batch = r.json() if r.status_code == 200 else []
+        if not batch: break
+        todos.extend(a["doc_id"] for a in batch)
+        offset += len(batch)
+        if len(batch) < 1000 or len(todos) >= limit: break
     return [d for d in todos if (CORPUS_DIR / d / "analysis.md").exists()]
 
 
@@ -243,15 +285,20 @@ def modo_teste():
     print(f"{'='*60}\n")
 
 
-def modo_producao(nota_min: int, dry_run: bool, workers: int, limite: int):
-    """Processa todos os artigos nota>=nota_min sem contexto_tema."""
+def modo_producao(nota_min: int, dry_run: bool, workers: int, limite: int, force_bullets: bool = False):
+    """Processa artigos nota>=nota_min sem contexto_tema (ou todos, se --force-bullets)."""
     print(f"\n{'='*60}")
-    print(f"PRODUÇÃO — Extração campos | nota >= {nota_min} | {'DRY-RUN' if dry_run else 'REAL'}")
-    print(f"Modelo: Gemini 2.0 Flash | Workers: {workers}")
+    modo_label = "FORCE-BULLETS (reescrever todos)" if force_bullets else "Extração campos"
+    print(f"PRODUÇÃO — {modo_label} | nota >= {nota_min} | {'DRY-RUN' if dry_run else 'REAL'}")
+    print(f"Modelo: Gemini 2.5 Flash | Workers: {workers}")
     print(f"{'='*60}\n")
 
-    print("🔍 Buscando artigos sem contexto_tema...")
-    doc_ids = _buscar_sem_contexto(nota_min, limit=limite)
+    if force_bullets:
+        print("🔍 Buscando todos os artigos com analysis.md (--force-bullets)...")
+        doc_ids = _buscar_todos_com_md(nota_min, limit=limite)
+    else:
+        print("🔍 Buscando artigos sem contexto_tema...")
+        doc_ids = _buscar_sem_contexto(nota_min, limit=limite)
     print(f"   → {len(doc_ids)} artigos com analysis.md local\n")
 
     if not doc_ids:
@@ -264,7 +311,16 @@ def modo_producao(nota_min: int, dry_run: bool, workers: int, limite: int):
     t0 = time.time()
 
     def processar(doc_id):
-        return _processar_artigo(doc_id, dry_run=dry_run, salvar_supabase=not dry_run)
+        resultado = _processar_artigo(doc_id, dry_run=dry_run, salvar_supabase=not dry_run)
+        # No modo force-bullets, filtrar payload para só atualizar bullets_praticos
+        if force_bullets and resultado.get("status") == "ok" and not dry_run:
+            bullets = resultado.get("dados", {}).get("bullets_praticos")
+            if bullets:
+                ok_patch = _patch_supabase(doc_id, {"bullets_praticos": bullets})
+                resultado["supabase"] = "ok" if ok_patch else "erro"
+            else:
+                resultado["status"] = "sem_bullets"
+        return resultado
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
         futures = {ex.submit(processar, d): d for d in doc_ids}
@@ -296,6 +352,8 @@ def main():
     parser.add_argument("--nota-min", type=int, default=7)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--workers", type=int, default=3)
+    parser.add_argument("--force-bullets", action="store_true",
+                        help="Reescrever bullets_praticos de TODOS os artigos com novo prompt")
     parser.add_argument("--limite", type=int, default=2000)
     args = parser.parse_args()
 
@@ -309,7 +367,8 @@ def main():
     if args.teste:
         modo_teste()
     else:
-        modo_producao(args.nota_min, args.dry_run, args.workers, args.limite)
+        modo_producao(args.nota_min, args.dry_run, args.workers, args.limite,
+                      force_bullets=args.force_bullets)
 
 
 if __name__ == "__main__":

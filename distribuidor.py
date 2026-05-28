@@ -1,15 +1,17 @@
 """
-CARDIODAILY — Distribuidor Diário v3
+CARDIODAILY — Distribuidor Diário v4
 =====================================
 Distribuição via Z-API (WhatsApp) + Telegram Bot.
 Roda via cron ou Agendador de Tarefas do Windows.
 
 Uso:
-  python3 distribuidor.py artigos        → distribuição diária (07:00)
-  python3 distribuidor.py radar          → podcast do radar (08:00)
-  python3 distribuidor.py semana         → lista semanal por revista (segunda 07:30)
+  python3 distribuidor.py artigos          → distribuição diária (07:00) — 1 artigo destaque
+  python3 distribuidor.py lista_diaria     → lista A navegável (07:00) — 5 artigos com gancho
+  python3 distribuidor.py lista_semanal    → lista B por revista (segundas 07:30)
+  python3 distribuidor.py radar            → podcast do radar (08:00)
+  python3 distribuidor.py semana           → lista semanal legado (sem gancho)
   python3 distribuidor.py semana --dry-run → preview sem enviar
-  python3 distribuidor.py teste          → simula sem enviar
+  python3 distribuidor.py teste            → simula sem enviar
 """
 
 import sys
@@ -18,6 +20,18 @@ import httpx
 import logging
 from datetime import datetime, timezone, timedelta
 from supabase import create_client
+
+# Lista navegável com ganchos
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+try:
+    from lista_whatsapp import (
+        gerar_lista_diaria,
+        gerar_lista_semanal_por_revista,
+        FORMATO_A, FORMATO_B,
+    )
+    _LISTA_OK = True
+except ImportError:
+    _LISTA_OK = False
 
 try:
     from dotenv import load_dotenv
@@ -169,7 +183,7 @@ def _buscar_tema(sb, tema, doencas, ja_set, ja_dois, dias):
     data_inicio = max(_data_publicacao_inicio(dias), DATA_PUBLICACAO_PISO)
     result = sb.table("artigos").select(
         "doc_id, doi, titulo, revista, doenca_principal, tipo_estudo, "
-        "nota_aplicabilidade, caminho_visual_abstract, caminho_audio, caminho_pdf"
+        "nota_aplicabilidade, gancho_abertura, caminho_visual_abstract, caminho_audio, caminho_pdf"
     ).gte("data_publicacao", data_inicio
     ).gte("nota_aplicabilidade", NOTA_MINIMA
     ).in_("doenca_principal", doencas
@@ -492,26 +506,44 @@ def tg_send_audio(audio_url, title=""):
 # =============================================================================
 
 def enviar_artigo(phone, artigo):
+    """
+    Sequência de entrega:
+      1. Gancho socrático (texto)  — desperta curiosidade
+      2. Áudio MP3                 — análise completa, ouve no carro
+      3. Visual abstract (imagem)  — anzol visual
+      4. Link PDF + crédito        — destino final para quem quer a prova
+    """
     titulo = artigo.get("titulo", "Sem título")
+    revista = artigo.get("revista", "")
+    nac = artigo.get("nota_aplicabilidade", "?")
     log.info(f"  Enviando: {titulo[:60]}...")
 
-    caption = f"📚 {titulo}\n📖 {artigo.get('revista', '')}\n⭐ NAC: {artigo.get('nota_aplicabilidade', '?')}/10"
+    # 1. Gancho socrático
+    gancho = artigo.get("gancho_abertura") or ""
+    if gancho:
+        msg_gancho = f"{gancho}\n\n📖 {revista} · NAC {nac}/10"
+    else:
+        # Fallback: título + revista
+        msg_gancho = f"📚 {titulo}\n\n📖 {revista} · NAC {nac}/10"
+    zapi_send_text(phone, msg_gancho)
+    tg_send_text(msg_gancho.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
-    # 1. Visual abstract
+    # 2. Áudio
+    if artigo.get("caminho_audio"):
+        zapi_send_audio(phone, artigo["caminho_audio"])
+        tg_send_audio(artigo["caminho_audio"], f"CardioDaily — {titulo[:50]}")
+
+    # 3. Visual abstract
     if artigo.get("caminho_visual_abstract"):
+        caption = f"🔬 {titulo[:80]}"
         zapi_send_image(phone, artigo["caminho_visual_abstract"], caption)
         tg_send_image(artigo["caminho_visual_abstract"], caption)
 
-    # 2. Texto com links (WhatsApp: plain text; Telegram: HTML para evitar 400)
-    texto_wa = montar_mensagem(artigo, html=False)
-    texto_tg = montar_mensagem(artigo, html=True)
-    zapi_send_text(phone, texto_wa)
-    tg_send_text(texto_tg, html=True)
-
-    # 3. Áudio
-    if artigo.get("caminho_audio"):
-        zapi_send_audio(phone, artigo["caminho_audio"])
-        tg_send_audio(artigo["caminho_audio"], f"CardioDaily - {titulo[:50]}")
+    # 4. Link PDF
+    if artigo.get("caminho_pdf"):
+        msg_pdf = f"📄 Análise completa (PDF):\n{artigo['caminho_pdf']}\n\n_CardioDaily — dados e fatos, sem firulas._"
+        zapi_send_text(phone, msg_pdf)
+        tg_send_text(msg_pdf.replace("_", "").replace("&", "&amp;"))
 
 
 # =============================================================================
@@ -725,7 +757,7 @@ def distribuir_eduardo():
     def _buscar(tipos, nota_min, limite=10):
         r = sb.table("artigos").select(
             "doc_id, doi, titulo, revista, doenca_principal, tipo_estudo, "
-            "nota_aplicabilidade, caminho_visual_abstract, caminho_audio, caminho_pdf"
+            "nota_aplicabilidade, gancho_abertura, caminho_visual_abstract, caminho_audio, caminho_pdf"
         ).gte("created_at", (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
         ).gte("nota_aplicabilidade", nota_min
         ).in_("tipo_estudo", tipos
@@ -899,6 +931,134 @@ def lista_semanal(dry_run: bool = False):
 
 
 # =============================================================================
+# LISTA DIÁRIA NAVEGÁVEL — FORMATO A (07:00)
+# =============================================================================
+
+def distribuir_lista_diaria(dry_run: bool = False):
+    """
+    Envia lista A (5 artigos com gancho) personalizada por temas de cada assinante.
+    Substitui distribuir_artigos() como envio padrão das 07:00.
+    """
+    log.info("=" * 60)
+    log.info("LISTA DIÁRIA NAVEGÁVEL — 07:00")
+    log.info(f"Data: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    log.info("=" * 60)
+
+    if not _LISTA_OK:
+        log.error("❌ src/lista_whatsapp.py não encontrado — abortando.")
+        sys.exit(1)
+
+    if not dry_run and not zapi_check_connected():
+        log.error("❌ Z-API desconectada — lista diária abortada.")
+        sys.exit(1)
+    if not dry_run:
+        log.info("✅ Z-API conectada")
+
+    sb = conectar_supabase()
+    assinantes = buscar_assinantes_ativos(sb)
+    enviados = 0
+
+    for assinante in assinantes:
+        nome  = assinante.get("nome", "?")
+        phone = assinante.get("phone", "")
+        temas = assinante.get("temas", [])
+
+        if BETA_PAUSADO and phone != DR_EDUARDO_PHONE:
+            log.info(f"  ⏸️  Beta pausado — pulando {nome}")
+            continue
+
+        msg = gerar_lista_diaria(
+            formato=FORMATO_A,
+            dias=10,
+            n=5,
+            temas=temas if temas else None,
+            nota_min=7,
+        )
+
+        if "Sem novidades" in msg:
+            log.info(f"  {nome}: sem novidades nos temas")
+            continue
+
+        log.info(f"  {nome} ({phone}) — {len(msg)} chars")
+
+        if dry_run:
+            log.info(f"  [DRY-RUN]\n{msg}\n")
+            continue
+
+        zapi_send_text(phone, msg)
+        tg_send_text(msg)
+        enviados += 1
+
+    log.info(f"\n{'=' * 60}")
+    log.info(f"LISTA DIÁRIA CONCLUÍDA — {enviados} enviados")
+    log.info("=" * 60)
+
+
+# =============================================================================
+# LISTA SEMANAL POR REVISTA — FORMATO B (segunda 07:30)
+# =============================================================================
+
+def distribuir_lista_semanal(dry_run: bool = False):
+    """
+    Envia lista B (até 7 artigos por revista) para todos os assinantes.
+    Roda às segundas 07:30 — usa revistas do dia (Circulation nas segundas).
+    """
+    log.info("=" * 60)
+    log.info("LISTA SEMANAL POR REVISTA — FORMATO B")
+    log.info(f"Data: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    log.info("=" * 60)
+
+    if not _LISTA_OK:
+        log.error("❌ src/lista_whatsapp.py não encontrado — abortando.")
+        sys.exit(1)
+
+    if not dry_run and not zapi_check_connected():
+        log.error("❌ Z-API desconectada — lista semanal abortada.")
+        sys.exit(1)
+    if not dry_run:
+        log.info("✅ Z-API conectada")
+
+    msg = gerar_lista_semanal_por_revista(
+        formato=FORMATO_B,
+        dias=7,
+        n=7,
+        nota_min=7,
+    )
+
+    if "sem novidades" in msg.lower():
+        log.info("Sem novidades para a lista semanal.")
+        return
+
+    log.info(f"  Mensagem: {len(msg)} chars")
+
+    if dry_run:
+        log.info(f"  [DRY-RUN]\n{msg}\n")
+        return
+
+    sb = conectar_supabase()
+    assinantes = buscar_assinantes_ativos(sb)
+    enviados = 0
+
+    for assinante in assinantes:
+        phone = assinante.get("phone", "")
+        nome  = assinante.get("nome", phone)
+
+        if BETA_PAUSADO and phone != DR_EDUARDO_PHONE:
+            log.info(f"  ⏸️  Beta pausado — pulando {nome}")
+            continue
+
+        ok = zapi_send_text(phone, msg)
+        tg_send_text(msg)
+        log.info(f"  {'✅' if ok else '⚠️'} {nome} ({phone})")
+        if ok:
+            enviados += 1
+
+    log.info(f"\n{'=' * 60}")
+    log.info(f"LISTA SEMANAL CONCLUÍDA — {enviados} enviados")
+    log.info("=" * 60)
+
+
+# =============================================================================
 # ENTRY POINT
 # =============================================================================
 
@@ -909,17 +1069,23 @@ if __name__ == "__main__":
 
     modo = sys.argv[1].lower()
 
-    if modo == "artigos":
+    dry = "--dry-run" in sys.argv
+
+    if modo == "lista_diaria":
+        distribuir_lista_diaria(dry_run=dry)
+    elif modo == "lista_semanal":
+        distribuir_lista_semanal(dry_run=dry)
+    elif modo == "artigos":
         distribuir_artigos()
     elif modo == "radar":
         distribuir_radar()
     elif modo == "semana":
-        dry = "--dry-run" in sys.argv
         lista_semanal(dry_run=dry)
     elif modo == "teste":
         modo_teste()
     elif modo == "eduardo":
         distribuir_eduardo()
     else:
-        print(f"Modo desconhecido: {modo}. Use: artigos | radar | semana | teste | eduardo")
+        print(f"Modo desconhecido: {modo}.")
+        print("Use: lista_diaria | lista_semanal | artigos | radar | semana | teste | eduardo")
         sys.exit(1)

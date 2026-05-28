@@ -470,11 +470,11 @@ class GeminiVisionClassifier:
             time.sleep(self.call_interval)
 
         # 3. Chamar Gemini Vision com backoff exponencial
-        esperas = [30, 60, 120]
+        esperas = [15, 45, 120]
         last_err = None
         for tentativa, espera in enumerate([0] + esperas):
             if espera:
-                logging.info(f"  Aguardando {espera}s (rate limit, tentativa {tentativa+1}/4)...")
+                logging.info(f"  Aguardando {espera}s (tentativa {tentativa+1}/4)...")
                 time.sleep(espera)
             try:
                 if self._use_new_api:
@@ -485,11 +485,20 @@ class GeminiVisionClassifier:
             except Exception as e:
                 err_msg = str(e)
                 last_err = err_msg
-                if "429" in err_msg or "quota" in err_msg.lower() or "RESOURCE_EXHAUSTED" in err_msg:
-                    logging.warning(f"  Rate limit: {err_msg[:80]}")
+                _transitorio = (
+                    "429" in err_msg or
+                    "503" in err_msg or
+                    "quota" in err_msg.lower() or
+                    "RESOURCE_EXHAUSTED" in err_msg or
+                    "UNAVAILABLE" in err_msg or
+                    "overload" in err_msg.lower() or
+                    "high demand" in err_msg.lower()
+                )
+                if _transitorio:
+                    logging.warning(f"  ⚠️  Gemini tentativa {tentativa+1} falhou ({type(e).__name__}). Aguardando {esperas[tentativa] if tentativa < len(esperas) else 0}s...")
                     continue
-                # Erro não relacionado a rate limit — falhar imediatamente
-                logging.error(f"  Gemini Vision erro: {err_msg}")
+                # Erro permanente (auth, bad request) — não retry
+                logging.error(f"  Gemini erro permanente: {err_msg}")
                 return ("artigo_original", 0.30, f"ERRO Gemini: {err_msg}", empty_meta)
 
         logging.error(f"  Todas as tentativas falharam: {last_err[:80]}")

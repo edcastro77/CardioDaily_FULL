@@ -27,6 +27,15 @@ from pathlib import Path
 
 import requests as req_lib
 
+try:
+    import markdown as _markdown_lib
+    def _md_to_html(text: str) -> str:
+        return _markdown_lib.markdown(text, extensions=["extra", "nl2br"])
+except ImportError:
+    import html as _html_lib
+    def _md_to_html(text: str) -> str:
+        return "<pre>" + _html_lib.escape(text) + "</pre>"
+
 # ── WhatsApp ───────────────────────────────────────────────────────────────────
 try:
     from whatsapp.webhook_handler import handle_webhook
@@ -183,8 +192,15 @@ HTML = """<!DOCTYPE html>
   .card-doenca { font-size: .78rem; color: #64748b; }
   .card-resumo { font-size: .84rem; color: #334155; line-height: 1.6;
     background: #f8fafc; border-radius: 6px; padding: 10px 12px;
-    border-left: 3px solid #1a5f7a; white-space: pre-wrap;
+    border-left: 3px solid #1a5f7a;
     max-height: 220px; overflow-y: auto; }
+  .card-resumo h1,.card-resumo h2,.card-resumo h3 { font-size:.92rem; font-weight:700; color:#1a5f7a; margin:8px 0 4px; }
+  .card-resumo h4,.card-resumo h5 { font-size:.86rem; font-weight:600; color:#334155; margin:6px 0 3px; }
+  .card-resumo p { margin: 4px 0; }
+  .card-resumo ul,.card-resumo ol { margin: 4px 0 4px 16px; padding: 0; }
+  .card-resumo li { margin-bottom: 2px; }
+  .card-resumo strong { color: #1e293b; }
+  .card-resumo hr { border: none; border-top: 1px solid #e2e8f0; margin: 8px 0; }
   .card-resumo.vazio { color: #94a3b8; font-style: italic; border-left-color: #cbd5e1; }
 
   .card-acoes { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
@@ -512,12 +528,15 @@ function renderResultados(artigos, query) {
     const titulo = a.titulo_display || a.doc_id;
     const doenca = a.doenca_principal || '';
     const resumo = a.resumo_markdown || '';
+    const resumoRendered = a.resumo_html || '';
     const doi = a.doi || '';
     const docId = a.doc_id;
     const temImagem = a.tem_imagem;
     const resumoId = `resumo_${idx}`;
 
-    const resumoHtml = resumo
+    const resumoHtml = resumoRendered
+      ? `<div class="card-resumo" id="${resumoId}">${resumoRendered}</div>`
+      : resumo
       ? `<div class="card-resumo" id="${resumoId}">${escHtml(resumo)}</div>`
       : `<div class="card-resumo vazio" id="${resumoId}">Resumo clínico não disponível para este artigo.</div>`;
 
@@ -1212,10 +1231,24 @@ def _clean_titulo(titulo: str | None, doc_id: str | None) -> str:
         r'^(Contextualiz|Análise|Analysis|'
         r'BLOCO|Ficha|Seção|Introdução|Background|Implicação|Take.Home|Conclusão)',
         re.IGNORECASE)
+    # Títulos editoriais gerados pelo analisador — vagos, sem identificar o assunto
+    _EDITORIAL_VAGO = re.compile(
+        r'^(O que (muda|fazer|considerar|sabemos)|'
+        r'Como (tratar|manejar|prescrever|avaliar)|'
+        r'Quando (indicar|usar|tratar)|'
+        r'Por que|'
+        r'Vale a pena|'
+        r'Estado da Arte|'
+        r'Revisão|'
+        r'\d+\.\d+\s*[—–-]|'   # ex: "2.1 —", "3.2 -"
+        r'Dimensão\s*\|)',
+        re.IGNORECASE)
     is_bad = bool(
         re.match(r'^\d{4}-\d{2}', titulo)
         or (('-' in titulo or '_' in titulo) and ' ' not in titulo)
         or _GENERIC.match(titulo)
+        or _EDITORIAL_VAGO.match(titulo)
+        or len(titulo.split()) < 5  # menos de 5 palavras provavelmente vago
         or not titulo
     )
     if not is_bad:
@@ -1262,6 +1295,7 @@ def _clean_titulo(titulo: str | None, doc_id: str | None) -> str:
             if m_pref:
                 c = c[m_pref.end():].strip()
             if not c or _SKIP.match(c): continue
+            if _EDITORIAL_VAGO.match(c): continue  # ex: "O que muda na prescrição?"
             if re.match(r'^\d{4}-\d{2}', c): continue
             if '-' in c and '_' in c: continue
             if c.endswith(':'): continue
@@ -1273,20 +1307,23 @@ def _clean_titulo(titulo: str | None, doc_id: str | None) -> str:
     except Exception:
         pass
 
-    # 2. pdf_filename em analysis.json (fallback com extração do trecho após o journal)
+    # 2. analysis.json — source.titulo ou source.pdf_filename
     try:
         jp = folder / "analysis.json"
         if jp.exists():
             aj = json.loads(jp.read_text(encoding='utf-8', errors='ignore'))
-            fn = (aj.get('source') or {}).get('pdf_filename', '')
+            src = aj.get('source') or {}
+
+            # 2a. source.titulo (campo mais limpo, sem extensão)
+            fn = src.get('titulo', '') or src.get('pdf_filename', '')
             if fn and len(fn) > 15:
-                clean = re.sub(r'^\d{4}-\d{2}-(?:\d{2}-)?', '', fn)
+                clean = re.sub(r'^\d{4}-\d{2}-?(?:\d{2}-)?', '', fn)
                 clean = re.sub(r'\s*\(\d+\)\s*\.pdf\s*$', '', clean, flags=re.IGNORECASE)
                 clean = re.sub(r'\.pdf\s*$', '', clean, flags=re.IGNORECASE)
                 clean = clean.replace('_', ' ').replace('-', ' ')
-                # Remove prefixo de journal (palavra em maiúsculas no início)
-                clean = re.sub(r'^[A-Z][A-Z0-9]+\s+', '', clean).strip()
-                if len(clean.split()) >= 3:
+                # Remove prefixo de journal (sigla em maiúsculas: EHJ, JAMA, NEJM, JACC…)
+                clean = re.sub(r'^[A-Z]{2,6}\s+', '', clean).strip()
+                if len(clean.split()) >= 4:
                     return clean[:120]
     except Exception:
         pass
@@ -1402,6 +1439,7 @@ def buscar_api(q: str, tipo: str, nota: str, limite: str,
         resumo = a.get("resumo_markdown") or ""
         if not resumo:
             resumo = _resumo_from_disk(doc_id)
+        resumo_html = _md_to_html(resumo) if resumo else ""
         img = _asset(doc_id, "visual_abstract.png", "infografico_portrait.png", "mindmap.png")
         out.append({
             "doc_id": doc_id,
@@ -1414,6 +1452,7 @@ def buscar_api(q: str, tipo: str, nota: str, limite: str,
             "created_at": (a.get("created_at") or "")[:10],
             "doi": a.get("doi") or "",
             "resumo_markdown": resumo,
+            "resumo_html": resumo_html,
             "tem_imagem": img is not None,
             "img_file": img or "",
         })
@@ -1680,7 +1719,52 @@ document.getElementById('content').innerHTML = marked.parse(md);
 </body></html>""".encode("utf-8")
                 self._send(200, "text/html; charset=utf-8", body)
             else:
-                self._send(404, "text/plain", b"Analise nao encontrada")
+                # analysis.md não existe localmente — mostrar dados do Supabase
+                titulo_fb, revista_fb, nota_fb, doi_fb, resumo_fb = "", "", "", "", ""
+                try:
+                    r_fb = req_lib.get(
+                        f"{SUPABASE_URL}/rest/v1/artigos",
+                        headers=_SB_HEADERS,
+                        params={"select": "titulo,revista,data_publicacao,nota_aplicabilidade,doi,resumo_markdown",
+                                "doc_id": f"eq.{doc_id}"},
+                        timeout=5)
+                    if r_fb.status_code == 200 and r_fb.json():
+                        row = r_fb.json()[0]
+                        titulo_fb   = _clean_titulo(row.get("titulo") or "", doc_id)
+                        revista_fb  = row.get("revista") or ""
+                        nota_fb     = row.get("nota_aplicabilidade") or ""
+                        doi_fb      = row.get("doi") or ""
+                        resumo_fb   = row.get("resumo_markdown") or ""
+                except Exception:
+                    pass
+
+                doi_link = f'<a href="https://doi.org/{doi_fb}" target="_blank">{doi_fb}</a>' if doi_fb else "—"
+                resumo_html_fb = _md_to_html(resumo_fb) if resumo_fb else "<p style='color:#94a3b8;font-style:italic'>Resumo não disponível.</p>"
+
+                body = f"""<!DOCTYPE html><html lang="pt-BR"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CardioDaily — {titulo_fb or doc_id}</title>
+<style>
+body{{font-family:'Segoe UI',sans-serif;max-width:820px;margin:40px auto;padding:0 20px;color:#1e293b;background:#f8fafc}}
+.header{{background:#1a5f7a;color:white;border-radius:10px;padding:24px 28px;margin-bottom:24px}}
+.header h1{{margin:0 0 8px;font-size:1.25rem;line-height:1.4}}
+.meta{{font-size:.85rem;opacity:.85}}
+.nota{{display:inline-block;background:rgba(255,255,255,.2);border-radius:6px;padding:2px 10px;font-weight:700;margin-right:8px}}
+.content{{background:white;border-radius:10px;padding:24px 28px;box-shadow:0 1px 4px rgba(0,0,0,.08)}}
+.aviso{{background:#fef9c3;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:6px;margin-bottom:20px;font-size:.88rem;color:#92400e}}
+h2,h3{{color:#1a5f7a}}
+</style></head><body>
+<div class="header">
+  <div class="meta"><span class="nota">&#9733; {nota_fb}/10</span>{revista_fb}</div>
+  <h1>{titulo_fb or doc_id}</h1>
+  <div class="meta">DOI: {doi_link}</div>
+</div>
+<div class="content">
+  <div class="aviso">⚠️ Análise local não encontrada — este artigo está indexado no Supabase mas não foi analisado nesta máquina. Rode o pipeline para gerar a análise completa.</div>
+  {resumo_html_fb}
+</div>
+</body></html>""".encode("utf-8")
+                self._send(200, "text/html; charset=utf-8", body)
 
         elif path.startswith("/instagram/"):
             # /instagram/{doc_id}  → JSON com caption gerada
