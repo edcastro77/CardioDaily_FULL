@@ -1240,16 +1240,21 @@ def _clean_titulo(titulo: str | None, doc_id: str | None) -> str:
         r'Vale a pena|'
         r'Estado da Arte|'
         r'Revisão|'
-        r'\d+\.\d+\s*[—–-]|'   # ex: "2.1 —", "3.2 -"
+        r'\d+\.\d+\s*[—–-]\s*$|'   # ex: "2.1 —" sozinho (sem texto após)
         r'Dimensão\s*\|)',
         re.IGNORECASE)
+    # Títulos que começam com ano (20XX ou 19XX) + espaço + texto longo são guidelines reais — nunca ruins
+    _is_year_guideline = bool(re.match(r'^\d{4}\s+\S', titulo) and len(titulo.split()) >= 4)
+
     is_bad = bool(
-        re.match(r'^\d{4}-\d{2}', titulo)
-        or (('-' in titulo or '_' in titulo) and ' ' not in titulo)
-        or _GENERIC.match(titulo)
-        or _EDITORIAL_VAGO.match(titulo)
-        or len(titulo.split()) < 5  # menos de 5 palavras provavelmente vago
-        or not titulo
+        not _is_year_guideline and (
+            re.match(r'^\d{4}-\d{2}', titulo)
+            or (('-' in titulo or '_' in titulo) and ' ' not in titulo)
+            or _GENERIC.match(titulo)
+            or _EDITORIAL_VAGO.match(titulo)
+            or len(titulo.split()) < 5  # menos de 5 palavras provavelmente vago
+            or not titulo
+        )
     )
     if not is_bad:
         return titulo[:120]
@@ -1262,7 +1267,10 @@ def _clean_titulo(titulo: str | None, doc_id: str | None) -> str:
         r'Introdução|Background|Methods|Results|Contribuição|Limitaç|'
         r'Pontos|Perspectiv|Implicaç|Script|Pérola|Dados|Study|Clinical|'
         r'Nota\s+de\s+Aplicabilidade|Classificação|Endpoint|Justificativa|'
-        r'Material\s+de|Observaç|Valor(es)?\s+de\s+Ref|A\d+\s*[—–-])',
+        r'Material\s+de|Observaç|Valor(es)?\s+de\s+Ref|A\d+\s*[—–-]|'
+        r'\d+[A-Z]?\.\s*(Quem|Como|Quando|Por que|O que|Caso|Discuss|Conclu)|'  # "3A. Quem é essa paciente?"
+        r'Quem é ess[ao] paciente|'   # título de seção de caso clínico
+        r'Caso\s+Cl[íi]nico)',
         re.IGNORECASE)
 
     # 1. analysis.md — tabela Markdown (prioridade máxima, formato novo) + headings (formato antigo)
@@ -1617,6 +1625,32 @@ class Handler(BaseHTTPRequestHandler):
                     r'^#\s*(?:An[aá]lise|Analysis)\s*:.*?\n---\s*\n?',
                     '', md.lstrip(), flags=re.DOTALL | re.IGNORECASE)
 
+                # 1c. Converte blocos ```...``` em texto plano formatado.
+                # Os analysis.md novos têm um ### CABEÇALHO seguido de um bloco
+                # com TÍTULO:, REVISTA:, TIPO: etc. dentro de ```.
+                # Renderizar como <pre><code> produz fonte monospace — convertemos
+                # cada linha "CHAVE: valor" em "**CHAVE:** valor" para markdown normal.
+                def _codeblock_to_plain(m):
+                    content = m.group(1)
+                    linhas = []
+                    for linha in content.split('\n'):
+                        linha = linha.rstrip()
+                        if not linha:
+                            continue
+                        # Se é "CHAVE: valor" → formata como bold
+                        if ':' in linha:
+                            chave, _, valor = linha.partition(':')
+                            chave_stripped = chave.strip()
+                            valor_stripped = valor.strip()
+                            if chave_stripped and valor_stripped:
+                                linhas.append(f"**{chave_stripped}:** {valor_stripped}  ")
+                            elif chave_stripped:
+                                linhas.append(f"**{chave_stripped}**  ")
+                        else:
+                            linhas.append(linha + "  ")
+                    return '\n' + '\n'.join(linhas) + '\n'
+                md = re.sub(r'```[a-zA-Z]*\n(.*?)```', _codeblock_to_plain, md, flags=re.DOTALL)
+
                 # 2. Remove seção SCRIPT MAPA MENTAL e tudo abaixo dela
                 cut = re.search(
                     r'\n#{1,3}[^\n]*(?:MAPA MENTAL|MindNode|SCRIPT PARA|FINE-ONE)[^\n]*',
@@ -1699,6 +1733,8 @@ th{{background:#1a5f7a;color:#fff;padding:10px 14px;text-align:left;font-weight:
 td{{padding:9px 14px;border-bottom:1px solid #e2e8f0}}
 tr:nth-child(even) td{{background:#f8fafc}}
 code{{background:#f1f5f9;padding:2px 7px;border-radius:4px;font-size:.87em;font-family:'Menlo','Courier New',monospace}}
+pre{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin:12px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:.88rem;line-height:1.7;color:#334155;white-space:pre-wrap;word-break:break-word;overflow-x:auto}}
+pre code{{background:none;padding:0;border-radius:0;font-family:inherit;font-size:inherit;color:inherit}}
 blockquote{{border-left:4px solid #1a5f7a;margin:16px 0;padding:10px 16px;background:#f0f7fb;border-radius:0 6px 6px 0;color:#334155}}
 hr{{border:none;border-top:1px solid #e2e8f0;margin:24px 0}}
 </style>
