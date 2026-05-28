@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CardioDaily — Auditor de Integridade do Supabase v2.0
+CardioDaily — Auditor de Integridade do Supabase v2.1
 
 Gera relatório semanal das tabelas `artigos` e `radar`:
 - Campos nulos obrigatórios
@@ -41,6 +41,35 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
 CORPUS_DIR   = _ROOT / "outputs" / "corpus"
 OUTPUT_DIR   = _ROOT / "outputs" / "auditorias"
+
+# ── títulos genéricos/inválidos ─────────────────────────────────────────────
+# Padrões que indicam que o título não foi preenchido corretamente.
+# Qualquer título que contenha um desses fragmentos (case-insensitive) é genérico.
+TITULOS_GENERICOS_FRAGMENT = [
+    "o que tem esta paciente",
+    "o que tem este paciente",
+    "análise do artigo",
+    "analise do artigo",
+    "estudo clínico recente",
+    "estudo clinico recente",
+    "artigo em análise",
+    "artigo em analise",
+    "título não disponível",
+    "titulo nao disponivel",
+    "sem título",
+    "sem titulo",
+    "untitled",
+    "resumo do estudo",
+    "resumo do artigo",
+    "novo artigo",
+    "artigo recente",
+    "estudo recente",
+    "publicação recente",
+    "publicacao recente",
+]
+
+# Títulos muito curtos (≤ 10 chars) também são suspeitos
+TITULO_MIN_CHARS = 10
 
 HDRS = lambda: {
     "apikey": SUPABASE_KEY,
@@ -85,6 +114,64 @@ def _pct(parte: int, total: int) -> str:
     if not total:
         return "0%"
     return f"{parte / total * 100:.1f}%"
+
+
+# ── detecção de títulos genéricos ───────────────────────────────────────────
+
+def _detectar_titulos_genericos(quick: bool = False) -> list[dict]:
+    """
+    Busca artigos com títulos genéricos/inválidos.
+    Faz paginação em lotes de 1000 para varrer todo o banco.
+    Retorna lista de dicts com doc_id, titulo, nota_aplicabilidade.
+    """
+    encontrados = []
+    offset = 0
+    batch  = 1000
+
+    while True:
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/artigos",
+            headers=HDRS(),
+            params={
+                "select": "doc_id,titulo,nota_aplicabilidade",
+                "titulo": "not.is.null",   # só os que TÊM título (os nulos já são capturados acima)
+                "order":  "nota_aplicabilidade.desc",
+                "offset": str(offset),
+                "limit":  str(batch),
+            },
+            timeout=60,
+        )
+        if r.status_code != 200:
+            break
+        dados = r.json()
+        if not isinstance(dados, list) or not dados:
+            break
+
+        for a in dados:
+            titulo = (a.get("titulo") or "").strip()
+            if not titulo:
+                continue
+            # Muito curto
+            if len(titulo) <= TITULO_MIN_CHARS:
+                encontrados.append(a)
+                continue
+            # Fragmento genérico
+            titulo_lower = titulo.lower()
+            if any(frag in titulo_lower for frag in TITULOS_GENERICOS_FRAGMENT):
+                encontrados.append(a)
+
+        if len(dados) < batch:
+            break
+
+        # Em modo quick, basta checar os primeiros 2000
+        if quick and offset >= 2000:
+            break
+
+        offset += batch
+
+    # Ordena por nota desc para mostrar os mais críticos primeiro
+    encontrados.sort(key=lambda x: -(x.get("nota_aplicabilidade") or 0))
+    return encontrados
 
 
 # ── checks individuais ───────────────────────────────────────────────────────
@@ -134,6 +221,24 @@ def check_artigos(quick: bool) -> tuple[str, list[str]]:
     linhas.append(f"   {s} Sem titulo:           {sem_titulo:,} (null={sem_titulo_null}, vazio={sem_titulo_vazio})")
     if sem_titulo > 0:
         comandos.append(f"Títulos ausentes ({sem_titulo}): python3 scripts/backfill_titulos.py")
+
+    # Títulos genéricos — busca em lotes, avalia localmente
+    genericos = _detectar_titulos_genericos(quick=quick)
+    n_gen = len(genericos)
+    s = _semaforo(n_gen, 1, 5)
+    linhas.append(f"   {s} Títulos genéricos:    {n_gen:,}")
+    if n_gen > 0:
+        linhas.append("   ⚠️  ATENÇÃO: Estes artigos têm títulos inválidos e NÃO devem ser enviados:")
+        for g in genericos[:10]:
+            doc_id = (g.get("doc_id") or "?")[:22]
+            titulo = (g.get("titulo") or "?")[:70]
+            nota   = g.get("nota_aplicabilidade", "?")
+            linhas.append(f"      🚫 [{nota}] {doc_id} — \"{titulo}\"")
+        if n_gen > 10:
+            linhas.append(f"      ... e mais {n_gen - 10} artigos com título genérico")
+        comandos.append(
+            f"Títulos genéricos ({n_gen}): python3 scripts/backfill_sem_resumo.py --apenas-sem-titulo"
+        )
 
     # Sem doenca_principal
     sem_doenca = _count("artigos", {"doenca_principal": "is.null"})

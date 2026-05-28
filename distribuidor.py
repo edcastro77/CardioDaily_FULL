@@ -1,6 +1,6 @@
 """
-CARDIODAILY — Distribuidor Diário v4
-=====================================
+CARDIODAILY — Distribuidor Diário v4.1
+========================================
 Distribuição via Z-API (WhatsApp) + Telegram Bot.
 Roda via cron ou Agendador de Tarefas do Windows.
 
@@ -139,6 +139,41 @@ TEMA_PARA_DOENCAS = {
 
 CORPUS_DIR = os.path.join(os.path.dirname(__file__), "outputs", "corpus")
 
+# Fragmentos que identificam títulos genéricos/de template — artigos com esses
+# títulos NÃO devem ser enviados (são resquícios de prompt mal-preenchido).
+_TITULOS_GENERICOS = [
+    "o que tem esta paciente",
+    "o que tem este paciente",
+    "análise do artigo",
+    "analise do artigo",
+    "estudo clínico recente",
+    "estudo clinico recente",
+    "artigo em análise",
+    "artigo em analise",
+    "título não disponível",
+    "titulo nao disponivel",
+    "sem título",
+    "sem titulo",
+    "untitled",
+    "resumo do estudo",
+    "resumo do artigo",
+    "novo artigo",
+    "artigo recente",
+    "estudo recente",
+    "publicação recente",
+    "publicacao recente",
+]
+_TITULO_MIN_CHARS = 10
+
+
+def _titulo_e_generico(titulo: str | None) -> bool:
+    """Retorna True se o título parece genérico/de template e não deve ser enviado."""
+    t = (titulo or "").strip()
+    if not t or len(t) <= _TITULO_MIN_CHARS:
+        return True
+    tl = t.lower()
+    return any(frag in tl for frag in _TITULOS_GENERICOS)
+
 def _gerar_e_subir_pdf(doc_id: str) -> str | None:
     """
     Tenta gerar o PDF resumo e publicar no Supabase Storage.
@@ -227,6 +262,10 @@ def _buscar_tema(sb, tema, doencas, ja_set, ja_dois, dias):
             continue
         doi = (a.get("doi") or "").strip().lower()
         if doi and doi in ja_dois:
+            continue
+        # Título genérico/de template → artigo inválido, não envia
+        if _titulo_e_generico(a.get("titulo")):
+            log.warning(f"  [SKIP] Título genérico detectado: \"{(a.get('titulo') or '')[:60]}\" ({a['doc_id']})")
             continue
         # Pacote completo obrigatório: VA + áudio + PDF — sem qualquer um deles, não envia
         if not a.get("caminho_visual_abstract"):
@@ -814,6 +853,10 @@ def distribuir_eduardo():
     if not revisoes:
         log.warning("Nenhuma revisão/meta com nota ≥ 7 e áudio nos últimos 30 dias.")
 
+    # Filtra títulos genéricos antes de selecionar
+    originais = [a for a in originais if not _titulo_e_generico(a.get("titulo"))]
+    revisoes  = [a for a in revisoes  if not _titulo_e_generico(a.get("titulo"))]
+
     selecionados = []
     if originais:
         selecionados.append(originais[0])
@@ -893,7 +936,9 @@ def buscar_artigos_semana(sb, dias: int = 7):
         .limit(200)
         .execute()
     )
-    return result.data or []
+    artigos_raw = result.data or []
+    # Remove artigos com títulos genéricos/de template
+    return [a for a in artigos_raw if not _titulo_e_generico(a.get("titulo"))]
 
 
 def montar_lista_semanal(artigos: list) -> str:
