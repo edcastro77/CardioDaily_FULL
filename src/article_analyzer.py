@@ -2512,9 +2512,9 @@ class ArticleAnalyzer:
                         if s.get('justificativa_notas'):
                             f.write(f"{s['justificativa_notas']}\n\n")
                         f.write("---\n\n")
+                        nc = s.get('nucleo_comum') or {}
                         if s.get('contexto_tema'):
                             f.write(f"## Contexto do Tema\n\n{s['contexto_tema']}\n\n")
-                            nc = s.get('nucleo_comum') or {}
                         if nc:
                             f.write("## Análise do Núcleo Comum\n\n")
                             labels = {
