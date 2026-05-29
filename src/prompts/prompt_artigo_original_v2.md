@@ -130,6 +130,35 @@ Faça inicialmente uma pesquisa e avalie a importância do tema central em discu
 *O tom narrativo e crítico deve ser mantido em todos os casos.*
 A análise do módulo correspondente e exploração do rigor quanto à metodologia deve ser minuciosa e rigorosa.
 
+📐 INSTRUÇÃO PARA tamanho_beneficio E mcid_avaliacao (OBRIGATÓRIO — nunca deixar vazios):
+
+TAMANHO DO BENEFÍCIO — hierarquia de reporte:
+1. Desfechos BINÁRIOS (morte, IAM, AVC, hospitalização):
+   — ARR (Redução Absoluta de Risco) = taxa controle − taxa intervenção
+   — NNT = 1 / ARR (quantos pacientes tratar para evitar 1 evento)
+   — RR ou HR com IC 95% completo (reporte limite inferior E superior)
+   — Se apenas RR/OR for reportado, calcule ARR estimado usando a taxa de eventos do grupo controle
+2. Desfechos CONTÍNUOS (PA, FEVE, LDL, escore de dor):
+   — MD (Diferença de Médias) com IC 95% quando os estudos usam a mesma escala
+   — SMD (Hedges g) quando escalas diferem: < 0.2 trivial | 0.2–0.5 pequeno | 0.5–0.8 moderado | > 0.8 grande
+3. Conclusão de benefício: o tamanho do efeito justifica o uso na prática? Pese benefício absoluto × efeitos adversos × custo.
+
+AVALIAÇÃO MCID — critério universal de significância clínica:
+A MCID (Minimum Clinically Important Difference) é a menor mudança que o paciente percebe como benéfica e que justifica o tratamento. Ela separa significância estatística de significância clínica real.
+
+Siga esta sequência obrigatória:
+1. MCID definida: os autores estipularam a MCID a priori (na seção de Métodos ou cálculo amostral)?
+   — Se SIM: qual é o valor e para qual desfecho?
+   — Se NÃO: use o valor de MCID estabelecido pela literatura para aquele desfecho específico (ex.: redução ≥5 mmHg em PA, ≥5% em FEVE, ≥0.5 ponto em KCCQ, ARR ≥1% para eventos duros). Se não houver referência consolidada, declare explicitamente.
+2. TESTE DE APLICABILIDADE: compare o LIMITE INFERIOR do IC 95% do desfecho primário com a MCID.
+   — Limite inferior > MCID → benefício clínico comprovado mesmo no pior cenário provável ✅
+   — Limite inferior < MCID (IC cruza a linha da MCID) → estatisticamente significativo mas clinicamente incerto ⚠️
+   — Limite inferior < 0 (ou nulo) → sem evidência de benefício clínico ❌
+3. VEREDITO MCID: uma frase direta. Ex.: "IC 95% inferior (HR 0,83) representa ARR de 0,9% — abaixo da MCID de 1,5% para este desfecho; significância estatística não implica relevância clínica para o paciente individual."
+
+Formato esperado para tamanho_beneficio: "ARR 2,1% (NNT=48); HR 0,78 (IC95% 0,67–0,91) — limite inferior mantém benefício relevante. Redução absoluta modesta mas sustentada em análise de sensibilidade."
+Formato esperado para mcid_avaliacao: "MCID: 1,5% ARR (definida pelos autores) | Efeito: ARR 2,1%; HR 0,78 (IC95% 0,67–0,91) | Limite inferior (ARR 1,2%) supera MCID: SIM ✅ | Veredito: benefício clinicamente relevante mesmo no pior cenário estatístico."
+
 RETORNE UM JSON COM A SEGUINTE ESTRUTURA:
 
 {
@@ -141,32 +170,34 @@ RETORNE UM JSON COM A SEGUINTE ESTRUTURA:
   "nota_aplicabilidade_clinica": 0,
   "justificativa_notas": "breve justificativa das notas",
 
-  "contexto_tema": "Qual o tema em discussão e o que sabemos sobre o assunto hoje?",
+  "contexto_tema": "Qual o tema em discussão e o que sabemos sobre o assunto hoje — estado da arte em 3-5 frases densas.",
 
   "nucleo_comum": {
-    "pergunta_clinica_importa": "análise detalhada",
-    "desenho_confiavel": "análise detalhada",
-    "calculo_amostra": "análise detalhada (especialmente para RCTs: taxa de eventos esperada, redução estimada, n calculado)",
-    "desfecho_primario_relevante": "análise detalhada",
-    "tamanho_beneficio": "análise detalhada com números",
-    "aplicabilidade_pratica": "análise detalhada",
-    "vieses_limitacoes": "análise detalhada",
-    "impacto_conduta": "análise detalhada",
-    "interesses_envolvidos": "análise de conflitos e financiamento",
-    "conclusao_geral": "síntese da avaliação"
+    "pergunta_clinica_importa": "Por que esta pergunta importa clinicamente? Qual lacuna ela preenche?",
+    "desenho_confiavel": "Qual o desenho? É adequado para responder a pergunta? Limitações estruturais?",
+    "calculo_amostra": "N calculado, poder, taxa de eventos esperada, redução mínima detectável. Para RCTs: randomização, cegamento, ITT vs PP.",
+    "desfecho_primario_relevante": "O desfecho primário é clinicamente relevante (duro) ou surrogate? Adjudicação central?",
+    "tamanho_beneficio": "ARR e NNT para desfechos binários. MD/SMD para contínuos. IC 95% completo (limites inferior e superior). Avaliação do limite inferior do IC vs MCID.",
+    "aplicabilidade_pratica": "Para quem se aplica? Critérios de inclusão/exclusão refletem pacientes reais? Disponibilidade no Brasil?",
+    "vieses_limitacoes": "Vieses identificados (seleção, aferição, confundimento, publicação). O que enfraquece a validade interna e externa?",
+    "impacto_conduta": "O que muda na prática após este estudo? Prescrição, indicação, contraindicação, posologia, monitoramento.",
+    "interesses_envolvidos": "Financiamento, vínculos declarados dos autores com a indústria. Impacto potencial nos resultados.",
+    "conclusao_geral": "Síntese crítica: o que o estudo prova, o que não prova, e qual seu lugar na hierarquia de evidências atual."
   },
 
   "analise_especifica": {
     "modulo": "RCT ou Diagnóstico ou Prognóstico ou Observacional",
-    "pontos_chave": ["ponto específico 1", "ponto específico 2", "ponto específico 3"]
+    "pontos_chave": ["ponto metodológico ou clínico específico deste módulo 1", "ponto 2", "ponto 3"]
   },
 
   "reflexao_final": {
-    "conclusao": "conclusão concisa sobre a importância do artigo",
-    "bullets_praticos": ["Como este estudo pode me ajudar na prática - bullet 1", "bullet 2", "bullet 3"],
-    "relevancia": "relevância para discussões científicas atuais ou aplicação no mundo real",
-    "reflexao_pessoal": "Pontos fortes, fracos e áreas potenciais para pesquisas futuras"
+    "conclusao": "Conclusão concisa: o estudo muda conduta, reforça prática existente, ou apenas gera hipótese?",
+    "bullets_praticos": ["O que fazer diferente na prática a partir de amanhã — bullet 1", "bullet 2", "bullet 3"],
+    "relevancia": "Relevância para o cenário cardiológico brasileiro e para discussões científicas atuais.",
+    "reflexao_pessoal": "Pontos fortes, fracos e lacunas que justificam estudos futuros."
   },
+
+  "mcid_avaliacao": "MCID: [valor e fonte — definida pelos autores ou literatura] | Efeito: [ARR/MD/SMD com IC95%] | Limite inferior IC supera MCID: [SIM ✅ / NÃO ⚠️ / Não aplicável] | Veredito: [uma frase direta sobre se o benefício é clinicamente relevante para o paciente]",
 
   "keywords": ["termo clínico 1", "termo clínico 2", "termo clínico 3", "termo clínico 4", "termo clínico 5"]
 }

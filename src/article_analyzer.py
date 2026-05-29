@@ -242,22 +242,31 @@ def _patch_campos_clinicos_supabase(doc_id: str, analysis_structured: dict) -> b
 
     nucleo   = analysis_structured.get("nucleo_comum", {})
     reflexao = analysis_structured.get("reflexao_final", {})
+    s        = analysis_structured  # alias — revisões/meta têm campos na raiz
 
     payload = {}
 
-    # Schema originais
+    # Schema originais — campos na raiz do JSON
     for campo in ["contexto_tema", "por_que_importa", "principais_recomendacoes"]:
-        v = analysis_structured.get(campo)
+        v = s.get(campo)
         if v and isinstance(v, str) and len(v.strip()) > 10:
             payload[campo] = v.strip()
 
+    # Campos em nucleo_comum (originais) com fallback para raiz (revisões/meta)
     for campo in ["aplicabilidade_pratica", "impacto_conduta", "tamanho_beneficio", "conclusao_geral"]:
-        v = nucleo.get(campo)
+        v = nucleo.get(campo) if nucleo else s.get(campo)
+        if not v:
+            v = s.get(campo)  # fallback raiz sempre
         if v and isinstance(v, str) and len(v.strip()) > 10:
             payload[campo] = v.strip()
 
-    # bullets_praticos — JSONB
-    bp = reflexao.get("bullets_praticos")
+    # mcid_avaliacao — todos os tipos, sempre na raiz
+    mcid = s.get("mcid_avaliacao")
+    if mcid and isinstance(mcid, str) and len(mcid.strip()) > 10:
+        payload["mcid_avaliacao"] = mcid.strip()
+
+    # bullets_praticos — originais: reflexao_final | revisões/meta: raiz
+    bp = reflexao.get("bullets_praticos") or s.get("bullets_praticos")
     if isinstance(bp, list) and bp:
         payload["bullets_praticos"] = bp
     elif isinstance(bp, str) and bp.strip():
@@ -399,17 +408,29 @@ def _upsert_artigo_supabase(doc_id: str, article_dir: str,
                       if va_png.exists() else None)
 
         # ── Campos clínicos ricos ─────────────────────────────────────────────
-        s = analysis_structured or {}
+        # analysis_structured pode ser None; analise (analysis.json["analysis"]) tem os
+        # campos direto na raiz — não dentro de "structured"
+        s = analysis_structured or analise  # fallback para raiz do analysis
         campos_clinicos = {}
         for campo in ["contexto_tema", "por_que_importa", "principais_recomendacoes"]:
             v = s.get(campo)
             if v and isinstance(v, str) and len(v.strip()) > 10:
                 campos_clinicos[campo] = v.strip()
+            elif v and isinstance(v, (dict, list)) and v:
+                # guardar JSON como texto serializado
+                import json as _json
+                campos_clinicos[campo] = _json.dumps(v, ensure_ascii=False)
         for campo in ["aplicabilidade_pratica", "impacto_conduta", "tamanho_beneficio", "conclusao_geral"]:
-            v = nucleo.get(campo)
+            v = nucleo.get(campo) if nucleo else s.get(campo)
             if v and isinstance(v, str) and len(v.strip()) > 10:
                 campos_clinicos[campo] = v.strip()
-        bp = reflexao.get("bullets_praticos")
+        # mcid_avaliacao: todos os tipos — vem da raiz do JSON
+        mcid = s.get("mcid_avaliacao")
+        if mcid and isinstance(mcid, str) and len(mcid.strip()) > 10:
+            campos_clinicos["mcid_avaliacao"] = mcid.strip()
+        # bullets_praticos: originais → reflexao_final.bullets_praticos
+        #                   revisões/meta → raiz do JSON (bloco JSON padronizado)
+        bp = reflexao.get("bullets_praticos") or s.get("bullets_praticos")
         if isinstance(bp, list) and bp:
             campos_clinicos["bullets_praticos"] = bp
         elif isinstance(bp, str) and bp.strip():
@@ -432,8 +453,16 @@ def _upsert_artigo_supabase(doc_id: str, article_dir: str,
         }
         if caminho_va:
             payload["caminho_visual_abstract"] = caminho_va
-        if scores.get("nota_metodologica") is not None:
-            payload["nota_metodologica"] = scores["nota_metodologica"]
+        # nota_trabalho_estatistico — campo canônico
+        nota_est = (scores.get("nota_trabalho_estatistico")
+                    or scores.get("estatistico")
+                    or scores.get("nota_metodologica")
+                    or (analysis_structured or {}).get("nota_trabalho_estatistico"))
+        if nota_est is not None:
+            try:
+                payload["nota_trabalho_estatistico"] = int(float(nota_est))
+            except (ValueError, TypeError):
+                pass
         if analise.get("keywords"):
             payload["keywords"] = analise["keywords"]
         if analise.get("muda_conduta"):
