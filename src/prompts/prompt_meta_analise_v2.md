@@ -112,6 +112,9 @@ A MCID é a menor mudança que o paciente percebe como benéfica. Um IC 95% esta
    - Limite inferior abaixo de zero (ou nulo) → sem evidência de benefício clínico ❌
 3. **Veredito direto**: declare explicitamente se esta meta-análise demonstra ou não significância clínica para o paciente — separada da significância estatística.
 
+⚠️ mcid_avaliacao É OBRIGATÓRIO EM TODAS AS META-ANÁLISES, SEM EXCEÇÃO.
+Se a MCID não foi declarada pelos autores, use o valor da literatura para o desfecho. Se não há referência consolidada, estime com base no contexto clínico e declare explicitamente que é uma estimativa. NUNCA omita ou deixe vazio.
+
 **Qualidade da evidência:**
 - **Volume**: quantos pacientes, quantos estudos sustentam cada estimativa
 - **Sensibilidade**: o resultado se mantém removendo estudos de baixa qualidade ou patrocinados pela indústria?
@@ -213,7 +216,7 @@ Ao final, obrigatoriamente, inclua o bloco JSON abaixo (sem omitir nenhum campo)
   "tamanho_beneficio": "<ARR e NNT para desfechos binários; MD/SMD para contínuos; IC 95% completo; avaliação do limite inferior vs relevância clínica — ex.: 'ARR 1,8% (NNT=56); HR 0,81 (IC95% 0,72–0,91); limite inferior mantém benefício relevante'>",
   "impacto_conduta": "<o que muda na prática clínica após esta meta-análise — prescrição, indicação, contraindicação, monitoramento>",
   "conclusao_geral": "<síntese crítica: o que a meta-análise prova, o que não prova, e qual seu lugar na hierarquia de evidências>",
-  "mcid_avaliacao": "MCID: [valor e fonte] | Efeito agrupado: [ARR/MD/SMD com IC95%] | Limite inferior IC supera MCID: [SIM ✅ / NÃO ⚠️ / Não aplicável] | Veredito: [uma frase direta sobre relevância clínica real para o paciente]",
+  "mcid_avaliacao": "MCID: X% ARR ou Y unidades (fonte: autores/literatura/estimativa) | Efeito agrupado: ARR Z%; HR A (IC95% B–C) | Limite inferior IC supera MCID: SIM ✅ ou NÃO ⚠️ | Veredito: frase direta sobre relevância clínica real para o paciente individual",
   "bullets_praticos": [
     "<ação concreta 1 — o que fazer na prática com base nesta meta-análise>",
     "<ação concreta 2>",

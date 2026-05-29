@@ -64,6 +64,7 @@ Para cada contribuição relevante, responda de forma integrada:
   2. O **limite inferior do IC 95%** do efeito principal supera a MCID? Se não supera: significância estatística sem garantia de relevância clínica para o paciente individual.
   3. Veredito direto em uma frase: "O benefício demonstrado [supera / não alcança / é incerto em relação à] MCID de [X], portanto [é / não é] clinicamente relevante para o paciente individual."
   - Para revisões narrativas sem dados quantitativos próprios: avalie se os estudos-chave citados discutem MCID e sintetize o veredito.
+  - ⚠️ mcid_avaliacao É OBRIGATÓRIO EM TODAS AS REVISÕES, SEM EXCEÇÃO. Se não há dados quantitativos próprios, avalie os estudos primários citados. Se nenhum reporta MCID, declare explicitamente e emita o veredito com base no contexto clínico. NUNCA omita ou deixe vazio.
 - **O impacto prático**: isso muda o que eu faço amanhã no consultório/UTI? Se sim, como exatamente?
 
 > **Regra**: se o artigo traz uma informação que não muda conduta, não refina diagnóstico e não melhora acompanhamento, ela pode ser mencionada brevemente mas não merece desenvolvimento.
@@ -181,7 +182,7 @@ Ao final, obrigatoriamente, inclua o bloco JSON abaixo (sem omitir nenhum campo)
   "tamanho_beneficio": "<se o artigo apresenta dados quantitativos: ARR e NNT para desfechos binários; MD/SMD para contínuos; IC 95% e avaliação do limite inferior vs relevância clínica. Se narrativa sem dados próprios: síntese da magnitude reportada nos estudos-chave citados>",
   "impacto_conduta": "<o que muda na prática clínica após esta revisão — prescrição, indicação, raciocínio diagnóstico, monitoramento>",
   "conclusao_geral": "<síntese crítica: o que este artigo consolida, o que questiona, e qual seu valor para a prática atual>",
-  "mcid_avaliacao": "MCID: [valor e fonte, ou 'não declarada'] | Efeito: [tamanho do efeito com IC95%, ou 'revisão narrativa sem metanálise'] | Limite inferior IC supera MCID: [SIM ✅ / NÃO ⚠️ / Não aplicável] | Veredito: [uma frase direta sobre relevância clínica real para o paciente]",
+  "mcid_avaliacao": "MCID: X% ARR ou Y unidades (fonte: autores/literatura/estimativa; ou 'não declarada — baseado em contexto clínico') | Efeito: ARR Z%; HR A (IC95% B–C) ou 'revisão narrativa — sem efeito agrupado próprio' | Limite inferior IC supera MCID: SIM ✅ ou NÃO ⚠️ ou Não calculável | Veredito: frase direta sobre relevância clínica real para o paciente individual",
   "bullets_praticos": [
     "<ação concreta 1 — o que fazer na prática com base nesta revisão>",
     "<ação concreta 2>",

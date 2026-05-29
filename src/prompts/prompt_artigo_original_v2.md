@@ -156,8 +156,15 @@ Siga esta sequência obrigatória:
    — Limite inferior < 0 (ou nulo) → sem evidência de benefício clínico ❌
 3. VEREDITO MCID: uma frase direta. Ex.: "IC 95% inferior (HR 0,83) representa ARR de 0,9% — abaixo da MCID de 1,5% para este desfecho; significância estatística não implica relevância clínica para o paciente individual."
 
-Formato esperado para tamanho_beneficio: "ARR 2,1% (NNT=48); HR 0,78 (IC95% 0,67–0,91) — limite inferior mantém benefício relevante. Redução absoluta modesta mas sustentada em análise de sensibilidade."
-Formato esperado para mcid_avaliacao: "MCID: 1,5% ARR (definida pelos autores) | Efeito: ARR 2,1%; HR 0,78 (IC95% 0,67–0,91) | Limite inferior (ARR 1,2%) supera MCID: SIM ✅ | Veredito: benefício clinicamente relevante mesmo no pior cenário estatístico."
+⚠️ CAMPO mcid_avaliacao É OBRIGATÓRIO EM TODOS OS ARTIGOS, SEM EXCEÇÃO.
+Não importa a nota, não importa o tipo de estudo, não importa se o artigo declara ou não a MCID.
+Se o artigo não declara MCID, use o valor estabelecido na literatura para aquele desfecho.
+Se não há valor na literatura, estime com base no contexto clínico e declare a estimativa.
+NUNCA deixe mcid_avaliacao vazio, nulo ou como placeholder.
+
+Formato obrigatório (preencha com os dados reais do artigo):
+tamanho_beneficio: "ARR 2,1% (NNT=48); HR 0,78 (IC95% 0,67–0,91) — limite inferior mantém benefício relevante. Redução absoluta modesta mas sustentada em análise de sensibilidade."
+mcid_avaliacao: "MCID: 1,5% ARR (não declarada pelos autores — estimativa baseada em literatura de eventos CV maiores) | Efeito: ARR 2,1%; HR 0,78 (IC95% 0,67–0,91) | Limite inferior (ARR 1,2%) supera MCID: SIM ✅ | Veredito: mesmo no pior cenário estatístico, o benefício supera o limiar de relevância clínica para o paciente individual."
 
 RETORNE UM JSON COM A SEGUINTE ESTRUTURA:
 
@@ -197,7 +204,7 @@ RETORNE UM JSON COM A SEGUINTE ESTRUTURA:
     "reflexao_pessoal": "Pontos fortes, fracos e lacunas que justificam estudos futuros."
   },
 
-  "mcid_avaliacao": "MCID: [valor e fonte — definida pelos autores ou literatura] | Efeito: [ARR/MD/SMD com IC95%] | Limite inferior IC supera MCID: [SIM ✅ / NÃO ⚠️ / Não aplicável] | Veredito: [uma frase direta sobre se o benefício é clinicamente relevante para o paciente]",
+  "mcid_avaliacao": "MCID: X% ARR ou Y unidades (fonte: autores/literatura/estimativa clínica) | Efeito: ARR Z%; HR A (IC95% B–C) | Limite inferior IC supera MCID: SIM ✅ ou NÃO ⚠️ | Veredito: frase direta sobre relevância clínica real para o paciente individual",
 
   "keywords": ["termo clínico 1", "termo clínico 2", "termo clínico 3", "termo clínico 4", "termo clínico 5"]
 }
