@@ -1,869 +1,548 @@
 # CADERNO DE EXECUÇÃO — CARDIODAILY
-## Versão 22.2 | 27/Maio/2026
-### Histórico: v13.2 (20/Fev) → v15.0 (05/Abr) → v16.0 (29/Abr) → v17.0 (02/Mai) → v18.0 (02/Mai) → v19.0 (15/Mai) → v20.0 (18/Mai) → v21.0 (23/Mai) → v22.0 (25/Mai) → v22.1 (26/Mai) → v22.2 (27/Mai)
+## Versão 25.0 | 29/Maio/2026
+### Este documento substitui todas as versões anteriores. É o único documento canônico do projeto.
 
 ---
 
-## ⚠️ ESTADO REAL DO SISTEMA (atualizado 27/Maio/2026 — 10:30)
+## PARTE 1 — O QUE É O CARDIODAILY E POR QUE EXISTE
 
-Este documento registra o estado **honesto e verificado** do sistema. Nada aqui foi romantizado.
+### O problema real
 
-### Completude dos artigos no Supabase (3.471 artigos total | 2.200 com nota ≥ 7)
+O cardiologista da linha de frente trabalha 60 horas por semana, opera, prescreve, atende. Ele não lê o NEJM, o Circulation, o EHJ — não porque não quer, mas porque é impossível. O volume de publicações relevantes em cardiologia é de centenas de artigos por mês. Nenhum humano consegue filtrar isso sozinho.
 
-| Campo | Preenchidos (nota≥7) | % | Status |
-|---|---|---|---|
-| `nota_aplicabilidade` | 2.200 | 100% | ✅ |
-| `titulo` | ~2.024 | ~92% | 🟡 |
-| `doenca_principal` | ~2.156 | ~98% | ✅ |
-| `revista` | ~2.178 | ~99% | ✅ |
-| `keywords` | **1.722** | **78%** | 🟡 |
-| `contexto_tema` | **1.699** | **77%** | 🟡 |
-| `aplicabilidade_pratica` | **1.699** | **77%** | 🟡 |
-| `impacto_conduta` | **1.698** | **77%** | 🟡 |
-| `bullets_praticos` | **2.151** | **99.6%** | ✅ |
-| `gancho_lista` | **2.154** | **99%** | ✅ |
-| `gancho_abertura` | **998** | **99% (nota≥8)** | ✅ |
-| `caminho_pdf` | ~810 | ~23% | 🔴 |
-| `caminho_audio` | ~441 | ~13% | 🔴 |
+O resultado: médicos praticando condutas desatualizadas. Não por negligência. Por falta de tempo e de filtro.
 
-**Evolução 23–25/Mai — KNOWLEDGE BASE COMPLETO:**
+### A solução
 
-| Campo | Antes | Depois | % |
-|---|---|---|---|
-| keywords | ~400 (18%) | 2.155/2.159 | **100%** |
-| contexto_tema | ~400 (18%) | 2.155/2.159 | **100%** |
-| aplicabilidade_pratica | ~400 (18%) | 2.155/2.159 | **100%** |
-| impacto_conduta | ~400 (18%) | 2.154/2.159 | **100%** |
-| bullets_praticos | ~400 (18%) | 2.151/2.159 | **99.6%** ✅ |
+O CardioDaily é um serviço de inteligência clínica. Ele:
+1. **Captura** artigos de cardiologia de alto impacto (NEJM, JACC, EHJ, Circulation, JAMA Cardiology e ~40 outras revistas)
+2. **Analisa** cada artigo com IA — não resume, analisa. Avalia metodologia, identifica o que muda na prática, quantifica o benefício
+3. **Filtra** pelo que realmente importa — usa um sistema de notas com regras invioláveis (LEI 0) que impede inflar a importância de estudos fracos
+4. **Entrega** todo dia às 07:00, personalizado por especialidade, em 4 formatos: gancho socrático + áudio + visual abstract + PDF completo
 
-**Como foi feito (3 passos, custo total ~US$0.20):**
-1. Backfill zero-token (`backfill_campos_clinicos.py`) — extrai de `analysis.json` local
-2. Extração Gemini 2.5 Flash (`extrai_campos_llm.py`) — extrai de `analysis.md` existente
-3. Reanálise real (blocos 5–10) — 557 artigos com schema antigo sem `analysis.md`
+### A prova de que funciona
 
-**8 artigos irrecuperáveis** (4 sem pasta local + 4 Gemini não conseguiu estruturar JSON) — para fins práticos: **100% completo**.
-
-**Melhoria implementada 25/Mai — Prescrição Concreta:**
-Novo `PROMPT_EXTRACAO` exige dose, via, frequência, nome comercial e critério de seleção em cada bullet.
-Exemplo: "Iniciar dapagliflozina 10mg/dia em ICFEr (FEVE≤40%), mesmo sem DM2, para reduzir hospitalização por IC."
-Todos os 2.151 bullets foram reescritos com este formato via `--force-bullets`.
-
-**Implementado 26/Mai — Lista WhatsApp navegável (sugestão Fernanda):**
-- Coluna `gancho_lista` criada no Supabase (TEXT, máx 90 chars)
-- Formato: `[TIPO DE ESTUDO] · [IMPACTO PRÁTICO]` — ex: `Meta robusta · abandona jejum rotineiro para CATE eletivo`
-- `scripts/extrair_ganchos.py` — 2.154/2.159 artigos (99%), custo ~US$0.22, ~18 min
-- `src/lista_whatsapp.py` — FORMATO_A (visual emoji) e FORMATO_B (sóbrio tag)
-- `scripts/teste_lista.py` — preview terminal + envio real via Z-API
-- **Integrado no `distribuidor.py`** — comandos `lista_diaria` e `lista_semanal` funcionais ✅
-
-**Implementado 27/Mai — Gancho de abertura socrático (funil de entrega completo):**
-- Coluna `gancho_abertura` criada no Supabase (TEXT, máx 200 chars) — SQL: `ALTER TABLE artigos ADD COLUMN IF NOT EXISTS gancho_abertura TEXT;`
-- Prompt socrático/provocativo — tom colega-para-colega, sem descrever o artigo, sem emojis
-- `scripts/gerar_ganchos_abertura.py` — **998/1.006 artigos nota≥8 populados** (23 min, Gemini 2.5 Flash, workers=3)
-- 2 artigos sem `analysis.md` local — irrelevante para operação
-- **Distribuidor já implementado** (`enviar_artigo()` usa `gancho_abertura` como primeira mensagem)
-- **Funil de entrega completo e testado:**
-  1. Gancho socrático (texto provocativo) → 2. Áudio MP3 → 3. Visual Abstract → 4. Link PDF
-- `python3 distribuidor.py teste` — VA:✅ Audio:✅ PDF:✅ para todos os 18 assinantes
-
-### O problema real da reanálise nota-7
-
-Na sessão de 18/Mai, o caderno dizia "568 artigos nota-7". Hoje o Supabase mostra 1.267 artigos nota-7. Por quê?
-
-**Motivo 1:** A implementação da LEI 0 em código (`aplicar_teto_nac()`) está rebaixando artigos que antes recebiam nota 8 ou 9 com base no desenho do estudo. Registros e coortes observacionais sem grupo controle que recebiam nota 9 agora são limitados a 6. Isso é **correto** — era o objetivo. O efeito colateral é que o universo de nota-7 cresce.
-
-**Motivo 2:** O Supabase tem artigos registrados por scripts antigos que **não têm PDF local nem analysis.json**. São entradas órfãs — existem no banco mas não podem ser reanalisadas sem o PDF. 191 de cada 500 artigos nota-7 verificados não têm analysis.json local.
-
-**Motivo 3:** A reanálise dos blocos anteriores (nota 8, 9, 10 = blocos 1-4) corretamente processou os artigos, mas o rebaixamento de nota cria novos candidatos na faixa 7 continuamente.
-
-**O que isso significa na prática:**
-- Dos ~1.267 nota-7: ~850 têm análise local (fazíveis) e ~417 são órfãos (precisam do PDF)
-- A reanálise não termina em 6 fins de semana como o v20.0 dizia — é um horizonte móvel
-- **Solução correta:** backfill de campos via Gemini Flash (extrai de analysis.md existente) é mais eficiente do que reanalisar tudo
+O próprio Dr. Eduardo mudou sua prática em pelo menos 3 condutas nos últimos 6 meses por causa do sistema: propranolol na tempestade elétrica, IECA vs BRA no BioBank, clopidogrel crônico no PEGASUS. Nenhuma dessas mudanças teria ocorrido sem o sistema filtrando e entregando na hora certa.
 
 ---
 
-## MUDANÇAS v21.0 (19–23/Maio/2026)
+## PARTE 2 — A LEI 0: A REGRA MAIS IMPORTANTE DO SISTEMA
 
-### 1. LEI 0 — Teto de nota implementado EM CÓDIGO (inviolável) ✅
+### Por que existe
 
-**Problema:** O LLM estava atribuindo nota 9 a registros retrospectivos sem grupo controle ("multicentrico prospectivo nacional" ≠ RCT). Isso contamina o Supabase com artigos superestimados.
+A inteligência artificial — Gemini, Claude, GPT — tem tendência a superestimar a importância de estudos. Um registro nacional com 10.000 pacientes impressiona, mas metodologicamente é muito mais fraco que um RCT com 500. Se o sistema não tiver uma regra inviolável sobre isso, ele vai entregar "nota 9" para estudos que valem, no máximo, nota 6. Isso corromperia a confiança do médico.
 
-**Solução:** Duas funções adicionadas em `src/article_analyzer.py`:
+### A regra
 
-#### `_detectar_nivel_desenho(analysis_json)` → (nivel: str, teto: int)
-Inspeciona o texto de `nucleo_comum.desenho_confiavel` e `justificativa_notas` para classificar o desenho:
+**Passo 1 — Teto por desenho de estudo:**
 
-| Nível | Critério | Teto NAC |
+| Nível | Desenho | NAC máximo |
 |---|---|---|
-| A | RCT + desfecho duro + adjudicação | 10 |
-| B | RCT com surrogate ou limitações | 8 |
-| C | Observacional + propensity/multivariada | 7 |
-| D | Registro prospectivo sem controle | 6 |
-| E | Série de casos, transversal, opinião | 5 |
+| A | RCT + desfecho duro + adjudicação central | 10 |
+| B | RCT com surrogate validado ou com limitações | 8 |
+| C | Observacional COM grupo controle + propensity score ou multivariada robusta | 7 |
+| D | Registro prospectivo SEM grupo controle | 6 |
+| E | Série de casos, transversal, opinião de especialista | 5 |
 
-**Critério definitivo:** randomização presente → A ou B. Sem randomização mas com controle + propensity → C. Sem randomização, sem controle → D. Sem grupo comparação → E.
+**Passo 2 — Teto estatístico:**
+Se `nota_trabalho_estatistico < 8` → NAC máximo é 7, independente do desenho.
 
-#### `aplicar_teto_nac(score, analysis_json, article_type)` → score corrigido
-Aplica 3 camadas:
-1. **Teto por desenho** (passo 1)
-2. **Teto estatístico:** se `nota_trabalho_estatistico < 8` → NAC máximo 7
-3. **Garantia observacional:** se é observacional E score ≥ 9 → score máximo 8
+**O que NÃO eleva o nível:**
+"Multicêntrico", "prospectivo", "nacional", "N=10.000" — nenhum desses conta. O que define o nível é: (1) randomização, (2) grupo controle, (3) adjudicação central de desfechos.
 
-**Chamada em dois pontos:**
-- Após parse do JSON do LLM (linha ~990 em `article_analyzer.py`)
-- Em `_upsert_artigo_supabase()` antes de montar o payload
+### Onde está implementada
 
-**5 casos de teste verificados:** todos passam. Registros sem controle corretamente limitados a 6.
-
-**Regra absoluta:** esta função NUNCA deve ser desabilitada, contornada ou removida. A integridade das notas no Supabase depende disso.
+- **Em código:** função `aplicar_teto_nac()` em `src/article_analyzer.py` — aplicada antes de salvar no Supabase
+- **No prompt:** `src/prompts/prompt_artigo_original_v2.md` — instrui o LLM a respeitar o teto
+- **No auditor:** `scripts/auditoria_supabase.py` — detecta violações automaticamente e lista os infratores
 
 ---
 
-### 2. Prompt artigo_original_v2.md — critérios de nota completos ✅
+## PARTE 3 — O FUNIL DE ENTREGA
 
-**Arquivo:** `src/prompts/prompt_artigo_original_v2.md`
+Todo artigo aprovado percorre este caminho antes de chegar no celular do médico:
 
-Adicionadas definições completas por nível (10 a ≤4) com exemplos explícitos de exclusão:
-- Nota 9: "Estudos observacionais estão EXCLUÍDOS desta categoria"
-- Nota 8: tipos típicos e limitações que justificam
-- Notas 7, 6, 5, ≤4: definições precisas com tipos de estudo
+```
+1. GANCHO SOCRÁTICO (texto, 1-2 linhas)
+   Pergunta ou provocação clínica — faz o médico querer saber mais.
+   Exemplo: "Você ainda usa metoprolol para miocardiopatia hipertrófica obstrutiva?"
+   Gerado por: scripts/gerar_ganchos_abertura.py (Claude Sonnet 4.6)
 
-Isso reforça a LEI 0 no nível do prompt (dupla proteção: prompt + código).
+2. ÁUDIO (MP3, 3-5 minutos)
+   Análise técnica narrada — ouve no carro, no corredor, entre procedimentos.
+   Tom: colega para colega. Sem introdução longa, sem lero-lero.
+   Gerado por: src/podcast_script_generator.py (GPT-4o script) + OpenAI TTS-HD onyx (áudio)
+   Publicado em: Supabase bucket "podcasts"
+
+3. VISUAL ABSTRACT (imagem PNG 1920×1080)
+   8 seções visuais — o médico decide em 10 segundos se merece atenção.
+   Não é para ensinar. É anzol.
+   Gerado por: src/infographics/visual_abstract_generator.py (Playwright + Jinja2)
+   Publicado em: Supabase bucket "visual_abstracts"
+
+4. PDF COMPLETO (4-6 páginas)
+   Análise completa com todos os campos clínicos — destino final para quem quer todos os detalhes.
+   Gerado por: src/pdf_generator.py (WeasyPrint)
+   Publicado em: Supabase bucket "resumos_pdf"
+```
+
+**Regra absoluta:** os 4 elementos são obrigatórios. Artigo sem áudio, sem VA ou sem PDF **não é enviado**. O distribuidor verifica os 4 antes de qualquer envio.
 
 ---
 
-### 3. CLAUDE.md — LEI 0 detalhada ✅
+## PARTE 4 — ARQUITETURA: COMO O SISTEMA FUNCIONA
 
-Tabela completa de critérios (10 a ≤4) adicionada ao CLAUDE.md. Exemplos proibidos explícitos:
-- "Registro sem controle recebendo NAC 9 → ERRADO (teto é 6)"
-- "Estudo observacional recebendo NAC 9 → ERRADO"
+### O cérebro: Supabase
 
-Garante que toda sessão futura do Claude carrega as regras.
+O Supabase é o banco de dados central. Tabela principal: `artigos` — 3.592 registros (Mai/2026).
+
+Cada artigo no Supabase é um registro com campos precisos:
+
+| Campo | O que é | Por que importa |
+|---|---|---|
+| `doc_id` | Hash único do PDF original | Chave primária — evita duplicatas |
+| `titulo` | Título real do artigo | O que o médico vê na lista |
+| `revista` | Sigla da revista (NEJM, JACC, EHJ…) | Contexto de credibilidade |
+| `data_publicacao` | Data de publicação na revista | Filtra o que é recente |
+| `created_at` | Data em que Dr. Eduardo indexou | **Usado pelo distribuidor** — não data_publicacao |
+| `tipo_estudo` | original / revisao / metanalise / guideline | Define qual LLM analisa e qual prompt |
+| `doenca_principal` | Categoria clínica (73 opções) | Personalização por especialidade do assinante |
+| `nota_aplicabilidade` | NAC 1-10 com teto LEI 0 | O filtro de qualidade central do sistema |
+| `nota_trabalho_estatistico` | Nota metodológica (Passo 2 da LEI 0) | Impede NAC inflado por estudo fraco |
+| `caminho_audio` | URL pública do MP3 | Funil — sem isso o artigo não é enviado |
+| `caminho_visual_abstract` | URL pública do VA PNG | Funil — sem isso o artigo não é enviado |
+| `caminho_pdf` | URL pública do PDF | Funil — sem isso o artigo não é enviado |
+| `gancho_abertura` | Frase socrática (200 chars) | Primeiro contato do médico com o artigo |
+| `gancho_lista` | Frase curta (90 chars) | Listas WhatsApp semanais |
+| `contexto_tema` | Por que o tema importa clinicamente | Componente do PDF e do site |
+| `aplicabilidade_pratica` | O que fazer na prática | Componente central da entrega |
+| `bullets_praticos` | JSONB — condutas com dose e critério | O mais acionável do sistema |
+| `tamanho_beneficio` | ARR/NNT ou MD/SMD com IC 95% | Quantifica o benefício real — nunca apenas RR/OR/HR |
+| `mcid_avaliacao` | MCID + efeito + IC 95% + veredito clínico | Separa significância estatística de relevância clínica real |
+
+**Por que `created_at` e não `data_publicacao`?**
+Um artigo do NEJM de janeiro de 2025 que o Dr. Eduardo analisou em maio de 2026 é **novo** para o sistema. O que importa é quando entrou na base, não quando foi publicado. Esse bug existiu e foi corrigido em 19/abr/2026.
+
+### O corpus local
+
+Cada artigo tem uma pasta em `outputs/corpus/{doc_id}/`:
+```
+outputs/corpus/doi_XXXXX/
+├── source.pdf              ← PDF original
+├── analysis.md             ← Análise completa em markdown
+├── analysis.json           ← Todos os campos estruturados
+└── assets/
+    ├── visual_abstract.png ← VA 8 seções (nota ≥ 7)
+    ├── resumo.pdf          ← PDF resumo
+    └── podcast.mp3         ← Áudio (nota ≥ 8)
+```
+
+O Supabase é a janela pública do corpus. O corpus local é a fonte da verdade.
 
 ---
 
-### 4. Z-API — detecção de desconexão antes do envio ✅
+## PARTE 5 — OS SCRIPTS: CADA UM, SUA FUNÇÃO, SUA RAZÃO DE EXISTIR
 
-**Problema descoberto (22/Mai):** Dr. Eduardo trocou de celular. Z-API desconectou silenciosamente. As funções de envio retornavam HTTP 200 mas as mensagens não chegavam. O dia inteiro (artigos + radar) foi perdido.
+### NÚCLEO — Rodam no dia a dia
 
-**Causa:** Z-API retorna `{"connected":false,"session":false}` no endpoint `/status`, mas as chamadas de envio continuam respondendo 200 sem entregar.
+**`ARTIGOS/classificador_artigos.py`**
+O porteiro. Recebe PDFs novos, renderiza a primeira página como imagem, manda para o Gemini 2.0 Flash Vision que identifica: é original? revisão? meta-análise? guideline? Renomeia o arquivo no formato `YYYY-MM-REVISTA-Titulo.pdf` e move para a pasta certa. Acurácia: 98%+. Sem ele, o pipeline não sabe como analisar o artigo.
 
-**Solução:** função `zapi_check_connected()` adicionada em `distribuidor.py`:
+**`src/article_analyzer.py`**
+O cérebro. O script mais importante do sistema. Orquestra todo o pipeline de análise:
+- Lê o PDF, extrai texto
+- Detecta tipo (original → Gemini 2.5 Pro, revisão/guideline → Claude Sonnet 4.6)
+- Envia para o LLM com o prompt correto
+- Aplica LEI 0 (teto de nota inviolável)
+- Gera podcast script + áudio
+- Gera Visual Abstract
+- Gera PDF resumo
+- Faz upsert completo no Supabase com todos os campos
+
+**`distribuidor.py`**
+O carteiro. Todo dia às 07:00, busca no Supabase os artigos elegíveis para cada assinante (nota ≥ 8, tema compatível, não enviado antes, pacote completo), monta a mensagem e envia via Z-API (WhatsApp) + Telegram. Também distribui o Radar às 08:00. Versão atual: v4.1.
+
+**`src/web_biblioteca.py`**
+O administrador local. Servidor HTTP em `localhost:5100` — busca visual, preview do artigo, análise completa renderizada. Usado pelo Dr. Eduardo para revisar artigos antes de qualquer decisão editorial.
+
+**`src/radar/radar_pubmed.py`**
+Varre o PubMed diariamente em 1 de 13 temas (ciclo de 13 dias). Baixa os abstracts, analisa com Gemini, gera script de podcast e áudio via ElevenLabs. Publica no Supabase bucket `radar_podcasts`. **ElevenLabs exclusivamente** — sem fallback para OpenAI TTS.
+
+**`src/briefing_semanal.py`**
+O Eduardo Cri-Cri. Ao final de cada lote de análise, gera um briefing ácido e irreverente sobre os novos artigos. Voz: Cartesia Luana PT-BR. Serve para o Dr. Eduardo ter um panorama rápido do que entrou sem precisar abrir o Administrador.
+
+**`src/pdf_generator.py`**
+Gera o PDF de 4-6 páginas de cada artigo. Lê `analysis.json` (formato novo) ou `analysis.md` (legado). Motor: WeasyPrint. Estilo: clean, acadêmico, sem emojis ou tabelas desnecessárias.
+
+**`src/podcast_script_generator.py`**
+Transforma a análise estruturada em um script de podcast coloquial. Motor: GPT-4o. Tom: colega para colega, direto, sem introdução longa.
+
+**`src/infographics/visual_abstract_generator.py`**
+Gera o Visual Abstract de 8 seções (1920×1080px). Motor: Playwright renderizando HTML/CSS → PNG. **ÚNICO formato visual aprovado** — todos os outros estão em quarentena permanente.
+
+**`src/lista_whatsapp.py`**
+Gera as mensagens de lista navegável para WhatsApp — lista diária e lista semanal por revista. Dois formatos: FORMATO_A (com emoji de cor) e FORMATO_B (sóbrio, com tag).
+
+**`scripts/auditoria_supabase.py`**
+O inspetor. Verifica a integridade de toda a tabela: campos nulos, títulos genéricos, violações de LEI 0, artigos sem áudio, cobertura do Radar. Roda semanalmente. Envia relatório via Telegram. **O único script que tem visão completa da saúde do sistema.**
+
+---
+
+### BACKFILL — Rodam uma vez para corrigir o passado
+
+Existem porque o sistema evoluiu. Campos que hoje são obrigatórios não existiam quando os primeiros artigos foram indexados. Esses scripts preenchem retroativamente sem precisar reanalisar o artigo:
+
+| Script | O que preenche | Por que existe |
+|---|---|---|
+| `scripts/backfill_campos_clinicos.py` | `contexto_tema`, `aplicabilidade_pratica`, `impacto_conduta`, etc. | Campos do schema novo, artigos antigos não tinham |
+| `scripts/backfill_keywords.py` | `keywords` | Campo criado depois da indexação inicial |
+| `scripts/backfill_titulos.py` | `titulo` | Artigos com título vazio ou de template |
+| `scripts/backfill_data_publicacao.py` | `data_publicacao` | Datas faltando — CrossRef como fonte |
+| `scripts/backfill_datas_crossref.py` | `data_publicacao` via CrossRef | Versão mais precisa do anterior |
+| `scripts/backfill_sem_resumo.py` | `resumo_markdown` | Artigos sem take-home textual |
+| `scripts/extrair_ganchos.py` | `gancho_lista` em lote | Ganchos para a lista semanal |
+| `scripts/gerar_ganchos_abertura.py` | `gancho_abertura` | Gancho socrático para envio diário |
+
+---
+
+### UPLOAD — Publicam no Supabase Storage
+
+O corpus local tem os arquivos. Esses scripts sobem para o bucket público:
+
+| Script | O que sobe | Bucket |
+|---|---|---|
+| `scripts/upload_pdfs_supabase.py` | PDFs resumo | `resumos_pdf` |
+| `scripts/upload_podcasts_supabase.py` | MP3 dos artigos | `podcasts` |
+| `scripts/upload_visual_abstracts_supabase.py` | VA PNG | `visual_abstracts` |
+
+---
+
+### REANÁLISE — Reprocessam artigos já analisados
+
+Existem porque o sistema evolui e análises antigas ficam desatualizadas:
+
+| Script | Quando usar |
+|---|---|
+| `scripts/reanalisar_2026.py` | Reanálise dos artigos de 2026 com novo prompt |
+| `scripts/reanalisar_flagados.py` | Artigos marcados como problemáticos |
+| `scripts/reanalyze_failed_packages.py` | Artigos com pacote incompleto |
+| `scripts/reparar_scores_e_vas.py` | Corrige notas e VAs quebrados |
+| `scripts/reparar_audio_paths.py` | Reconecta áudios desvinculados |
+
+**ATENÇÃO:** Reanálise custa dinheiro (Gemini + Claude). Nunca reanalisar sem antes verificar se o backfill zero-custo resolve. Regra absoluta: **auditar antes de reanalisar**.
+
+---
+
+### INDEXAÇÃO — Constroem o banco a partir do corpus local
+
+| Script | Função |
+|---|---|
+| `scripts/indexar_corpus_completo.py` | Varre o corpus inteiro e indexa tudo no Supabase |
+| `scripts/extrai_campos_llm.py` | Extrai campos clínicos via LLM de artigos sem structured data |
+| `scripts/corrigir_taxonomia.py` | Corrige `doenca_principal` com valores errados (Other, Outros) |
+
+---
+
+### SUPORTE — Raramente rodam
+
+| Script | Função |
+|---|---|
+| `scripts/admin_temas.py` | Gestão dos temas do Radar |
+| `scripts/compactar_diretriz.py` | Compacta guidelines longas para o manual |
+| `scripts/rebuild_markdown_exports.py` | Reconstrói exports markdown do corpus |
+| `scripts/repair_corpus_missing_analysis_md.py` | Recupera artigos sem analysis.md |
+| `scripts/sync_resumo_markdown.py` | Sincroniza resumos entre corpus e Supabase |
+| `scripts/preencher_nota_aplicabilidade.py` | Preenche notas faltando em lote |
+| `scripts/fix_titulos_supabase.py` | Correções manuais de títulos em lote |
+
+---
+
+## PARTE 6 — DOIS SCHEMAS DE ANÁLISE (DECISÃO CRÍTICA DE MAI/2026)
+
+O sistema tem dois tipos de artigo com análises completamente diferentes:
+
+### Schema 1 — Artigos Originais e Meta-análises (Gemini 2.5 Pro)
+
+```json
+{
+  "titulo": "...",
+  "nota_aplicabilidade_clinica": 8,
+  "nota_trabalho_estatistico": 7,
+  "contexto_tema": "por que este tema importa clinicamente",
+  "nucleo_comum": {
+    "aplicabilidade_pratica": "o que fazer",
+    "impacto_conduta": "como muda a prática",
+    "tamanho_beneficio": "magnitude do efeito",
+    "conclusao_geral": "síntese"
+  },
+  "analise_especifica": { ... },  // módulos por tipo: RCT, Diagnóstico, Prognóstico...
+  "reflexao_final": {
+    "bullets_praticos": ["conduta 1", "conduta 2"]
+  }
+}
+```
+
+### Schema 2 — Revisões, Guidelines e Meta-análises de rede (Claude Sonnet 4.6)
+
+```json
+{
+  "por_que_importa": { ... },
+  "principais_recomendacoes": [...],
+  "algoritmo_principal": "...",
+  "nota_relevancia_pratica": 9
+}
+```
+
+**Como o sistema detecta qual schema usar:**
 ```python
-def zapi_check_connected() -> bool:
-    resp = httpx.get(f"{ZAPI_BASE}/status", headers=ZAPI_HEADERS, timeout=10)
-    data = resp.json()
-    connected = data.get("connected", False)
-    if not connected:
-        # Envia alerta no Telegram com instruções de reconexão
-        httpx.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", ...)
-    return connected
+is_guideline = bool(s.get('por_que_importa') or s.get('principais_recomendacoes'))
 ```
 
-Chamada no início de `distribuir_artigos()` e `distribuir_radar()`. Se desconectada → log de erro + `sys.exit(1)`.
-
-**Mensagem de alerta no Telegram:**
-> 🚨 *CardioDaily — Z-API DESCONECTADA*
-> As mensagens do dia não foram enviadas.
-> Para reconectar: abra o WhatsApp → Aparelhos conectados → reconecte o CardioDaily
-
-**Quando acontece:** troca de celular, reinicialização do iPhone, timeout de sessão (≈14 dias sem uso).
+**Por que dois schemas?** Guidelines têm estrutura própria (recomendações por classe de evidência, algoritmos). Forçar o mesmo JSON de um RCT em um guideline produzia análises ruins. A separação melhorou radicalmente a qualidade.
 
 ---
 
-### 5. `backfill_campos_clinicos.py` — expansão de campos ✅
+## PARTE 7 — O QUE FOI TENTADO E DESCARTADO
 
-**Antes:** script preenchia apenas 8 campos de texto clínico (contexto_tema, aplicabilidade_pratica, etc.)
+### n8n — CANCELADO (05/Abr/2026)
+Custo: $350/mês. Complexidade: enorme. Valor: zero além do que Python já fazia.
+Substituído 100% por `distribuidor.py` + GitHub Actions. Economia imediata.
 
-**Depois:** preenche também:
-- `keywords` — extrai de `analysis.json → analysis.keywords` ou `scores.keywords`
-- `titulo` — extrai do JSON; fallback: regex no `analysis.md` procurando linha "Título do artigo"
-- `revista` — extrai do JSON; fallback: nome do PDF; fallback: regex Vancouver no `analysis.md`
-- `doenca_principal` — extrai de `classification.doenca_principal`
+### DALL-E 3 — PROIBIDO PERMANENTEMENTE
+Testado para gerar infográficos. Resultado: corações bonitos com setas e bolinhas. Zero conteúdo clínico. Não consegue renderizar números, tabelas ou dados com precisão. Custo: US$0,04/imagem para lixo visual. Arquivos movidos para `archive/legacy_images/`.
 
-**Flag `--apenas-vazios`:** pré-carrega estado do Supabase, só faz PATCH em campos NULL. Nunca sobrescreve dados bons.
+### Cards HTML→PNG para WhatsApp — PROIBIDO PERMANENTEMENTE
+Layout 1080×1080px via Playwright. Problema: bullets curtos (como devem ser) ficam com fonte minúscula. Espaços vazios enormes. Resultado visual amador. Não serve para WhatsApp onde o conteúdo precisa ser lido em 2 segundos.
 
-**Resultado após expansão:**
-- keywords: 39% → 75% dos artigos preenchidos
-- revista: já estava 99% (confirmado)
-- doenca_principal: 100% (confirmado)
+### InfographicPortrait (`portrait_visualmed`) — PROIBIDO PERMANENTEMENTE
+Gerador de infográficos portrait. Descartado pelos mesmos motivos dos cards: layout não adaptativo, resultado ruim com dados reais.
 
-**Uso:**
-```bash
-python3 scripts/backfill_campos_clinicos.py --dry-run          # preview 20 artigos
-python3 scripts/backfill_campos_clinicos.py --nota-min 7       # todos nota≥7
-python3 scripts/backfill_campos_clinicos.py --apenas-vazios    # só campos NULL
-python3 scripts/backfill_campos_clinicos.py --nota-min 7 --apenas-vazios  # combinado
-```
+### MindmapGenerator PNG — PROIBIDO PERMANENTEMENTE
+Gerador de mapas mentais visuais. Descartado. O mapa mental em markdown (`mindmap.md`) ainda existe no corpus mas sem geração de PNG.
 
----
+### `infographic_mpl.py` (matplotlib/seaborn) — PROIBIDO PERMANENTEMENTE
+Gráficos de barras e charts. Descartado. Representação visual de dados clínicos via matplotlib produzia gráficos genéricos sem valor para o médico.
 
-### 6. `scripts/extrai_campos_llm.py` — extração via Gemini Flash (NOVO) ✅
+**O único formato visual aprovado:** Visual Abstract de 8 seções (`src/infographics/visual_abstract_generator.py`). Aprovado pelo Dr. Eduardo após testes. Qualidade: 9/10.
 
-**Propósito:** preencher `contexto_tema`, `bullets_praticos`, `keywords`, `aplicabilidade_pratica`, `impacto_conduta`, `tamanho_beneficio`, `conclusao_geral` para artigos onde o `analysis.json` não tem esses campos (schema antigo) — sem reanalisar o PDF.
-
-**Como funciona:**
-1. Lê `analysis.md` existente (já gerado, sem custo)
-2. Envia para Gemini 2.0 Flash com prompt de extração
-3. Recebe JSON estruturado com os 7 campos
-4. Faz PATCH no Supabase (apenas campos vazios)
-
-**Custo estimado:** ~US$ 0.0001/artigo = ~US$ 0.17 para todos os 1.667 artigos pendentes
-
-**Modo teste (validação manual antes de produção):**
-```bash
-python3 scripts/extrai_campos_llm.py --teste
-# Processa 11 artigos específicos (5 originais + 3 revisões + 3 meta-análises)
-# Resultado em: scripts/teste_extracao_resultado.json
-# NÃO salva no Supabase
-```
-
-**Modo produção (depois de validar):**
-```bash
-python3 scripts/extrai_campos_llm.py --nota-min 7 --workers 5
-python3 scripts/extrai_campos_llm.py --nota-min 7 --dry-run   # preview
-```
-
-**Status:** script criado e testado. Aguardando validação manual do Dr. Eduardo nos 11 artigos de teste antes de rodar em produção.
+### Google Drive como fonte de PDFs — ABANDONADO
+O pipeline original baixava PDFs do Google Drive. Criava dependência de API, autenticação e lentidão. Substituído por pasta local: Dr. Eduardo joga o PDF na pasta, o sistema analisa.
 
 ---
 
-## ESTADO ATUAL DOS COMPONENTES (23/Maio/2026)
+## PARTE 8 — ESTADO ATUAL DO SISTEMA (29/Mai/2026)
 
-### Pipeline de análise
+### Funil nota ≥ 8 (1.012 artigos elegíveis)
 
-| Componente | Status | Confiabilidade |
+| Asset | Cobertura | Situação |
 |---|---|---|
-| Classificador v8.0 (Gemini Vision) | ✅ Operacional | 98%+ |
-| Análise originais (Gemini 2.5 Pro) | ✅ Operacional | Alta |
-| Análise revisões/guidelines (Claude 4.6) | ✅ Operacional | Alta |
-| Análise meta-análises (Gemini 2.5 Pro) | ✅ Operacional | Alta |
-| Visual Abstract 8 seções (Playwright) | ✅ Operacional | Alta |
-| Mapa mental visual (Claude + Playwright) | ✅ Operacional | Alta |
-| Podcast (GPT-4o script + TTS onyx) | ✅ Operacional | Alta |
-| Briefing Cri-Cri (Claude + Cartesia) | ✅ Operacional | Alta |
-| PDF Generator v2 (WeasyPrint) | ✅ Operacional | Alta |
-| LEI 0 em código (`aplicar_teto_nac`) | ✅ Implementado | Inviolável |
+| Visual Abstract | 100% | ✅ |
+| PDF | 99% | ✅ |
+| Gancho abertura | 99% | ✅ |
+| Áudio | 54% (541/1.012) | 🔴 471 nunca gerados |
 
-### Distribuição
+**Os 471 sem áudio:** nunca foram gerados — existem antes do sistema de áudio estar consolidado. Gerar todos custa ElevenLabs/OpenAI TTS. Decisão do Dr. Eduardo sobre quando e quanto gastar.
 
-| Componente | Status | Observação |
+### Completude da tabela `artigos`
+
+| Campo | Preenchimento | Observação |
 |---|---|---|
-| Distribuidor artigos (07:00) | ✅ Funcional | Verificar Z-API antes de cada envio |
-| Distribuidor Radar (08:00) | ✅ Funcional | ElevenLabs obrigatório |
-| Z-API check de conexão | ✅ Implementado | Alerta Telegram se desconectado |
-| Lista semanal (segunda 07:30) | ✅ Funcional | |
-| Gancho de abertura socrático | ✅ Implementado | 998/1006 artigos nota≥8 populados |
-| Funil completo (gancho→áudio→VA→PDF) | ✅ Testado | VA:✅ Audio:✅ PDF:✅ todos os 18 assinantes |
-| Telegram Bot | ⏳ Pendente migração | Era n8n — ainda não reimplementado |
-
-### Banco de dados (Supabase)
-
-| Campo | Estado | Próximo passo |
-|---|---|---|
-| keywords | 37% preenchidos | Rodar `backfill_campos_clinicos.py` depois `extrai_campos_llm.py` |
-| contexto_tema | 12% preenchidos | Rodar `extrai_campos_llm.py` após validação manual |
-| bullets_praticos | 12% preenchidos | Idem |
-| caminho_pdf | 23% preenchidos | `upload_pdfs_supabase.py --since 2020-01-01` |
-| caminho_audio | 13% preenchidos | `gerar_audios_lote.py` |
-| RLS habilitado | ❌ Não | Antes do lançamento (SQL em v20.0) |
-
----
-
-## REANÁLISE NOTA-7 — STATUS E PROTOCOLO
-
-### Situação atual (23/Mai/2026)
-
-| Bloco | Artigos | Status | Data |
-|---|---|---|---|
-| Blocos 1-4 (nota 8-10) | ~300 | ✅ Concluído | Antes 18/Mai |
-| Bloco 5 (100 nota-7) | 100 | ⏳ Preparado em `tmp_nota7_b5/` | Aguardando execução |
-| Blocos 6+ | ~752 | ⏳ Pendente | Horizonte móvel |
-
-**Atenção:** O número de artigos nota-7 cresce conforme a LEI 0 rebaixa artigos de notas superiores. Não é um número fixo.
-
-### Protocolo por bloco
-
-```bash
-# 1. Preparar bloco (Claude faz isso)
-ls tmp_nota7_b5/ | wc -l   # confirmar 100 PDFs
-
-# 2. Rodar no Terminal interativo (Dr. Eduardo)
-CARDIODAILY_FORCE_REANALYZE=1 caffeinate -dims \
-  python3 src/article_analyzer.py --local-dir tmp_nota7_b5
-
-# 3. Backfill zero-token (imediatamente após)
-python3 scripts/backfill_campos_clinicos.py --nota-min 7 --apenas-vazios
-
-# 4. Reportar ao Claude para preparar próximo bloco
-```
-
-**REGRA ABSOLUTA:** nunca rodar `article_analyzer.py` em background pelo Claude Code. Sempre no Terminal interativo do Dr. Eduardo com `caffeinate` para evitar suspensão.
-
-### Estratégia mais eficiente (recomendada)
-
-Em vez de reanalisar TODOS os 1.267 nota-7 (lento, caro), a ordem de prioridade é:
-
-1. **`backfill_campos_clinicos.py --apenas-vazios`** — zero tokens, extrai de analysis.json existente
-2. **`extrai_campos_llm.py --nota-min 7`** — ~US$0.17, extrai de analysis.md existente via Gemini Flash
-3. **Reanálise real** — apenas artigos onde `analysis.md` está corrompido, vazio ou com schema muito antigo
-
-Para o objetivo de **knowledge base acionável**, passos 1 e 2 já resolvem 80% do problema.
-
----
-
-## BACKFILLS PENDENTES — COMANDOS EXATOS
-
-### Prioridade 1: campos do knowledge base (custo zero)
-```bash
-# Backfill de keywords, titulo, revista, doenca_principal + campos clínicos
-python3 scripts/backfill_campos_clinicos.py --nota-min 7 --apenas-vazios
-```
-
-### Prioridade 2: campos via LLM (custo ~US$0.17)
-```bash
-# ANTES: validar com os 11 artigos de teste
-python3 scripts/extrai_campos_llm.py --teste
-# Ler resultado em: scripts/teste_extracao_resultado.json
-# Comparar com avaliação manual do Dr. Eduardo
-# SE aprovado:
-python3 scripts/extrai_campos_llm.py --nota-min 7 --workers 5
-```
-
-### Prioridade 3: PDFs históricos (custo: tempo de geração)
-```bash
-python3 scripts/upload_pdfs_supabase.py --dry-run --since 2020-01-01  # preview
-python3 scripts/upload_pdfs_supabase.py --since 2020-01-01            # executar
-```
-
-### Prioridade 4: áudios (custo: ElevenLabs por artigo)
-```bash
-python3 scripts/gerar_audios_lote.py --dry-run  # preview
-python3 scripts/gerar_audios_lote.py            # executar
-```
-
----
-
-## MUDANÇAS v21.0 — OPERAÇÃO KNOWLEDGE BASE (23–25/Maio/2026)
-
-### O que foi feito e por quê
-
-O Supabase tinha 3.539 artigos indexados, mas apenas 18% deles tinham os campos clínicos preenchidos (`keywords`, `contexto_tema`, `aplicabilidade_pratica`, `impacto_conduta`, `bullets_praticos`). Sem esses campos, o banco é um índice mudo — não consegue responder "me mostre artigos sobre SGLT2 em IC" nem entregar bullets acionáveis ao médico no WhatsApp.
-
-O objetivo desta operação foi transformar o Supabase de índice em **cérebro mobilizável**: cada artigo nota≥7 com conhecimento clínico estruturado e pronto para consulta.
-
-### Como foi feito — 3 passos em sequência
-
-**Passo 1 — Backfill zero-token** (`scripts/backfill_campos_clinicos.py --apenas-vazios`)
-- Lê o `analysis.json` local de cada artigo e extrai os campos diretamente
-- Zero custo, zero tokens, 12–60 segundos para 2.200 artigos
-- Resultado: preencheu todos os artigos com schema novo (reanalisados em 2026)
-- **Quando usar:** sempre que rodar um bloco de reanálise — é o primeiro passo pós-processamento
-
-**Passo 2 — Extração via Gemini Flash** (`scripts/extrai_campos_llm.py --nota-min 7 --workers 5`)
-- Para artigos com schema antigo onde o `analysis.json` não tem os campos, lê o `analysis.md` existente e usa Gemini 2.5 Flash para extrair os 7 campos estruturados
-- Custo: ~US$0.0001/artigo (~US$0.20 para 1.600 artigos)
-- Resultado: preencheu artigos de 2020–2025 que nunca passaram pelo novo pipeline
-- **Quando usar:** após o Passo 1, para artigos que ainda ficaram sem `contexto_tema`
-
-**Passo 3 — Reanálise real** (blocos 5–10, `article_analyzer.py --local-dir tmp_nota7_bN`)
-- Para artigos onde o `analysis.md` está corrompido, vazio ou inexistente — única opção é reanalisar o PDF
-- 557 artigos processados em 10 blocos de ~100 (blocos 5 a 10b)
-- Cada bloco seguido de Passo 1 + Passo 2 imediatamente
-- **Quando usar:** apenas para artigos sem `analysis.md` utilizável — é o mais lento e caro
-
-### Resultado final
-
-| Campo | Antes (22/Mai) | Depois (25/Mai) |
-|---|---|---|
-| keywords | ~400 (18%) | **2.155/2.159 (100%)** |
-| contexto_tema | ~400 (18%) | **2.155/2.159 (100%)** |
-| aplicabilidade_pratica | ~400 (18%) | **2.155/2.159 (100%)** |
-| impacto_conduta | ~400 (18%) | **2.154/2.159 (100%)** |
-| bullets_praticos | ~400 (18%) | **2.012/2.159 (93%)** |
-
-4 artigos órfãos (sem PDF local) são irrecuperáveis. Para fins práticos: **100% completo**.
-
-### Problemas encontrados e resolvidos
-
-| Problema | Causa | Solução |
-|---|---|---|
-| `extrai_campos_llm.py` falhava silenciosamente | SDK `google.generativeai` não instalada | Migrado para `google-genai` (SDK nova) |
-| JSON truncado do Gemini | `max_output_tokens=2000` muito baixo | Aumentado para `8000` |
-| Modelo `gemini-2.0-flash` indisponível | Descontinuado para novas contas | Migrado para `gemini-2.5-flash` |
-| `analysis.md` com JSON malformado (10–13 artigos) | Schema legado com caracteres especiais | Irrecuperáveis sem reanálise — aceitável |
-
-### Protocolo padrão pós-reanálise (fixar para sempre)
-
-Após qualquer bloco de reanálise, rodar **sempre nesta ordem**:
-
-```bash
-# 1. Extrai dos analysis.json novos (zero custo)
-python3 scripts/backfill_campos_clinicos.py --nota-min 7 --apenas-vazios
-
-# 2. Extrai dos analysis.md via Gemini (custo mínimo)
-python3 scripts/extrai_campos_llm.py --nota-min 7 --workers 5
-```
-
----
-
-### Melhorias a implementar no futuro próximo
-
-#### 1. `bullets_praticos` ainda em 93% — precisa atenção
-Os 7% restantes (~147 artigos) têm `contexto_tema` preenchido mas sem `bullets_praticos`. Causa provável: revisões e guidelines com schema diferente onde `reflexao_final.bullets_praticos` não existe.
-- **Solução:** adicionar `bullets_praticos` ao prompt de extração do Gemini Flash para revisões, ou extrair de `por_que_importa` + `principais_recomendacoes` quando `bullets_praticos` for nulo.
-- **Arquivo:** `scripts/extrai_campos_llm.py` — adicionar fallback no prompt
-
-#### 2. Prescrição concreta nos bullets — feedback da Carol e Fernanda
-Os bullets atuais são acionáveis mas genéricos ("considere SGLT2i em pacientes com IC"). O que os médicos querem: **dose, nome comercial, critério de seleção exato**.
-- "Iniciar dapagliflozina 10mg/dia em pacientes com ICFEr (FEVE<40%) já em uso de betabloqueador + IECA/BRA, independente do DM2"
-- **Solução:** adicionar ao `PROMPT_EXTRACAO` em `extrai_campos_llm.py` instrução explícita: "nos bullets_praticos, quando o estudo permitir, inclua dose, via, frequência e critério de seleção do paciente"
-- **Prioridade:** ALTA — é exatamente o que diferencia o CardioDaily de qualquer resumo genérico
-
-#### 3. `caminho_pdf` em 23% — backfill histórico pendente
-2.700+ artigos sem PDF no Supabase Storage. O PDF existe localmente mas nunca foi subido.
-- **Comando:** `python3 scripts/upload_pdfs_supabase.py --since 2020-01-01`
-- **Estimativa:** ~3–4 horas para subir todos via upload sequencial
-- **Prioridade:** MÉDIA — necessário para o site e para o Telegram Bot funcionarem com link direto
-
-#### 4. `caminho_audio` em 13% — 1.500+ artigos sem podcast
-- **Comando:** `python3 scripts/gerar_audios_lote.py`
-- **Custo:** ElevenLabs por caractere (~US$0.30/artigo) — rodar em lotes por nota (nota≥9 primeiro)
-- **Prioridade:** MÉDIA — necessário para a distribuição completa
-
-#### 5. Automação do protocolo pós-reanálise
-Hoje o Dr. Eduardo precisa rodar manualmente os 3 comandos após cada bloco. Deveria ser automático.
-- **Solução:** `article_analyzer.py` já chama o briefing ao final — adicionar chamada ao backfill e extração LLM como step final do pipeline
-- **Arquivo:** `src/article_analyzer.py` — adicionar ao final do loop principal
-- **Prioridade:** BAIXA — conforto operacional, não urgente
-
-#### 6. Limpeza das pastas temporárias
-As pastas `tmp_nota7_b5` até `tmp_nota7_b10b` ainda existem com ~657 PDFs duplicados (já estão em `outputs/corpus/`).
-- **Comando:** `rm -rf tmp_nota7_b*/`
-- **Prioridade:** BAIXA — só disco
-
----
-
-## MUDANÇAS v20.0 (18/Maio/2026) — Supabase como Cérebro Acionável + Backfill Campos Clínicos
-
-### Conceito central — por que estamos reanalisando os artigos
-
-O Supabase não é apenas um índice de artigos — é o **cérebro mobilizável do CardioDaily**. Cada campo estruturado no banco (`aplicabilidade_pratica`, `impacto_conduta`, `bullets_praticos`, etc.) é uma unidade de conhecimento clínico que o assistente WhatsApp pode consultar e entregar ao médico em tempo real.
-
-> "O resumo_markdown responde 'o que foi publicado'. Os campos JSON respondem 'o que eu faço com isso agora'."
-
-### 1. Novos campos clínicos no Supabase — IMPLEMENTADO ✅
-
-8 colunas adicionadas à tabela `artigos`:
-
-| Campo | Tipo | Origem | Conteúdo |
-|---|---|---|---|
-| `contexto_tema` | TEXT | `analysis.json → analysis.contexto_tema` | Contexto clínico do tema |
-| `aplicabilidade_pratica` | TEXT | `analysis.json → nucleo_comum.aplicabilidade_pratica` | Aplicabilidade direta na prática |
-| `impacto_conduta` | TEXT | `analysis.json → nucleo_comum.impacto_conduta` | Como muda a conduta |
-| `tamanho_beneficio` | TEXT | `analysis.json → nucleo_comum.tamanho_beneficio` | Magnitude do efeito em linguagem humana |
-| `conclusao_geral` | TEXT | `analysis.json → nucleo_comum.conclusao_geral` | Conclusão do estudo |
-| `bullets_praticos` | JSONB | `analysis.json → reflexao_final.bullets_praticos` | Lista de bullets acionáveis |
-| `por_que_importa` | TEXT | `analysis.json → analysis.por_que_importa` | Para revisões/guidelines |
-| `principais_recomendacoes` | TEXT | `analysis.json → analysis.principais_recomendacoes` | Para revisões/guidelines |
-
-**SQL rodado no Supabase:**
-```sql
-ALTER TABLE artigos
-  ADD COLUMN IF NOT EXISTS contexto_tema TEXT,
-  ADD COLUMN IF NOT EXISTS aplicabilidade_pratica TEXT,
-  ADD COLUMN IF NOT EXISTS impacto_conduta TEXT,
-  ADD COLUMN IF NOT EXISTS tamanho_beneficio TEXT,
-  ADD COLUMN IF NOT EXISTS conclusao_geral TEXT,
-  ADD COLUMN IF NOT EXISTS bullets_praticos JSONB,
-  ADD COLUMN IF NOT EXISTS por_que_importa TEXT,
-  ADD COLUMN IF NOT EXISTS principais_recomendacoes TEXT;
-```
-
-### 2. Backfill inicial — 408 artigos populados, zero tokens ✅
-
-**Script:** `scripts/backfill_campos_clinicos.py`
-
-**Resultado da primeira execução (18/Mai/2026):**
-- 3191 pastas com `analysis.json` analisadas
-- **408 artigos atualizados** (reanalisados com novo schema — notas 8, 9, 10)
-- 2783 artigos sem campos (schema antigo)
-
-### 3. `sync_resumo_markdown.py` — bug de tabelas corrigido ✅
-
-`_limpar()` tinha `re.sub(r'\|.*\|', '', texto)` que destruía todo o TAKE-HOME MESSAGE em tabela. Removida.
-
----
-
-## MUDANÇAS v19.0 (13–15/Maio/2026) — Briefing Cri-Cri + Radar fix + Compactador Diretrizes
-
-### 1. Briefing de Curadoria (Eduardo Cri-Cri) ✅
-
-**Propósito:** ao final de cada lote de análise, gerar um áudio ácido/irreverente com todos os artigos do dia — para o Dr. Eduardo usar no sábado/domingo de curadoria.
-
-**Arquivo principal:** `src/briefing_semanal.py`
-
-**Pipeline:**
-1. Busca artigos no Supabase (`created_at >= N horas atrás`), ordenados por nota DESC
-2. Gera script via Claude Sonnet 4.6 (persona Eduardo Cri-Cri)
-3. Salva script em `outputs/briefing/briefing_YYYYMMDD_HHMM.txt`
-4. Gera áudio via Cartesia Luana PT-BR (`700d1ee3-a641-4018-ba6e-899dcadc9e2b`, speed=1.05)
-5. Converte WAV → MP3 via ffmpeg
-6. Upload para bucket Supabase `briefing_audio`
-7. Envia ao WhatsApp + Telegram do Dr. Eduardo
-
-**Fix crítico:** Cartesia gera WAV RF64 — `_find_data_chunk()` localiza o chunk `data` dinamicamente.
-
-**CLI:**
-```bash
-./cardiodaily briefing              # últimas 24h
-./cardiodaily briefing --horas 48   # janela maior
-./cardiodaily briefing --dry-run    # só script, sem áudio
-```
-
-### 2. Radar — fixes + arquitetura ✅
-
-- **ElevenLabs exclusivo** no Radar (sem fallback Cartesia)
-- **Um único workflow:** `radar.yml` (dois workflows antigos causavam duplicata diária)
-- **Guard anti-duplo-disparo:** verifica `(tema, data)` no Supabase antes de processar
-- **Prompt reescrito:** sem PMIDs no áudio, linguagem humana para HR/IC95%/p-valor, máx 3 artigos, duração alvo 5 min
-
-### 3. Compactador de Diretrizes SBC-PI ✅
-
-**Módulo:** `src/compactador_diretrizes/`
-
-**CLI:** `./cardiodaily diretriz --input arquivo.pdf`
-**Web:** `./cardiodaily diretriz-web` → `http://localhost:5002`
-
----
-
-## MUDANÇAS v18.0 (02/Maio/2026) — Correção Supabase: PDFs + Áudios
-
-### Diagnóstico de integridade (auditoria executada)
-- **Total:** 3.275 artigos no Supabase
-- **Sem `caminho_pdf`:** 2.661 (81%) — PDF gerado localmente mas nunca subido ao Storage
-- **Sem `caminho_audio`:** 3.181 (97%)
-- **Causa raiz:** `pdf_generator.py` gerava `assets/resumo.pdf` local mas nunca subia ao bucket
-
-### Correções implementadas
-
-1. **`article_analyzer.py` — step 7e:** upload automático do PDF após cada análise
-2. **`scripts/gerar_audios_lote.py`:** migrado OpenAI TTS → ElevenLabs
-3. **`scripts/auditoria_supabase.py`:** diagnóstico periódico com semáforo (✅/🟡/🔴)
-
----
-
-## MUDANÇAS v17.0 (02/Maio/2026) — Novo formato de análise + PDF
-
-### Prompt artigo_original_v2.md
-- Arquivo: `src/prompts/prompt_artigo_original_v2.md`
-- Baseado no Replete (referência aprovada) + 3 adições CardioDaily
-- Output JSON estruturado: `nucleo_comum`, `analise_especifica`, `reflexao_final`
-
-### Envio ao Gemini — regra crítica permanente
-- **Para Gemini:** `system_msg=None`, prompt + artigo juntos em `contents`, `max_output_tokens=32000`
-- **Para Claude:** `system_message` separado (correto)
-- Separar para Gemini degrada significativamente a qualidade
-
-### PDF Generator v2
-- Arquivo: `src/pdf_generator.py` + `src/templates/article_report.html/.css`
-- 5 páginas: capa + informações + núcleo + reflexão
-- **REGRA:** nunca `<div class="page-break">` manual — WeasyPrint é automático
-
----
-
-## MUDANÇAS v16.0 (29/Abril/2026)
-
-### Radar: OpenAI TTS → ElevenLabs TTS (PT-BR)
-- **Lição aprendida:** fazer grep completo em `src/`, `scripts/`, raiz antes de alterar qualquer chamada de API — a mudança foi incompleta na primeira vez
-
----
-
-## MUDANÇAS v15.0 (05/Abril/2026)
-
-### Arquitetura: n8n cancelado → Python + cron
-- n8n ($350/mês) substituído por `distribuidor.py` + cron
-- Economia anual: ~$4.000
-
-### Bug crítico distribuidor (19/Abr/2026)
-- Distribuidor usava `data_publicacao` (data da revista) para filtrar artigos novos
-- Corrigido para `created_at` (data de indexação)
-
----
-
-## ARQUITETURA ATUAL
-
-```
-┌─────────────────────────────────────┐
-│  MAC LOCAL (Notebook Dr. Eduardo)   │
-│                                     │
-│  Classificador → Analisador →       │
-│  Arquivador → Administrador         │
-│  Radar (13 temas, rotação 13 dias)  │
-│                                     │
-│  Tudo sobe para Supabase            │
-│  imediatamente após processamento   │
-└──────────────┬──────────────────────┘
-               │ Upload assets + dados
-               ▼
-┌─────────────────────────────────────┐
-│  SUPABASE (banco + storage)         │
-│                                     │
-│  Tabelas: artigos, radar,           │
-│  whatsapp_users, entregas           │
-│  Storage: visual_abstracts,         │
-│  podcasts, radar_podcasts,          │
-│  resumos_pdf, briefing_audio        │
-└──────────────┬──────────────────────┘
-               │ Query + URLs
-               ▼
-┌─────────────────────────────────────┐
-│  MAC LOCAL (beta) / VPS (produção)  │
-│                                     │
-│  distribuidor.py (cron)             │
-│  07:00 → 1 artigo personalizado     │
-│  07:30 → lista semanal (segunda)    │
-│  08:00 → 1 podcast do Radar         │
-│                                     │
-│  telegram_bot.py (⏳ pendente)       │
-└──────────────┬──────────────────────┘
-               │ API WhatsApp + Telegram
-               ▼
-┌─────────────────────────────────────┐
-│  ASSINANTES                         │
-│  WhatsApp + Telegram                │
-└─────────────────────────────────────┘
-```
-
----
-
-## STACK TÉCNICA
-
-| Componente | Tecnologia |
+| `titulo` | 99.7% | 9 vazios — artigos com problema no PDF original |
+| `revista` | 99.5% | 16 nulos — todos nota ≤ 6, fora do funil |
+| `nota_aplicabilidade` | 99.9% | LEI 0 aplicada em 41 artigos em 28/Mai/2026 |
+| `nota_trabalho_estatistico` | ~35% | Só artigos do schema novo (Mai/2026+) |
+| `mcid_avaliacao` | ~2.5% (90 artigos) | Campo novo — só artigos de 29/Mai/2026 |
+| `tamanho_beneficio` | ~35% | Campo novo — schema Mai/2026+ |
+| `doenca_principal` | 95% | 161 nulos — todos nota ≤ 4, fora do funil |
+| `caminho_audio` | 19% | 471 históricos pendentes |
+| `caminho_visual_abstract` | 68% | Upload histórico pendente |
+| `caminho_pdf` | 97.9% | 76 pendentes |
+| `resumo_markdown` | 74% | Artigos do schema antigo sem take-home |
+| `keywords` | 86% | Backfill parcial feito |
+| `contexto_tema` / campos clínicos | 66% | Só schema novo (Mai/2026+) |
+
+**Sobre os buracos históricos:** não são erros. São artigos indexados antes do schema atual existir. Eles têm `analysis.md` e `nota_aplicabilidade` corretos — funcionam no funil. Só não têm os campos novos.
+
+### Componentes operacionais
+
+| Componente | Status |
 |---|---|
-| Análise revisões/guidelines | Claude Sonnet 4.6 |
-| Análise originais/meta-análises | Gemini 2.5 Pro |
-| Classificação visual | Gemini 2.0 Flash |
-| Extração campos LLM barato | Gemini 2.0 Flash (`extrai_campos_llm.py`) |
-| Script de podcast (artigos) | GPT-4o |
-| Áudio artigos | OpenAI TTS-HD voz onyx |
-| Áudio Radar | ElevenLabs `eleven_multilingual_v2` PT-BR |
-| Briefing Cri-Cri | Cartesia Luana PT-BR (`700d1ee3-a641-4018-ba6e-899dcadc9e2b`) |
-| Infográfico visual | Visual Abstract 8 seções (Playwright + Jinja2) |
-| Banco de dados | Supabase (3.471 artigos, 73 categorias EN) |
-| WhatsApp | Z-API (instance `3F0C22040662826CFF327E97F8598275`) |
+| Classificador v8.0 (Gemini Vision) | ✅ 98%+ acurácia |
+| Pipeline de análise (Gemini 2.5 Pro + Claude 4.6) | ✅ Operacional |
+| LEI 0 em código | ✅ Inviolável |
+| LEI 0 no auditor | ✅ Implementado 28/Mai/2026 |
+| Campo `mcid_avaliacao` (Supabase + prompts) | ✅ Implementado 29/Mai/2026 |
+| Campo `tamanho_beneficio` (ARR/NNT/MD/SMD) | ✅ Implementado 29/Mai/2026 |
+| Campo `bullets_praticos` em revisões/meta | ✅ Implementado 29/Mai/2026 |
+| Visual Abstract 8 seções | ✅ Operacional |
+| Podcast (GPT-4o + TTS onyx) | ✅ Operacional |
+| Radar PubMed (ElevenLabs) | ✅ 13 temas, ciclo de 13 dias |
+| Briefing Cri-Cri (Cartesia Luana) | ✅ Operacional |
+| PDF resumo (WeasyPrint) | ✅ Operacional |
+| Distribuidor (Z-API + Telegram) | ✅ v4.1 — filtra títulos genéricos |
+| Administrador web (localhost:5100) | ✅ Operacional |
+| Auditor de integridade | ✅ v2.2 — LEI 0 + títulos + funil |
+| Telegram Bot (@CardioDailyBot) | ⏳ Pendente migração do n8n |
+| Deploy VPS | ⏳ Pendente — hoje roda local no Mac |
 
 ---
 
-## DISTRIBUIÇÃO DIÁRIA (distribuidor.py)
+## PARTE 9 — PENDÊNCIAS POR PRIORIDADE
 
-### 07:00 — 1 artigo personalizado por assinante
-1. Consulta temas do assinante (`temas` em `whatsapp_users`)
-2. Mapeia temas → `doenca_principal`
-3. Busca artigos dos últimos 10 dias, nota ≥ 8 — **filtro por `created_at`**
-4. Prioridade: Original > Meta-análise > Revisão
-5. Filtra já enviados (`artigos_enviados`)
-6. Envia: visual abstract + texto + áudio
-7. Marca como enviado
+### 🔴 Alta
 
-### 07:30 — Lista semanal (apenas segundas-feiras)
-- Artigos nota ≥ 8 dos últimos 7 dias, agrupados por revista
-
-### 08:00 — Radar
-1. Consulta tabela `radar` para hoje
-2. Se existe: envia podcast + resumo para todos os assinantes
-3. Se não existe: não envia (guard anti-duplo)
-
-### Temas do assinante → doenca_principal
-| Tema | doenca_principal incluídas |
-|---|---|
-| coronaria | Coronariopatia Aguda, Crônica, Intervenção Vascular |
-| cardiometabolico | Dislipidemias, Cardiometabólica, Manifestações CV |
-| miocardiopatias | Miocardiopatias, IC, Cardio-Onco, Cardio-Obstet, Congênitas, Aortopatias |
-| prevencao | HAS, Pré-Op, Prevenção CV, Farmacologia, Outros |
-| valvulopatias | Valvulopatias |
-| arritmia | Arritmias, Marcapasso, Stroke |
-| uti | Emergências/UTI |
-| imagem | Imagem Cardiovascular |
-
----
-
-## RADAR PUBMED — 13 TEMAS (rotação diária)
-
-| Dia (% 13) | Tema | Nome PT |
+| # | Item | Comando |
 |---|---|---|
-| 0 | doenca_coronariana | Coronária/DAC |
-| 1 | cardio_metabolica | Cardiometabólica |
-| 2 | arritmias | Arritmias |
-| 3 | insuficiencia_cardiaca | Insuficiência Cardíaca |
-| 4 | valvulopatias | Valvulopatias |
-| 5 | miocardiopatias | Miocardiopatias |
-| 6 | intervencao_hemodinamica | Intervenção/Hemodinâmica |
-| 7 | cardio_oncologia | Cardio-Oncologia |
-| 8 | cardiobstetrica | Cardio-Obstétrica |
-| 9 | cardio_genomica | Cardio-Genômica |
-| 10 | uti_cardiologica | UTI Cardiológica |
-| 11 | aorta_congenitas | Aorta/Congênitas |
-| 12 | imagem_cardiovascular | Imagem Cardiovascular |
+| 1 | 471 artigos nota≥8 sem áudio — bloqueiam funil | `python3 scripts/gerar_audios_lote.py --desde 2020-01-01` |
+| 2 | 76 PDFs sem upload no Supabase | `python3 scripts/upload_pdfs_supabase.py --since 2020-01-01` |
+| 3 | Revisão de notas com viés (~850 artigos) | Decisão editorial — reanálise em lotes |
 
-**Pipeline:** `run_radar_diario.py` → PubMed (14 dias, 50 artigos) → triagem Gemini → script Gemini → MP3 ElevenLabs → Supabase Storage → tabela `radar` → WhatsApp
+### 🟡 Média
 
----
-
-## DEPLOY
-
-### Mac local (beta)
-```bash
-0 7 * * * cd /Users/edcastro77/CardioDaily_FULL && python3 distribuidor.py artigos
-0 8 * * * cd /Users/edcastro77/CardioDaily_FULL && python3 distribuidor.py radar
-```
-
-### VPS (produção — pendente)
-```bash
-git clone <repo> CardioDaily_FULL
-cd CardioDaily_FULL
-python3 -m venv venv && source venv/bin/activate
-pip install supabase httpx python-telegram-bot
-
-# Cron (10/11 UTC = 07/08 BRT)
-0 10 * * * cd /opt/CardioDaily_FULL && venv/bin/python3 distribuidor.py artigos
-0 11 * * * cd /opt/CardioDaily_FULL && venv/bin/python3 distribuidor.py radar
-```
-
----
-
-## CHECKLIST COMPLETO (estado em 23/Maio/2026)
-
-### Concluído
-
-- [x] Classificador v8.0 — 98%+ acurácia (Gemini Vision)
-- [x] Pipeline de análise completo (originais, revisões, meta-análises, guidelines)
-- [x] Visual Abstract 8 seções (Playwright)
-- [x] Mapa mental visual (Claude + Playwright)
-- [x] Podcast (GPT-4o + TTS onyx)
-- [x] Briefing Cri-Cri (Claude + Cartesia Luana)
-- [x] PDF Generator v2 (formato Replete)
-- [x] Novo prompt análise artigo original (prompt_artigo_original_v2.md)
-- [x] LEI 0 em código — `aplicar_teto_nac()` (inviolável)
-- [x] Z-API check de conexão antes de enviar
-- [x] n8n cancelado, `distribuidor.py` operacional
-- [x] Radar: dois workflows → um único (`radar.yml`)
-- [x] 8 campos clínicos criados no Supabase (v20.0)
-- [x] `backfill_campos_clinicos.py` expandido (keywords, titulo, revista, doenca_principal)
-- [x] `extrai_campos_llm.py` criado (Gemini Flash, pronto para produção)
-- [x] Compactador de Diretrizes SBC-PI
-- [x] Bug `data_publicacao` → `created_at` no distribuidor
-- [x] Bug strip de tabelas no `sync_resumo_markdown.py`
-
-### Pendente imediato
-
-- [x] ~~Validar teste LLM~~ — **CONCLUÍDO 23/Mai**
-- [x] ~~Backfill zero-token~~ — **CONCLUÍDO 23/Mai**
-- [x] ~~Backfill LLM~~ — **CONCLUÍDO 23/Mai** (~US$0.20)
-- [x] ~~Blocos 5–10 (557 artigos nota-7)~~ — **CONCLUÍDO 23–25/Mai**
-- [x] ~~Knowledge base 100% preenchido~~ — **CONCLUÍDO 25/Mai** (2.155/2.159 artigos nota≥7)
-- [ ] **Backfill PDFs histórico:** `python3 scripts/upload_pdfs_supabase.py --since 2020-01-01`
-- [ ] **Backfill áudios:** `python3 scripts/gerar_audios_lote.py`
-
-### Pendente antes do lançamento
-
-- [ ] RLS no Supabase — SQL em v20.0 acima
-- [ ] Deploy VPS
-- [ ] Telegram Bot reimplementado (`telegram_bot.py`)
-- [ ] Criar bucket `briefing_audio` no Supabase (Storage → New bucket → público)
-- [ ] Limpeza Supabase: dropar `nota_geral`, `resumo_json`; limpar usuário duplicado em `whatsapp_users`
-- [ ] Testar distribuidor com credenciais reais: `python3 distribuidor.py teste`
-- [ ] Cancelar plano n8n (se ainda ativo)
-
----
-
-## RLS NO SUPABASE — SQL ANTES DO LANÇAMENTO
-
-```sql
--- Tabelas sensíveis
-ALTER TABLE public.whatsapp_users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.conversas_whatsapp ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.whatsapp_sends ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "service_role_full_access" ON public.whatsapp_users
-  USING (auth.role() = 'service_role')
-  WITH CHECK (auth.role() = 'service_role');
-
--- Tabelas de conteúdo (artigos = leitura pública, escrita restrita)
-ALTER TABLE public.artigos ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "read_public" ON public.artigos FOR SELECT USING (true);
-CREATE POLICY "write_service_only" ON public.artigos FOR ALL
-  USING (auth.role() = 'service_role');
-```
-
----
-
-## LEIS DE OPERAÇÃO (Claude)
-
-1. **LEI 0 nunca é contornada:** `aplicar_teto_nac()` é chamada após todo parse de LLM e antes de todo upsert no Supabase. Nunca remover, desabilitar ou bypassar.
-2. **Busca sistemática antes de qualquer mudança de API/provider:** grep em `src/`, `scripts/` e raiz — listar TODOS os pontos afetados antes de tocar código.
-3. **Atualizar `docs/CADERNO_EXECUCAO.md` ao final de cada sessão** com mudanças relevantes, estado honesto, o que funcionou e o que falhou.
-4. **Nunca criar arquivos temporários na pasta raiz** — usar `archive/logs_operacionais/` ou `outputs/`.
-5. **Para Gemini:** `system_msg=None`, prompt + artigo juntos em `contents`, `max_output_tokens=32000`. Nunca separar.
-6. **PDF sem page-break manual:** WeasyPrint é automático. Capa usa `@page cover` isolada.
-7. **`article_analyzer.py` sempre em Terminal interativo** com `caffeinate -dims` — nunca em background pelo Claude Code.
-
----
-
-## QUARENTENA PERMANENTE — NUNCA REATIVAR
-
-| Componente | Motivo |
+| # | Item |
 |---|---|
-| DALL-E 3 | Gera arte genérica, não infográficos clínicos. Zero dado real renderizado. |
-| `InfographicPortrait` (`portrait_visualmed.html`) | Texto minúsculo, espaços vazios |
-| `MindmapGenerator` PNG visual | Substituído pelo Visual Abstract |
-| `infographic_mpl.py` (matplotlib) | Qualidade visual insuficiente |
-| Cards HTML→PNG para WhatsApp 1080×1080 | Texto ilegível em mobile, não escala |
+| 4 | Criar bucket `briefing_audio` no Supabase Dashboard → Storage |
+| 5 | Conectar `radar_pubmed.py` → tabela `radar` para upload automático |
+| 6 | Migrar `telegram_bot.py` para `nota_aplicabilidade` e dropar `nota_geral` |
+
+### ⚪ Baixa
+
+| # | Item |
+|---|---|
+| 7 | Telegram Bot — migrar para `scripts/telegram_bot.py` |
+| 8 | RLS Supabase — habilitar antes do lançamento público |
+| 9 | Deploy VPS $5/mês — produção estável sem depender do Mac |
+| 10 | Site próprio — acesso dos assinantes + publicações |
 
 ---
 
-## COMO FORNECER CONTEXTO AO CLAUDE EM SESSÕES FUTURAS
+## PARTE 10 — COMO OPERAR O SISTEMA
 
-### Diagnóstico do sistema
-```
-1. "Qual o estado atual do sistema?" → Claude lê este caderno + faz grep nos scripts
-2. Sempre citar versão do caderno ao reportar diagnóstico
-3. Dados concretos do Supabase valem mais que estimativas
-```
+### Processar novos artigos (sequência completa)
 
-### Para corrigir um bug
-```
-1. Comando exato que falhou
-2. Mensagem de erro completa (copiar do terminal)
-3. O que deveria ter acontecido
-4. Quando o bug começou (antes/depois de qual mudança)
-```
+```bash
+# 1. Classificar PDFs novos
+# Abrir: Classificar Artigos.app → apontar para pasta com PDFs
 
-### Para adicionar novo componente
-```
-1. O que entra (input: tipo de arquivo, formato, fonte)
-2. O que sai (output: onde salva, formato, nome)
-3. Quando dispara (manual / cron / gatilho automático)
-4. Qual modelo usar (Gemini / Claude / GPT-4o)
-5. Exemplo do resultado esperado
+# 2. Analisar tudo
+# Abrir: Analisar Tudo.app
+# (roda article_analyzer.py nas 4 pastas: ARTIGOS_ORIGINAIS, REVISOES, META_ANALISES, GUIDELINES)
+
+# 3. Arquivar PDFs processados
+# Abrir: Arquivar Artigos.app
+
+# 4. Gerar ganchos de abertura para novos artigos nota≥8
+python3 scripts/gerar_ganchos_abertura.py --nota-min 8 --apenas-vazios
 ```
 
-> **Mostrar é melhor que descrever.** Um screenshot do problema + um screenshot do esperado vale mais do que um parágrafo de texto.
+### Distribuição diária (automática via GitHub Actions)
+
+```bash
+python3 distribuidor.py artigos       # 07:00 — 1 artigo por assinante
+python3 distribuidor.py radar         # 08:00 — podcast do Radar
+python3 distribuidor.py teste         # dry-run — sem enviar nada
+python3 distribuidor.py eduardo       # envia só para Dr. Eduardo (revisão)
+```
+
+### Auditoria semanal
+
+```bash
+python3 scripts/auditoria_supabase.py           # relatório completo + Telegram
+python3 scripts/auditoria_supabase.py --dry-run # só exibe, não envia
+python3 scripts/auditoria_supabase.py --quick   # só contadores
+```
+
+### Administrador local
+
+```bash
+# Abrir: Administrador.app
+# Ou:
+python3 src/web_biblioteca.py
+# Acesso: http://localhost:5100
+```
 
 ---
 
-## PRINCÍPIOS INVIOLÁVEIS DO PROJETO
+## PARTE 11 — VARIÁVEIS DE AMBIENTE (.env)
 
-1. Rigor metodológico acima de tudo
-2. Crítica ao estudo, nunca ao autor
-3. Incerteza declarada é virtude
-4. Bola na rede — toda análise termina com conduta prática
-5. Nunca abandonar uma funcionalidade — sempre existe uma alternativa
-6. Independência editorial absoluta
-7. Controle total — sem dependência de plataformas visuais de terceiros
+```
+SUPABASE_URL                  # URL do projeto Supabase
+SUPABASE_SERVICE_KEY          # Chave de serviço (admin) — NUNCA expor publicamente
+ZAPI_BASE                     # Base URL do Z-API
+ZAPI_CLIENT_TOKEN             # Token de autenticação Z-API
+TELEGRAM_BOT_TOKEN            # Token do @CardioDailyBot
+TELEGRAM_CHAT_ID              # Chat ID do Dr. Eduardo
+GOOGLE_API_KEY                # Gemini 2.5 Pro + 2.0 Flash
+ANTHROPIC_API_KEY             # Claude Sonnet 4.6
+OPENAI_API_KEY                # GPT-4o (podcast script) + TTS-HD (áudio artigos)
+ELEVENLABS_API_KEY            # Radar podcast
+ELEVENLABS_VOICE_ID           # Voz do Radar (eleven_multilingual_v2)
+CARTESIA_API_KEY              # Briefing Cri-Cri (Luana PT-BR)
+BETA_PAUSADO=1                # Quando 1: envia apenas para Dr. Eduardo
+```
 
 ---
 
-*Versão 21.0 — 23/Maio/2026 — atualizado por Claude ao final da sessão*
-*Próxima atualização obrigatória: após execução do bloco 5 e validação do teste LLM*
+## PARTE 12 — DECISÕES TÉCNICAS PERMANENTES
+
+| Decisão | Regra | Motivo |
+|---|---|---|
+| Único artefato visual | Visual Abstract 8 seções — todos outros PROIBIDOS | Único testado e aprovado pelo Dr. Eduardo |
+| TTS do Radar | ElevenLabs exclusivamente — sem fallback | Qualidade superior, voz consistente |
+| TTS do Briefing | Cartesia Luana PT-BR | Isabella rejeitada ("rapariga de Portugal") |
+| TTS dos artigos | OpenAI TTS-HD onyx | Custo menor que ElevenLabs para volume alto |
+| Gemini: um único `contents` | Prompt + artigo juntos, sem `system_instruction` | Separar degrada qualidade da análise |
+| PDF: sem `page-break` manual | Paginação automática WeasyPrint | Breaks manuais quebravam o layout |
+| Filtro de envio | `created_at` (data de indexação), não `data_publicacao` | Artigo antigo analisado hoje = artigo novo |
+| DALL-E | PROIBIDO | Zero valor clínico, custo real |
+| n8n | CANCELADO | $350/mês sem vantagem sobre Python puro |
+| `mcid_avaliacao` | OBRIGATÓRIO em todos os artigos sem exceção | Separa p<0,05 de "importa para o paciente" |
+| Placeholders em prompts | PROIBIDO — usar valores exemplo reais | `[texto entre colchetes]` → Gemini trata como opcional e omite |
+
+---
+
+---
+
+## PARTE 13 — MCID: O CRITÉRIO DE RELEVÂNCIA CLÍNICA REAL
+
+### O que é MCID
+
+MCID (Minimum Clinically Important Difference) é a menor mudança em um desfecho que o paciente percebe como benéfica. É o que separa **significância estatística** de **relevância clínica real**.
+
+Um estudo pode ter p<0,001 e ainda assim o efeito ser clinicamente irrelevante — se o benefício real for menor que a MCID, o paciente individual não percebe diferença.
+
+### Regra do sistema
+
+O campo `mcid_avaliacao` é **obrigatório em todos os artigos**, sem exceção, independente de nota ou tipo. Formato padrão:
+
+```
+MCID: X% ARR ou Y unidades (fonte: autores/literatura/estimativa clínica)
+| Efeito: ARR Z%; HR A (IC95% B–C)
+| Limite inferior IC supera MCID: SIM ✅ ou NÃO ⚠️ ou Não calculável
+| Veredito: frase direta sobre relevância clínica real para o paciente individual
+```
+
+### Como interpretar o campo
+
+| Situação | Interpretação |
+|---|---|
+| Limite inferior IC > MCID | ✅ Benefício clínico robusto — mesmo no pior cenário estatístico, o paciente percebe diferença |
+| IC cruza a linha da MCID | ⚠️ Significância estatística sem garantia de relevância clínica |
+| Limite inferior < 0 | ❌ Sem evidência de benefício clínico |
+| Não aplicável (qualitativo, diagnóstico, etc.) | Declarar explicitamente o motivo |
+
+### Bug identificado e corrigido (29/Mai/2026)
+
+O prompt original usava `"mcid_avaliacao": "[placeholder em colchetes]"` → Gemini interpretava como campo opcional e deixava vazio. Corrigido: todos os prompts agora usam valores exemplo reais no formato final esperado, com aviso obrigatório `⚠️ NUNCA deixe este campo vazio`.
+
+### Prompts atualizados
+
+| Prompt | Arquivo | Status |
+|---|---|---|
+| Artigos originais | `src/prompts/prompt_artigo_original_v2.md` | ✅ mcid_avaliacao obrigatório |
+| Revisões/guidelines | `src/prompts/prompt_revisao_geral_v2.md` | ✅ mcid_avaliacao obrigatório |
+| Meta-análises | `src/prompts/prompt_meta_analise_v2.md` | ✅ mcid_avaliacao obrigatório |
+
+---
+
+*Documento atualizado em 29/Mai/2026. Próxima atualização: ao final de cada sessão de desenvolvimento.*
