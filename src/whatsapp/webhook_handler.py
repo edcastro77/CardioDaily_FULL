@@ -121,14 +121,53 @@ def _baixar_pdf(url: str, dest: Path) -> bool:
 
 
 def _buscar_supabase(q: str, limite: int = 10) -> list[dict]:
-    """Busca artigos no Supabase por termo livre."""
+    """Busca artigos no Supabase por termo livre — direto via REST API."""
     try:
+        from dotenv import load_dotenv
+        load_dotenv(ROOT / ".env")
+        sb_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+        sb_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
+        if not sb_url or not sb_key:
+            log.error("SUPABASE_URL ou SUPABASE_KEY não configurados")
+            return []
+
+        hdrs = {"apikey": sb_key, "Authorization": f"Bearer {sb_key}"}
+
+        # Expandir termos PT→EN
         sys.path.insert(0, str(ROOT / "src"))
-        from web_biblioteca import buscar_api
-        return buscar_api(q=q, tipo="", nota="5", limite=str(limite),
-                          data_inicio="", data_fim="")
+        try:
+            from web_biblioteca import _expand
+            termos = _expand(q.lower().strip())
+        except Exception:
+            termos = [q.lower().strip()]
+
+        # Construir filtro OR: título, doenca_principal, gancho_lista
+        filtros = []
+        for t in termos[:6]:
+            s = t.replace("'", "''")
+            filtros.append(f"titulo.ilike.%{s}%")
+            filtros.append(f"doenca_principal.ilike.%{s}%")
+            filtros.append(f"gancho_lista.ilike.%{s}%")
+
+        params = {
+            "select": "doc_id,titulo,revista,nota_aplicabilidade,doenca_principal,data_publicacao",
+            "or": f"({','.join(filtros)})",
+            "nota_aplicabilidade": "gte.5",
+            "order": "nota_aplicabilidade.desc,created_at.desc",
+            "limit": str(limite),
+        }
+
+        r = requests.get(f"{sb_url}/rest/v1/artigos", headers=hdrs, params=params, timeout=15)
+        log.info(f"buscar_supabase status={r.status_code} q={q!r} termos={termos}")
+
+        if r.status_code != 200:
+            log.error(f"Supabase erro {r.status_code}: {r.text[:200]}")
+            return []
+
+        return r.json() if isinstance(r.json(), list) else []
+
     except Exception as e:
-        log.error(f"buscar_api erro: {e}")
+        log.error(f"_buscar_supabase erro: {e}")
         return []
 
 
@@ -260,13 +299,13 @@ def _handle_busca(phone: str, query: str):
         zapi.send_text(phone, MSG_BUSCA_VAZIA.format(q=q))
         return
 
-    linhas = [f"📚 *{len(artigos)} artigos encontrados* — {q}\n"]
+    linhas = [f"📚 *{len(artigos)} artigos encontrados* — _{q}_\n"]
     for i, a in enumerate(artigos, 1):
-        titulo = (a.get("titulo") or "Sem título")[:60]
+        titulo = (a.get("titulo_display") or a.get("titulo") or "Sem título")[:65]
         nota = a.get("nota_aplicabilidade") or 0
-        revista = (a.get("revista") or "")[:25]
+        revista = (a.get("revista") or "")[:25].replace("_", " ")
         ano = (a.get("data_publicacao") or "")[:4]
-        linhas.append(f"{i}. [{nota}⭐] *{titulo}*\n   _{revista}_ {ano}")
+        linhas.append(f"{i}. *[{nota}]* {titulo}\n   _{revista}_ {ano}")
 
     linhas.append("\n_Para análise completa de um artigo, envie o PDF._")
     zapi.send_text(phone, "\n".join(linhas))
