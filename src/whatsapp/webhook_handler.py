@@ -150,7 +150,7 @@ def _buscar_supabase(q: str, limite: int = 10) -> list[dict]:
             filtros.append(f"gancho_lista.ilike.%{s}%")
 
         params = {
-            "select": "doc_id,titulo,revista,nota_aplicabilidade,doenca_principal,data_publicacao",
+            "select": "doc_id,titulo,revista,nota_aplicabilidade,doenca_principal,data_publicacao,gancho_lista,resumo_markdown,bullets_praticos",
             "or": f"({','.join(filtros)})",
             "nota_aplicabilidade": "gte.5",
             "order": "nota_aplicabilidade.desc,created_at.desc",
@@ -285,30 +285,90 @@ def _enviar_resultado(phone: str, artigo: dict, doc_id: str | None):
     log.info(f"[{phone}] Pacote enviado — doc_id={doc_id}")
 
 
+def _formatar_artigo_whatsapp(a: dict) -> str:
+    """Formata um artigo com análise clínica para envio no WhatsApp."""
+    nota       = a.get("nota_aplicabilidade") or 0
+    titulo     = (a.get("titulo") or "Sem título")[:80]
+    revista    = (a.get("revista") or "").replace("_", " ")
+    ano        = (a.get("data_publicacao") or "")[:4]
+    gancho     = a.get("gancho_lista") or ""
+    resumo     = a.get("resumo_markdown") or ""
+    bullets    = a.get("bullets_praticos") or []
+    doenca     = (a.get("doenca_principal") or "").replace("_", " ")
+
+    # Extrair bullets se vier como JSON string
+    if isinstance(bullets, str):
+        try:
+            import json as _j
+            bullets = _j.loads(bullets)
+        except Exception:
+            bullets = []
+
+    linhas = []
+
+    # Cabeçalho
+    estrelas = "⭐" * min(int(nota), 5)
+    linhas.append(f"*[{nota}/10] {estrelas}*")
+    linhas.append(f"*{titulo}*")
+    linhas.append(f"_{revista}_ · {ano} · {doenca}")
+    linhas.append("")
+
+    # Gancho — o impacto prático em 1 linha
+    if gancho:
+        # Pegar só a parte depois do "·" se existir
+        parte = gancho.split("·")[-1].strip() if "·" in gancho else gancho
+        linhas.append(f"💡 {parte}")
+        linhas.append("")
+
+    # Resumo clínico — primeiras 2 frases
+    if resumo:
+        frases = [f.strip() for f in resumo.replace("\n", " ").split(".") if len(f.strip()) > 20]
+        trecho = ". ".join(frases[:2]) + "." if frases else resumo[:300]
+        linhas.append(trecho)
+        linhas.append("")
+
+    # Bullets práticos — máx 3
+    if bullets and isinstance(bullets, list):
+        linhas.append("*O que muda na prática:*")
+        for b in bullets[:3]:
+            linhas.append(f"• {str(b)}")
+
+    return "\n".join(linhas)
+
+
 def _handle_busca(phone: str, query: str):
-    """Processa pedido de busca e responde com lista de artigos."""
+    """Busca artigos e entrega análise clínica completa — não só lista."""
     q = query.strip()
     if not q:
         zapi.send_text(phone, MSG_AJUDA)
         return
 
     zapi.send_text(phone, f"🔍 Buscando artigos sobre *{q}*...")
-    artigos = _buscar_supabase(q, limite=10)
+
+    # Buscar top 5 por nota — qualidade sobre quantidade
+    artigos = _buscar_supabase(q, limite=5)
 
     if not artigos:
         zapi.send_text(phone, MSG_BUSCA_VAZIA.format(q=q))
         return
 
-    linhas = [f"📚 *{len(artigos)} artigos encontrados* — _{q}_\n"]
-    for i, a in enumerate(artigos, 1):
-        titulo = (a.get("titulo_display") or a.get("titulo") or "Sem título")[:65]
-        nota = a.get("nota_aplicabilidade") or 0
-        revista = (a.get("revista") or "")[:25].replace("_", " ")
-        ano = (a.get("data_publicacao") or "")[:4]
-        linhas.append(f"{i}. *[{nota}]* {titulo}\n   _{revista}_ {ano}")
+    # Cabeçalho único
+    zapi.send_text(phone,
+        f"📚 *{len(artigos)} artigos sobre _{q}_*\n"
+        f"Ordenados por relevância clínica 👇"
+    )
 
-    linhas.append("\n_Para análise completa de um artigo, envie o PDF._")
-    zapi.send_text(phone, "\n".join(linhas))
+    import time
+    for a in artigos:
+        msg = _formatar_artigo_whatsapp(a)
+        if msg.strip():
+            zapi.send_text(phone, msg)
+            time.sleep(0.8)  # evitar flood
+
+    zapi.send_text(phone,
+        "_Para receber a análise completa (visual abstract + podcast + PDF), "
+        "envie o PDF do artigo._"
+    )
 
 
 # ─── Handler principal ────────────────────────────────────────────────────────
@@ -327,7 +387,11 @@ def handle_webhook(payload: dict) -> dict:
         return {"handled": False, "action": "not_received"}
 
     phone = payload.get("phone", "").strip()
-    body  = (payload.get("body") or "").strip()
+    # Z-API: "text" é dict {"message": "..."} nas versões recentes; "body" string nas antigas
+    _text = payload.get("text") or payload.get("body") or ""
+    if isinstance(_text, dict):
+        _text = _text.get("message") or ""
+    body = str(_text).strip()
     nome  = payload.get("senderName") or ""
 
     if not phone:

@@ -41,8 +41,13 @@ app = Flask(__name__)
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    import json as _json
+    raw = request.get_data(as_text=True)
     payload = request.get_json(silent=True) or {}
-    log.info(f"POST /webhook — phone={payload.get('phone')} type={payload.get('type')} body={repr(payload.get('body', ''))[:80]}")
+    # Log payload completo para diagnóstico
+    log.info(f"POST /webhook RAW: {raw[:500]}")
+    body = payload.get('text') or payload.get('body') or ''
+    log.info(f"POST /webhook — phone={payload.get('phone')} type={payload.get('type')} body={repr(body)[:80]}")
     try:
         result = handle_webhook(payload)
         log.info(f"  → action={result.get('action')}")
