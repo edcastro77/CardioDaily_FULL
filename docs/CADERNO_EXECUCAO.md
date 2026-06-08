@@ -1,5 +1,5 @@
 # CADERNO DE EXECUÇÃO — CARDIODAILY
-## Versão 25.0 | 29/Maio/2026
+## Versão 28.0 | 08/Jun/2026
 ### Este documento substitui todas as versões anteriores. É o único documento canônico do projeto.
 
 ---
@@ -330,89 +330,182 @@ O pipeline original baixava PDFs do Google Drive. Criava dependência de API, au
 
 ---
 
-## PARTE 8 — ESTADO ATUAL DO SISTEMA (29/Mai/2026)
+## PARTE 8 — ESTADO ATUAL DO SISTEMA (08/Jun/2026)
 
-### Funil nota ≥ 8 (1.012 artigos elegíveis)
+> **Fonte:** `scripts/auditoria_supabase.py` rodada em 07/Jun/2026 16:42. Total de 3.751 artigos no Supabase. Relatório salvo em `outputs/auditorias/auditoria_20260607_1642.txt`.
 
-| Asset | Cobertura | Situação |
+### Completude da tabela `artigos` (3.751 artigos)
+
+| Campo / Asset | Buraco | Situação |
 |---|---|---|
-| Visual Abstract | 100% | ✅ |
-| PDF | 99% | ✅ |
-| Gancho abertura | 99% | ✅ |
-| Áudio | 54% (541/1.012) | 🔴 471 nunca gerados |
-
-**Os 471 sem áudio:** nunca foram gerados — existem antes do sistema de áudio estar consolidado. Gerar todos custa ElevenLabs/OpenAI TTS. Decisão do Dr. Eduardo sobre quando e quanto gastar.
-
-### Completude da tabela `artigos`
-
-| Campo | Preenchimento | Observação |
-|---|---|---|
-| `titulo` | 99.7% | 9 vazios — artigos com problema no PDF original |
-| `revista` | 99.5% | 16 nulos — todos nota ≤ 6, fora do funil |
-| `nota_aplicabilidade` | 99.9% | LEI 0 aplicada em 41 artigos em 28/Mai/2026 |
-| `nota_trabalho_estatistico` | ~35% | Só artigos do schema novo (Mai/2026+) |
-| `mcid_avaliacao` | ~2.5% (90 artigos) | Campo novo — só artigos de 29/Mai/2026 |
-| `tamanho_beneficio` | ~35% | Campo novo — schema Mai/2026+ |
-| `doenca_principal` | 95% | 161 nulos — todos nota ≤ 4, fora do funil |
-| `caminho_audio` | 19% | 471 históricos pendentes |
-| `caminho_visual_abstract` | 68% | Upload histórico pendente |
-| `caminho_pdf` | 97.9% | 76 pendentes |
-| `resumo_markdown` | 74% | Artigos do schema antigo sem take-home |
-| `keywords` | 86% | Backfill parcial feito |
-| `contexto_tema` / campos clínicos | 66% | Só schema novo (Mai/2026+) |
-
-**Sobre os buracos históricos:** não são erros. São artigos indexados antes do schema atual existir. Eles têm `analysis.md` e `nota_aplicabilidade` corretos — funcionam no funil. Só não têm os campos novos.
+| `titulo` | 0 nulos/vazios | ✅ — 47 corrigidos em 07/Jun (nome de arquivo → título real) |
+| `caminho_pdf` | 0 sem | ✅ — completo |
+| `caminho_audio` | 2.732 sem (72.8%) | 🟡 — **28 nota≥8 sem áudio** (clássicos 2000-2019, gerando); 957 com áudio |
+| `resumo_markdown` | 72 sem (1.9%) | 🟡 — residual irrecuperável (sem PDF local) |
+| `keywords` | 127 sem (3.4%) | 🟡 — baixa prioridade |
+| `doenca_principal` | 0 sem no funil | ✅ |
+| **LEI 0 — violações ativas** | **0** | ✅ — 7 violações corrigidas em 07/Jun |
 
 ### Componentes operacionais
 
 | Componente | Status |
 |---|---|
 | Classificador v8.0 (Gemini Vision) | ✅ 98%+ acurácia |
-| Pipeline de análise (Gemini 2.5 Pro + Claude 4.6) | ✅ Operacional |
-| LEI 0 em código | ✅ Inviolável |
-| LEI 0 no auditor | ✅ Implementado 28/Mai/2026 |
-| Campo `mcid_avaliacao` (Supabase + prompts) | ✅ Implementado 29/Mai/2026 |
-| Campo `tamanho_beneficio` (ARR/NNT/MD/SMD) | ✅ Implementado 29/Mai/2026 |
-| Campo `bullets_praticos` em revisões/meta | ✅ Implementado 29/Mai/2026 |
+| Pipeline de análise (Gemini 2.5 Pro + Claude Sonnet 4.6) | ✅ Operacional |
+| LEI 0 em código + auditor | ✅ Inviolável — 0 violações ativas |
 | Visual Abstract 8 seções | ✅ Operacional |
-| Podcast (GPT-4o + TTS onyx) | ✅ Operacional |
+| Podcast (GPT-4o + TTS onyx) | ✅ Operacional — 957 artigos nota≥8 com áudio |
 | Radar PubMed (ElevenLabs) | ✅ 13 temas, ciclo de 13 dias |
 | Briefing Cri-Cri (Cartesia Luana) | ✅ Operacional |
 | PDF resumo (WeasyPrint) | ✅ Operacional |
-| Distribuidor (Z-API + Telegram) | ✅ v4.1 — filtra títulos genéricos |
+| Distribuidor (Z-API + Telegram) | ✅ Operacional — disparo diário 07h via GitHub Actions |
+| **WhatsApp busca** | ✅ **Operacional** — entrega análise clínica completa (gancho + resumo + bullets) |
 | Administrador web (localhost:5100) | ✅ Operacional |
-| Auditor de integridade | ✅ v2.2 — LEI 0 + títulos + funil |
+| Auditor de integridade | ✅ v2.3 — LEI 0 + títulos + funil + relatório Telegram |
+| Marketing Studio (Streamlit) | ✅ Novo — `src/marketing/studio_app.py` |
 | Telegram Bot (@CardioDailyBot) | ⏳ Pendente migração do n8n |
 | Deploy VPS | ⏳ Pendente — hoje roda local no Mac |
 
 ---
 
-## PARTE 9 — PENDÊNCIAS POR PRIORIDADE
+## PARTE 9 — PENDÊNCIAS POR PRIORIDADE (atualizada 08/Jun/2026)
+
+### ✅ Resolvido em 04-08/Jun/2026
+
+| Item | Status |
+|---|---|
+| 7 violações LEI 0 (NAC≥8 com EST<8) | ✅ Corrigidas manualmente 07/Jun |
+| 47 títulos com nome de arquivo | ✅ Corrigidos via backfill 07/Jun |
+| 479 artigos sem `resumo_markdown` | ✅ Preenchidos (resumo sintético) |
+| 32 áudios nota≥8 (2020-2026) | ✅ Gerados via `gerar_audios_lote.py --desde 2020-01-01` |
+| WhatsApp busca — campo `text` Z-API | ✅ Corrigido — era dict `{"message":"..."}` não string |
+| WhatsApp busca — formato da resposta | ✅ Entrega análise clínica (gancho+resumo+bullets), não lista |
+| Marketing Studio | ✅ `src/marketing/studio_app.py` — Streamlit com IA |
+| Placas CardioDaily (stories + post) | ✅ `src/marketing/placa_generator.py` — auto-fit aprovado |
 
 ### 🔴 Alta
 
-| # | Item | Comando |
-|---|---|---|
-| 1 | 471 artigos nota≥8 sem áudio — bloqueiam funil | `python3 scripts/gerar_audios_lote.py --desde 2020-01-01` |
-| 2 | 76 PDFs sem upload no Supabase | `python3 scripts/upload_pdfs_supabase.py --since 2020-01-01` |
-| 3 | Revisão de notas com viés (~850 artigos) | Decisão editorial — reanálise em lotes |
+| # | Item | Situação atual | Comando |
+|---|---|---|---|
+| 1 | 28 áudios nota≥8 clássicos (2000-2019) | ⏳ Gerando agora | `python3 scripts/gerar_audios_lote.py --desde 2000-01-01` |
+| 2 | Fechar delta corpus↔Supabase | 470 local não indexados | `python3 scripts/indexar_corpus_completo.py` |
+| 3 | WhatsApp webhook — URL fixa | cloudflared muda URL a cada reinício | Criar conta Cloudflare com domínio ou VPS |
 
 ### 🟡 Média
 
 | # | Item |
 |---|---|
-| 4 | Criar bucket `briefing_audio` no Supabase Dashboard → Storage |
-| 5 | Conectar `radar_pubmed.py` → tabela `radar` para upload automático |
-| 6 | Migrar `telegram_bot.py` para `nota_aplicabilidade` e dropar `nota_geral` |
+| 4 | 127 artigos sem `keywords` |
+| 5 | Criar bucket `briefing_audio` no Supabase Dashboard |
+| 6 | Conectar `radar_pubmed.py` → upload automático bucket radar |
+| 7 | Migrar `telegram_bot.py` |
 
 ### ⚪ Baixa
 
 | # | Item |
 |---|---|
-| 7 | Telegram Bot — migrar para `scripts/telegram_bot.py` |
 | 8 | RLS Supabase — habilitar antes do lançamento público |
 | 9 | Deploy VPS $5/mês — produção estável sem depender do Mac |
-| 10 | Site próprio — acesso dos assinantes + publicações |
+| 10 | Site próprio — acesso dos assinantes |
+| 11 | Carrossel Instagram para revisões |
+
+---
+
+## PRIORIDADE ANTI-BURACO — a regra para o Supabase parar de ter furos
+
+A causa-raiz dos buracos não é falta de backfill pontual — é que **artigos entram no Supabase em estados diferentes** conforme a época em que foram indexados. Para estancar de vez, a ordem é:
+
+1. **LEI 0 primeiro (integridade > completude).** Um campo vazio é um buraco visível; uma nota errada é um buraco *invisível* que corrompe o produto. Rodar `reanalisar_flagados.py --lei0` sempre que o auditor acusar violação. Isso já está automatizado no auditor desde 31/Mai — basta agir quando ele apitar.
+2. **Fechar o delta corpus↔Supabase.** As 90 pastas sem `analysis.json/md` são análises que nunca completaram — reprocessá-las e reindexar elimina o "+484". Enquanto o delta existir, todo dia que você indexa mais aparece um buraco novo.
+3. **Tornar a auditoria um hábito, não um evento.** Rodar `python3 scripts/auditoria_supabase.py` ao fim de cada lote (já manda relatório ao Telegram). O semáforo vermelho = ação imediata; amarelo = backlog; verde = ignorar.
+4. **Áudio e resumo por último.** São caros (TTS) ou de schema antigo — não corrompem nada, só limitam alcance. Decisão de orçamento do Dr. Eduardo, não emergência de integridade.
+
+**Regra de ouro:** nunca indexar um artigo sem antes confirmar que `analysis.json` existe e que a nota respeita o teto da LEI 0. O auditor agora pega isso — confie nele e aja no vermelho.
+
+---
+
+## PROJETO BURACO ZERO — CONCLUÍDO (31/Mai/2026)
+
+**Funil nota≥7 (2.198 artigos) com campos de texto 99-100% preenchidos.** LEI 0 = 0 violações. Os NULL residuais (1-4 por campo) são artigos sem source.pdf local — irrecuperáveis.
+
+| Campo | NULL final | Como foi preenchido |
+|---|---|---|
+| `nota_trabalho_estatistico` | 0 | já existia |
+| `mcid_avaliacao` | 2 | Flash (669 funil 2026) + Pro fix (116) + Flash funil total (~1.500), prompt reforçado |
+| `tamanho_beneficio` | 2 | Flash (158), prompt focado |
+| `contexto_tema` | 2 | Flash (16) |
+| `resumo_markdown` | 4 | **extração ZERO-TOKEN do analysis.md** (407) — `scripts/extrair_campos_md.py` |
+| keywords/doença/pdf/visual | 1-4 | já existiam |
+
+**Custo total do buraco zero: ~R$ 90** (mcid ~R$ 75 Flash+Pro + tamanho/contexto ~R$ 4 + resumo R$ 0 extração). Modelo padrão: Flash com `thinking_budget=0` + prompt que proíbe "não definido". Taxa de fracos caiu de 17% → 0%.
+
+**Scripts do backfill (staging isolado, reutilizáveis):**
+- `scripts/extrair_campos_md.py` — extrai campos do analysis.md SEM LLM (tentar SEMPRE primeiro)
+- `scripts/mcid_fix_pro.py` — mcid com `--model flash|pro`, `--from-supabase`, prompt reforçado, parser tolerante a chave deturpada
+- `scripts/campos_flash.py` — contexto_tema/tamanho_beneficio via Flash
+- `scripts/mcid_staging_flash.py` — staging original Flash
+
+**ÚNICO buraco grande restante: `caminho_audio` (1.525 no funil).** É TTS (custo real de geração), não dado faltante — decisão de orçamento do Dr. Eduardo, não emergência de integridade.
+
+**Lição central:** o PROMPT importa mais que o MODELO. Trocar Flash→Pro ajudou pouco; o que zerou os "não definido" foi o prompt reforçado (proibir a resposta preguiçosa + listar valores de referência da literatura). E SEMPRE: validar staging (vazios/fracos) antes de sincronizar; extração zero-token antes de LLM.
+
+## MUDANÇAS DE 31/Mai/2026
+
+- **Padronização de modelos Claude:** todos os IDs em `src/` e `scripts/` migrados para `claude-sonnet-4-6` (eram um mix de `claude-sonnet-4-20250514` antigo + variações). 8 arquivos de chamada + 2 docstrings em `article_analyzer.py`. Migração feita via skill `claude-api` — sem mudanças quebradas (Sonnet 4.6 mantém `temperature`). Verificado: 18 referências, todas canônicas, todos os arquivos compilam.
+- **Auditor v2.3 — check automático de LEI 0:** `scripts/auditoria_supabase.py` agora detecta artigos com `nota_aplicabilidade ≥ 8` e `nota_trabalho_estatistico ≤ 7` (violação do teto estatístico) e sugere `reanalisar_flagados.py --lei0`. Pegou 5 violações na primeira rodada.
+- **5 violações da LEI 0 corrigidas:** reanálise dos 5 doc_ids flagados. Auditor final: **`LEI 0 — teto estatístico violado: 0`**. Notas finais: doi_76adf=8/8, doi_5083=5/8, doi_aa62=7/6, doi_9ca7=7/8, doi_01fe=6/5. Backup das análises em `archive/logs_operacionais/backup_lei0_20260531/`.
+
+### Backfill de mcid_avaliacao com Gemini Flash (31/Mai) — abordagem "staging isolado"
+
+Preenchidos **669 mcid_avaliacao** no funil nota≥7 de 2026 (antes: 100% NULL). Custo total: **R$ 18,72** (Gemini 2.5 Flash, ~R$ 0,028/artigo — ~4x mais barato que o Pro). 2 artigos ficaram sem mcid por não terem `source.pdf` local.
+
+**Padrão usado (replicável para outros campos novos):**
+1. Script ISOLADO `scripts/mcid_staging_flash.py` — só leitura do corpus, calcula APENAS o campo novo, grava em CSV paralelo (`outputs/mcid_staging_flash.csv`). NUNCA toca em analysis.md/json nem na tabela `artigos` durante a geração. Elimina risco à LEI 0.
+2. Piloto de 10 primeiro → revisar qualidade → escalar em lotes (script é retomável: pula doc_ids já no CSV, grava incremental com flush).
+3. Sincronização CSV→Supabase é passo SEPARADO, só após aprovação: POST mínimo `on_conflict=doc_id` gravando SÓ o campo (não toca em nota). 669 gravados, 0 falhas. Auditor confirmou LEI 0 = 0 violações após sync.
+
+**Detalhes técnicos que importam:**
+- **Gemini 2.5 (Flash E Pro) têm "thinking" ON por padrão** e consomem o orçamento de saída → respostas vazias (out_tokens=0) ou truncadas. Fix OBRIGATÓRIO em extração estruturada: `thinking_config=types.ThinkingConfig(thinking_budget=0)` (Flash) ou `=512` (Pro). Esquecer isso no Pro gerou 52/116 mcid VAZIOS na 1ª tentativa.
+- O `--limit` deve ser aplicado DEPOIS de remover os já-feitos (senão a query corta antes de deduplicar e nunca chega na cauda da fila).
+- **SEMPRE validar o CSV de staging (contar vazios/truncados) ANTES de sincronizar** — foi essa checagem que evitou gravar 52 mcid vazios por cima de mcid presentes.
+
+**Correção da qualidade (Flash → Pro, prompt reforçado):**
+- Flash inicial: 47% diziam "não definida pelos autores", e 116 (17%) PARAVAM aí sem prosseguir — Dr. Eduardo reclamou ("mesma coisa que nada").
+- Causa raiz: prompt fraco (não forçava o passo "se autor não definiu → usar valor da literatura"). O MODELO importava menos que o PROMPT.
+- Fix: `scripts/mcid_fix_pro.py` (Gemini 2.5 Pro + prompt que PROÍBE parar em "não definido" e lista valores de referência: ARR≥1% eventos duros, ≥5mmHg PA, ≥5% FEVE/peso, AUC≥0.80 diagnóstico, etc.). 116 corrigidos por R$ 14,34. Resultado: 0 ainda fracos no funil 2026.
+- **Custo total mcid: R$ 33,06** (R$ 18,72 Flash + R$ 14,34 Pro fix).
+
+## MUDANÇAS DE 04-08/Jun/2026
+
+### WhatsApp Bot — correções críticas (07/Jun/2026)
+- **Bug raiz descoberto:** Z-API envia campo `text` como dict `{"message": "..."}`, não como string `body`. O código lia `payload.get("body")` → sempre vazio → `empty_body`. Corrigido em `src/whatsapp/webhook_handler.py`.
+- **Formato de busca reformulado:** `_handle_busca` entrega top 5 artigos com análise clínica completa — gancho + resumo (2 frases) + bullets práticos inteiros. Antes entregava lista numerada de títulos (inútil para decisão clínica). Aprovado pelo Dr. Eduardo como "ficou top".
+- **Expansão PT→EN:** adicionados `antiplaquetário`, `prasugrel`, `ticagrelor`, `DAPT`, `P2Y12` ao dicionário `_PT_TO_EN` em `src/web_biblioteca.py`.
+- **`_buscar_supabase` reescrita:** busca direta no Supabase REST API (não depende mais do servidor `web_biblioteca` estar rodando). Query inclui `gancho_lista`, `resumo_markdown`, `bullets_praticos`.
+- **Tunnel manager:** `scripts/tunnel_manager.py` — gerencia cloudflared quicktunnel e atualiza Z-API automaticamente quando URL muda. **Limitação:** URL muda a cada reinício (sem conta Cloudflare com domínio). Solução definitiva: VPS com IP fixo.
+
+### Marketing Studio (04-05/Jun/2026)
+- **`src/marketing/studio_app.py`** — Streamlit com 3 páginas: Sessão Semanal, Agenda, Kits Gerados.
+- **`src/marketing/extrator_ia.py`** — extração de conteúdo via Claude API: lê `analysis.md`, entrega frase icônica, âncora, bullets, legenda Instagram, script de vídeo.
+- **`src/marketing/placa_generator.py`** — gerador HTML→PNG via Playwright. Auto-fit de fontes calculado em Python por número de caracteres (JS descartado — imprevisível). Aprovado 100% pelo Dr. Eduardo.
+- **Templates:** `story.html` (1080×1920) + `post_feed.html` (1080×1080) — identidade CardioDaily: cinza claro, verde teal #3BAF9E, hexágonos, logo.
+- **`Marketing CardioDaily.app`** — clique duplo abre o Studio no browser.
+- **Agentes Claude Code:** `.claude/agents/cardiodaily-dev.md`, `auditor.md`, `editorial.md`, `marketing.md`.
+
+### Integridade do banco (07/Jun/2026)
+- **7 violações LEI 0 corrigidas:** 1 NAC=10→5 (COVID PCR, EST=1), 6 NAC=8→7 (EST=7, teto máx 7).
+- **47 títulos** corrigidos de nome de arquivo para título real.
+- **479 resumos** preenchidos — 27 do `analysis.md` local + 450 sintéticos com metadados.
+- **32 áudios** gerados (nota≥8, 2020-2026) via `gerar_audios_lote.py --desde 2020-01-01`.
+- **28 áudios** clássicos (nota≥8, 2000-2019) em geração via `--desde 2000-01-01`.
+
+### ⚠️ APRENDIZADOS OPERACIONAIS (31/Mai) — ler antes de reanalisar
+
+1. **Billing do Gemini bloqueia tudo silenciosamente.** Em 31/Mai o projeto Google `478858602455` entrou em "dunning" (cobrança em atraso) → todas as chamadas Gemini deram `403 PERMISSION_DENIED`. O analyzer **não aborta** nesse erro: ele marca o artigo como falha mas continua. **SEMPRE rodar um smoke-test do Gemini antes de reanálise em lote.** Solução aplicada: criada API key nova num **projeto NOVO** (chave no mesmo projeto bloqueado herda o bloqueio). Chave atual no `.env`: `AIzaSyCOvq...`.
+
+2. **`reanalisar_flagados.py` apaga as análises ANTES de confirmar sucesso** (Passo 4 remove `.md`/`.json`; Passo 5 reprocessa). Se o LLM falhar, perde-se a análise. **SEMPRE fazer backup dos `analysis.md`/`.json` antes de rodar.** (Foi o que salvou os dados na 1ª tentativa, que falhou por billing.)
+
+3. **`_upsert_artigo_supabase` pode falhar silenciosamente.** Na reanálise, os 2 originais subiram ao Supabase ("🧠 Supabase atualizado"), mas as 3 meta-análises (título genérico = doc_id) **não** — o upsert retornou False sem erro visível, e o Supabase ficou com as notas velhas que violavam a LEI 0. Workaround aplicado: empurrar `nota_aplicabilidade`+`nota_trabalho_estatistico` direto do `analysis.json` local via POST mínimo (`on_conflict=doc_id`), que funciona (status 200). **TODO:** investigar por que o payload completo das meta com título genérico não faz upsert — provável que algum campo clínico cause 400 engolido pelo `except`.
 
 ---
 
@@ -474,7 +567,7 @@ TELEGRAM_BOT_TOKEN            # Token do @CardioDailyBot
 TELEGRAM_CHAT_ID              # Chat ID do Dr. Eduardo
 GOOGLE_API_KEY                # Gemini 2.5 Pro + 2.0 Flash
 ANTHROPIC_API_KEY             # Claude Sonnet 4.6
-OPENAI_API_KEY                # GPT-4o (podcast script) + TTS-HD (áudio artigos)
+OPENAI_API_KEY                # TTS-HD onyx (áudio artigos) — script podcast migrado para Gemini
 ELEVENLABS_API_KEY            # Radar podcast
 ELEVENLABS_VOICE_ID           # Voz do Radar (eleven_multilingual_v2)
 CARTESIA_API_KEY              # Briefing Cri-Cri (Luana PT-BR)
@@ -498,6 +591,17 @@ BETA_PAUSADO=1                # Quando 1: envia apenas para Dr. Eduardo
 | n8n | CANCELADO | $350/mês sem vantagem sobre Python puro |
 | `mcid_avaliacao` | OBRIGATÓRIO em todos os artigos sem exceção | Separa p<0,05 de "importa para o paciente" |
 | Placeholders em prompts | PROIBIDO — usar valores exemplo reais | `[texto entre colchetes]` → Gemini trata como opcional e omite |
+| `caminho_pdf` obrigatório | Pipeline trava e tenta 3x antes de abortar o upsert | Regra definida 02/Jun/2026 — inadmissível indexar artigo sem PDF |
+| Análise clínica obrigatória | Pipeline valida chars por tipo (-2DP) E campos clínicos — bloqueia ambos | Causa raiz: timeout Anthropic ~2min padrão; PDFs grandes levam 5-6min |
+| Timeout Anthropic | `timeout=1800s` (30min) no cliente Anthropic | Revisões grandes levam 5-6min; guidelines >200 páginas levam 20min+ |
+| Guidelines → Gemini 3.1 Pro | `guideline` usa `gemini-3.1-pro-preview` (janela 1M tokens) | Claude não aguenta guidelines de 200+ páginas (limite 200k tokens) |
+| Auditor detecta corrupção | `auditoria_supabase.py` identifica artigos nota≥7 com MD<3000 chars | Comando: `python3 scripts/reanalise_corrompidos.py` |
+| Script de correção | `scripts/reanalise_corrompidos.py` — reanálise em lote de corrompidos | Aceita lista de doc_ids como argumentos ou usa lista hardcoded |
+| Modelo originais/meta | `gemini-3.5-flash` (era `gemini-2.5-pro`) | Testado em VANISH2 (NEJM): nota LEI 0 mais rigorosa, JSON completo, 43s/artigo, custo ~4x menor |
+| Modelo guidelines | `gemini-3.1-pro-preview` (era `claude-sonnet-4-6`) | Claude não cabe guidelines de 200+ pág (limite 200k tokens); Gemini 3.1 Pro aguenta 882k chars em 66s |
+| Modelo revisões | `claude-sonnet-4-6` — mantido | Revisões normais cabem; timeout corrigido para 1800s |
+| Script podcast | `gemini-3.5-flash` (era `gpt-4o` → `gpt-4.1`) | OpenAI quota zerada em 02/Jun/2026; migrado para Gemini — mesma chave já ativa, custo menor |
+| Claude Code (sessão) | Sonnet 4.6 + alto esforço | Padrão definido pelo Dr. Eduardo em 02/Jun/2026 |
 
 ---
 
@@ -545,4 +649,16 @@ O prompt original usava `"mcid_avaliacao": "[placeholder em colchetes]"` → Gem
 
 ---
 
-*Documento atualizado em 29/Mai/2026. Próxima atualização: ao final de cada sessão de desenvolvimento.*
+*Documento atualizado em 03/Jun/2026. Próxima atualização: ao final de cada sessão de desenvolvimento.*
+
+---
+
+## PARTE 14 — HISTÓRICO DE VERSÕES
+
+| Versão | Data | Mudanças |
+|---|---|---|
+| 29.0 | 04/Jun/2026 | Causa raiz dos 43 linhas: timeout Anthropic SDK (~2min padrão) — revisões grandes levam 5-6min. Corrigido para 1800s. Validação por chars (-2DP por tipo). Guidelines migrados para Gemini 3.1 Pro Preview (janela 1M, aguenta 882k chars em 66s). Reanálise 21 revisões corrompidas. |
+| 28.0 | 03/Jun/2026 | Correção sistêmica de análises corrompidas; validação de qualidade no pipeline; detecção de corrupção no auditor; reanálise de 14 artigos nota≥7 com Gemini 3.5 Flash; podcast script migrado para Gemini 3.5 Flash (quota OpenAI zerada); 4 colunas criadas no Supabase (`muda_conduta text`, `por_que_importa`, `principais_recomendacoes`, `nota_metodologica numeric`) |
+| 27.0 | 02/Jun/2026 | Troca `gemini-2.5-pro` → `gemini-3.5-flash` em originais/meta; troca `gpt-4o` → `gpt-4.1` no podcast; Claude Code padrão: Sonnet 4.6 + alto esforço |
+| 26.0 | 31/Mai/2026 | MCID framework completo; campos novos; estado Supabase 31/Mai |
+| 25.0 | 29/Mai/2026 | Padronização completa dos prompts — MCID obrigatório, placeholders proibidos |
