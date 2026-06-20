@@ -466,6 +466,7 @@ def verificar_e_limpar_incompletos(processados: set) -> int:
     - Deleta do Supabase os que NÃO têm corpus local (fantasmas sem análise).
     Retorna o número de entradas liberadas para re-indexação.
     """
+    print("[DESARMADO 20/06] limpeza destrutiva desativada por seguranca"); return
     try:
         headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
         r = requests.get(
@@ -601,7 +602,9 @@ def main():
     folders = [f for f in corpus_path.iterdir() if f.is_dir() and f.name.startswith("doi_")]
     log(f"📊 Total: {len(folders)}")
     processados = load_checkpoint()
-    verificar_e_limpar_incompletos(processados)
+    # DESARMADO 20/06: DELETE destrutivo sem backup + CORPUS_DIR de Mac inexistente.
+    # Reativar so apos portao de validacao confirmado e com salvaguardas.
+    # verificar_e_limpar_incompletos(processados)
     folders = [f for f in folders if f.name not in processados]
     log(f"⏭️ Restantes: {len(folders)}")
     if len(folders) == 0:
