@@ -51,6 +51,8 @@ try:
 except ImportError:
     pass
 
+from article_validator import validate_artigo_payload as _validate_artigo_payload
+
 # ─── Config ───────────────────────────────────────────────────────────────────
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
@@ -542,20 +544,40 @@ def processar_pdf(pdf_path: Path, dry_run: bool, gerar_assets: bool) -> str:
 
     # ── 5. Inserir no Supabase ────────────────────────────────────────
     payload = {
-        "doc_id":              doc_id,
-        "doi":                 doi or None,
-        "titulo":              analise.get("titulo") or titulo,
-        "revista":             meta["revista"],
-        "data_publicacao":     f"{meta['ano']}-01-01",
-        "tipo_estudo":         analise.get("tipo_estudo", "original"),
-        "doenca_principal":    analise.get("doenca_principal", "Outros"),
-        "nota_metodologia":    analise.get("nota_metodologia"),
-        "nota_aplicabilidade": nota,
-        "nota_geral":          analise.get("nota_geral"),
-        "generator":           "ingerir_artigos.py",
-        "generator_version":   "1.0",
-        "analysis_datetime":   datetime.now().isoformat(),
+        "doc_id":                  doc_id,
+        "doi":                     doi or None,
+        "titulo":                  analise.get("titulo") or titulo,
+        "revista":                 meta["revista"],
+        "data_publicacao":         f"{meta['ano']}-01-01",
+        "tipo_estudo":             analise.get("tipo_estudo", "original"),
+        "doenca_principal":        analise.get("doenca_principal", "Outros"),
+        "nota_trabalho_estatistico": analise.get("nota_metodologia"),
+        "nota_aplicabilidade":     nota,
+        "nota_geral":              analise.get("nota_geral"),
+        "generator":               "ingerir_artigos.py",
+        "generator_version":       "1.0",
+        "analysis_datetime":       datetime.now().isoformat(),
     }
+
+    # Monta dict mínimo para que aplicar_teto_nac() detecte o desenho do estudo
+    _analysis_bridge = {
+        "nota_trabalho_estatistico": analise.get("nota_metodologia"),
+        "justificativa_notas": analise.get("tipo_estudo", ""),
+        "nucleo_comum": {
+            "desenho_confiavel": " ".join([
+                analise.get("tipo_estudo", ""),
+                analise.get("tipo_endpoint", ""),
+                *([m for m in analise.get("metodos", []) if isinstance(m, str)][:2]),
+            ]),
+        },
+    }
+    payload, _warns = _validate_artigo_payload(
+        payload,
+        analysis_json=_analysis_bridge,
+        article_type=analise.get("tipo_estudo", ""),
+    )
+    for w in _warns:
+        print(f"   🔎 validação {w}")
 
     print("   💾 Inserindo no Supabase…")
     if not inserir_artigo(payload):

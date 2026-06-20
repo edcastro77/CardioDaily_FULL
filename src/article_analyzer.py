@@ -471,6 +471,18 @@ def _upsert_artigo_supabase(doc_id: str, article_dir: str,
             payload["resumo_markdown"] = resumo_markdown
         payload.update(campos_clinicos)
 
+        # ── Portão de validação ───────────────────────────────────────────────
+        # LEI 0 já foi aplicada acima (linha ~331); o validador re-confirma e
+        # também normaliza tipo_estudo, doenca_principal e keywords.
+        from src.article_validator import validate_artigo_payload as _validate_payload
+        payload, _warns = _validate_payload(
+            payload,
+            analysis_json=analysis_structured,
+            article_type=classif.get("type", ""),
+        )
+        for w in _warns:
+            print(f"   🔎 {w}")
+
         # ── Upsert ────────────────────────────────────────────────────────────
         h = {
             "apikey": sb_key,

@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from taxonomy import (TAXONOMY_CATEGORIES, TAXONOMY_SET as _TAXONOMY_SET, PROMPT_CLASSIFICATION,
                         migrate_legacy_category as _migrate_legacy_category,
                         validate_category as _validate_category)
+from article_validator import validate_artigo_payload as _validate_artigo_payload
 
 load_dotenv("/Users/edcastro77/CardioDaily_FULL/.env")
 CORPUS_DIR = "/Users/edcastro77/CardioDaily_FULL/outputs/corpus"
@@ -542,6 +543,7 @@ def importar_supabase(metadata):
             data["caminho_visual_abstract"] = metadata["caminho_visual_abstract"]
         if metadata.get("nota_metodologica") is not None:
             data["nota_metodologica"] = metadata["nota_metodologica"]
+            data["nota_trabalho_estatistico"] = metadata["nota_metodologica"]
         if metadata.get("keywords"):
             data["keywords"] = metadata["keywords"]
         if metadata.get("muda_conduta"):
@@ -556,6 +558,29 @@ def importar_supabase(metadata):
                 data[campo] = metadata[campo]
         if metadata.get("bullets_praticos"):
             data["bullets_praticos"] = metadata["bullets_praticos"]  # JSONB
+
+        # ── Portão de validação ───────────────────────────────────────────
+        # Carrega analysis.json para aplicar LEI 0 corretamente
+        _analysis_json_disk = None
+        _pasta = metadata.get("caminho_pasta", "")
+        if _pasta:
+            _aj_path = Path(_pasta) / "analysis.json"
+            if _aj_path.exists():
+                try:
+                    _aj_raw = json.loads(_aj_path.read_text(encoding="utf-8"))
+                    # _detectar_nivel_desenho espera o dict da chave "analysis"
+                    _analysis_json_disk = _aj_raw.get("analysis") or _aj_raw
+                except Exception:
+                    pass
+
+        data, _warns = _validate_artigo_payload(
+            data,
+            analysis_json=_analysis_json_disk,
+            article_type=metadata.get("tipo_estudo", ""),
+        )
+        for w in _warns:
+            log(f"  🔎 validação {w}")
+
         response = requests.post(url, headers=headers, json=data)
         if response.status_code not in [200, 201, 204]:
             log(f"❌ importar {metadata['doc_id']}: HTTP {response.status_code} — {response.text[:300]}")
