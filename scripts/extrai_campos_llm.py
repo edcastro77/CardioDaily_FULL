@@ -347,6 +347,11 @@ def modo_producao(nota_min: int, dry_run: bool, workers: int, limite: int, force
 
 
 def main():
+    import sys
+    print("[APOSENTADO 20/06] Backfill desativado. Com o portao de validacao "
+          "ativo, buracos novos nao nascem. Reparo do passado, se necessario, "
+          "deve ser feito em tabela paralela controlada, nao aqui.")
+    sys.exit(0)
     parser = argparse.ArgumentParser(description="CardioDaily — Extração campos via LLM")
     parser.add_argument("--teste", action="store_true", help="Modo teste (11 artigos, sem salvar)")
     parser.add_argument("--nota-min", type=int, default=7)
@@ -372,4 +377,9 @@ def main():
 
 
 if __name__ == "__main__":
+    import sys
+    print("[APOSENTADO 20/06] Backfill desativado. Com o portao de validacao "
+          "ativo, buracos novos nao nascem. Reparo do passado, se necessario, "
+          "deve ser feito em tabela paralela controlada, nao aqui.")
+    sys.exit(0)
     main()

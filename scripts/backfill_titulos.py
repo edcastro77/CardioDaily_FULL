@@ -146,6 +146,11 @@ def _processar(doc_id: str):
 
 
 def main():
+    import sys
+    print("[APOSENTADO 20/06] Backfill desativado. Com o portao de validacao "
+          "ativo, buracos novos nao nascem. Reparo do passado, se necessario, "
+          "deve ser feito em tabela paralela controlada, nao aqui.")
+    sys.exit(0)
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int, default=9999)
@@ -226,4 +231,9 @@ def main():
 
 
 if __name__ == "__main__":
+    import sys
+    print("[APOSENTADO 20/06] Backfill desativado. Com o portao de validacao "
+          "ativo, buracos novos nao nascem. Reparo do passado, se necessario, "
+          "deve ser feito em tabela paralela controlada, nao aqui.")
+    sys.exit(0)
     main()
