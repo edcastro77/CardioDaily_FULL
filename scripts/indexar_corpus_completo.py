@@ -12,7 +12,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from taxonomy import (TAXONOMY_CATEGORIES, TAXONOMY_SET as _TAXONOMY_SET, PROMPT_CLASSIFICATION,
                         migrate_legacy_category as _migrate_legacy_category,
                         validate_category as _validate_category)
-from article_validator import validate_artigo_payload as _validate_artigo_payload
+from article_validator import (validate_artigo_payload as _validate_artigo_payload,
+                               registrar_rejeicao_supabase as _registrar_rejeicao_sb)
 
 load_dotenv("/Users/edcastro77/CardioDaily_FULL/.env")
 CORPUS_DIR = "/Users/edcastro77/CardioDaily_FULL/outputs/corpus"
@@ -574,13 +575,18 @@ def importar_supabase(metadata):
                 except Exception:
                     pass
 
-        data, _warns = _validate_artigo_payload(
+        data, _warns, _is_valid = _validate_artigo_payload(
             data,
             analysis_json=_analysis_json_disk,
             article_type=metadata.get("tipo_estudo", ""),
         )
         for w in _warns:
             log(f"  🔎 validação {w}")
+        if not _is_valid:
+            _erros = [w for w in _warns if w.startswith("[ERRO]")]
+            _registrar_rejeicao_sb(data, _erros)
+            log(f"  🚫 BARRADO: {metadata.get('doc_id')} — {'; '.join(_erros)}")
+            return False
 
         response = requests.post(url, headers=headers, json=data)
         if response.status_code not in [200, 201, 204]:

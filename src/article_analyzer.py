@@ -474,14 +474,20 @@ def _upsert_artigo_supabase(doc_id: str, article_dir: str,
         # ── Portão de validação ───────────────────────────────────────────────
         # LEI 0 já foi aplicada acima (linha ~331); o validador re-confirma e
         # também normaliza tipo_estudo, doenca_principal e keywords.
-        from src.article_validator import validate_artigo_payload as _validate_payload
-        payload, _warns = _validate_payload(
+        from src.article_validator import (validate_artigo_payload as _validate_payload,
+                                           registrar_rejeicao_supabase as _registrar_rejeicao)
+        payload, _warns, _is_valid = _validate_payload(
             payload,
             analysis_json=analysis_structured,
             article_type=classif.get("type", ""),
         )
         for w in _warns:
             print(f"   🔎 {w}")
+        if not _is_valid:
+            _erros = [w for w in _warns if w.startswith("[ERRO]")]
+            _registrar_rejeicao(payload, _erros)
+            print(f"   🚫 Artigo BARRADO pelo portão — gravado em artigos_rejeitados")
+            return False
 
         # ── Upsert ────────────────────────────────────────────────────────────
         h = {

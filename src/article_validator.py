@@ -3,12 +3,15 @@
 Portão de validação único para escritas na tabela artigos do Supabase.
 
 Uso:
-    from src.article_validator import validate_artigo_payload
+    from src.article_validator import validate_artigo_payload, registrar_rejeicao_supabase
 
-    payload_limpo, warnings = validate_artigo_payload(payload, analysis_json, article_type)
+    payload_limpo, warnings, is_valid = validate_artigo_payload(payload, analysis_json, article_type)
     for w in warnings:
         logger.warning(w)
-    # chamar Supabase com payload_limpo
+    if not is_valid:
+        erros = [w for w in warnings if w.startswith("[ERRO]")]
+        registrar_rejeicao_supabase(payload_limpo, erros)
+        return  # NÃO grava em artigos
 
 Garante:
   - LEI 0 aplicada em nota_aplicabilidade (quando analysis_json fornecido)
@@ -17,9 +20,14 @@ Garante:
   - keywords sempre lista
   - título sinalizado se parece nome de arquivo
   - tipos numéricos corretos para notas
+
+Campos críticos (ausente OU inválido → is_valid=False, artigo barrado):
+  titulo, nota_aplicabilidade, nota_trabalho_estatistico,
+  mcid_avaliacao (>= 10 chars), resumo_markdown (>= 1000 chars)
 """
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
@@ -58,9 +66,10 @@ _RE_FILENAME_DATE   = re.compile(r'^\d{4}[-_]\d{2}')          # YYYY-MM ou YYYY_
 _RE_DOC_ID          = re.compile(r'^(doi|pdf)_[a-f0-9]+', re.IGNORECASE)
 _RE_UNDERSCORE      = re.compile(r'_')                         # qualquer _ em título
 _MCID_MIN_PIPES     = 3                                        # formato "A | B | C | D"
-_RESUMO_MIN_CHARS   = 100
+_RESUMO_MIN_CHARS   = 1000                                     # bloqueante
 _TITULO_MIN_WORDS   = 5
 _MCID_KEYWORD       = re.compile(r'\bMCID\b', re.IGNORECASE)
+_MCID_BLOCK_CHARS   = 10                                       # abaixo disso → ERRO grave
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +105,38 @@ def _aplicar_lei_0(nota: float, analysis_json: dict, article_type: str) -> float
 
 
 # ---------------------------------------------------------------------------
+# Gravação de rejeição
+# ---------------------------------------------------------------------------
+
+def registrar_rejeicao_supabase(payload: dict[str, Any], motivos: list[str]) -> bool:
+    """Grava artigo barrado em artigos_rejeitados. Silent failure — nunca derruba o pipeline."""
+    try:
+        import requests as _req
+        sb_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+        sb_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
+        if not sb_url or not sb_key:
+            return False
+
+        _EXCLUIR = {"embedding", "id"}
+        data = {k: v for k, v in payload.items() if k not in _EXCLUIR}
+        data["motivo_rejeicao"] = "; ".join(motivos)
+
+        h = {
+            "apikey": sb_key,
+            "Authorization": f"Bearer {sb_key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        }
+        r = _req.post(
+            f"{sb_url}/rest/v1/artigos_rejeitados",
+            headers=h, json=data, timeout=15,
+        )
+        return r.status_code in (200, 201, 204)
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Função principal
 # ---------------------------------------------------------------------------
 
@@ -103,36 +144,40 @@ def validate_artigo_payload(
     payload: dict[str, Any],
     analysis_json: dict | None = None,
     article_type: str = "",
-) -> tuple[dict[str, Any], list[str]]:
+) -> tuple[dict[str, Any], list[str], bool]:
     """
     Valida e limpa o payload antes de escrever na tabela artigos.
 
     Args:
-        payload:      Dict a enviar ao Supabase (copiado internamente — original não modificado).
+        payload:       Dict a enviar ao Supabase (copiado internamente — original não modificado).
         analysis_json: JSON completo da análise LLM (necessário para aplicar LEI 0).
-        article_type: Tipo do artigo (ex: 'artigo_original', 'revisao_sistematica_meta_analise').
-                      Usado pela LEI 0 quando analysis_json fornecido.
+        article_type:  Tipo do artigo. Usado pela LEI 0 quando analysis_json fornecido.
 
     Returns:
-        (payload_limpo, warnings)
-        - payload_limpo: cópia do payload com correções automáticas aplicadas.
-        - warnings: lista de strings descritivas; prefixo "[ERRO]" indica dado problemático
-          que não pôde ser corrigido automaticamente.
+        (payload_limpo, warnings, is_valid)
+        - payload_limpo: cópia com correções automáticas aplicadas.
+        - warnings:  todos os avisos; prefixo "[ERRO]" = campo crítico inválido/ausente.
+        - is_valid:  False se qualquer campo crítico estiver ausente ou inválido.
+                     Quando False, o caller NÃO deve gravar em artigos e deve
+                     chamar registrar_rejeicao_supabase() com os [ERRO]s.
     """
     p = dict(payload)
     warnings: list[str] = []
+    erros_graves: list[str] = []
     doc_id = p.get("doc_id", "<sem-doc_id>")
+
+    def _erro(msg: str) -> None:
+        erros_graves.append(msg)
+        warnings.append(msg)
 
     # ------------------------------------------------------------------ titulo
     titulo = p.get("titulo") or ""
     titulo = titulo.strip()
     if not titulo:
-        warnings.append(f"[ERRO][{doc_id}] titulo está vazio")
+        _erro(f"[ERRO][{doc_id}] titulo está vazio ou ausente")
     else:
         if _titulo_parece_filename(titulo):
-            warnings.append(
-                f"[ERRO][{doc_id}] titulo parece nome de arquivo: '{titulo[:70]}'"
-            )
+            _erro(f"[ERRO][{doc_id}] titulo parece nome de arquivo: '{titulo[:70]}'")
         word_count = len(titulo.split())
         if word_count < _TITULO_MIN_WORDS:
             warnings.append(
@@ -158,21 +203,19 @@ def validate_artigo_payload(
 
     # -------------------------------------------- nota_aplicabilidade + LEI 0
     nota_raw = p.get("nota_aplicabilidade")
-    if nota_raw is not None:
+    if "nota_aplicabilidade" not in p or nota_raw is None:
+        _erro(f"[ERRO][{doc_id}] nota_aplicabilidade ausente ou None — campo obrigatório")
+    else:
+        nota_float: float | None = None
         try:
             nota_float = float(nota_raw)
         except (TypeError, ValueError):
-            warnings.append(
-                f"[ERRO][{doc_id}] nota_aplicabilidade não numérico: '{nota_raw}' → None"
-            )
+            _erro(f"[ERRO][{doc_id}] nota_aplicabilidade não numérico: '{nota_raw}'")
             p["nota_aplicabilidade"] = None
-            nota_float = None
 
         if nota_float is not None:
             if not (0.0 <= nota_float <= 10.0):
-                warnings.append(
-                    f"[ERRO][{doc_id}] nota_aplicabilidade fora de [0-10]: {nota_float}"
-                )
+                _erro(f"[ERRO][{doc_id}] nota_aplicabilidade fora de [0-10]: {nota_float}")
 
             if analysis_json is not None:
                 _tipo_lei0 = article_type or str(p.get("tipo_estudo", ""))
@@ -188,21 +231,19 @@ def validate_artigo_payload(
 
     # ------------------------------------------------------- nota_trabalho_estatistico
     nota_est_raw = p.get("nota_trabalho_estatistico")
-    if nota_est_raw is not None:
+    if "nota_trabalho_estatistico" not in p or nota_est_raw is None:
+        _erro(f"[ERRO][{doc_id}] nota_trabalho_estatistico ausente ou None — campo obrigatório")
+    else:
+        nota_est: int | None = None
         try:
             nota_est = int(float(nota_est_raw))
         except (TypeError, ValueError):
-            warnings.append(
-                f"[ERRO][{doc_id}] nota_trabalho_estatistico não numérico: '{nota_est_raw}' → None"
-            )
-            nota_est = None
+            _erro(f"[ERRO][{doc_id}] nota_trabalho_estatistico não numérico: '{nota_est_raw}'")
             p["nota_trabalho_estatistico"] = None
 
         if nota_est is not None:
             if not (0 <= nota_est <= 10):
-                warnings.append(
-                    f"[ERRO][{doc_id}] nota_trabalho_estatistico fora de [0-10]: {nota_est}"
-                )
+                _erro(f"[ERRO][{doc_id}] nota_trabalho_estatistico fora de [0-10]: {nota_est}")
             p["nota_trabalho_estatistico"] = nota_est
 
     # ---------------------------------------------------------- doenca_principal
@@ -237,22 +278,27 @@ def validate_artigo_payload(
 
     # -------------------------------------------------------------- resumo_markdown
     resumo = p.get("resumo_markdown")
-    if resumo is not None:
+    if "resumo_markdown" not in p or resumo is None:
+        _erro(f"[ERRO][{doc_id}] resumo_markdown ausente — campo obrigatório")
+    else:
         resumo = str(resumo).strip()
         if len(resumo) < _RESUMO_MIN_CHARS:
-            warnings.append(
-                f"[AVISO][{doc_id}] resumo_markdown muito curto: {len(resumo)} chars"
+            _erro(
+                f"[ERRO][{doc_id}] resumo_markdown muito curto: {len(resumo)} chars"
                 f" (mínimo {_RESUMO_MIN_CHARS})"
             )
         p["resumo_markdown"] = resumo
 
     # -------------------------------------------------------------- mcid_avaliacao
     mcid = p.get("mcid_avaliacao")
-    if mcid is not None:
+    if "mcid_avaliacao" not in p or mcid is None:
+        _erro(f"[ERRO][{doc_id}] mcid_avaliacao ausente — campo obrigatório")
+    else:
         mcid = str(mcid).strip()
-        if len(mcid) < 20:
-            warnings.append(
-                f"[AVISO][{doc_id}] mcid_avaliacao muito curto ({len(mcid)} chars): '{mcid[:50]}'"
+        if len(mcid) < _MCID_BLOCK_CHARS:
+            _erro(
+                f"[ERRO][{doc_id}] mcid_avaliacao muito curto ({len(mcid)} chars)"
+                f" — mínimo {_MCID_BLOCK_CHARS}"
             )
         else:
             pipe_count = mcid.count("|")
@@ -267,4 +313,5 @@ def validate_artigo_payload(
                 )
         p["mcid_avaliacao"] = mcid
 
-    return p, warnings
+    is_valid = len(erros_graves) == 0
+    return p, warnings, is_valid

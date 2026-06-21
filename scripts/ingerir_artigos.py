@@ -51,7 +51,8 @@ try:
 except ImportError:
     pass
 
-from article_validator import validate_artigo_payload as _validate_artigo_payload
+from article_validator import (validate_artigo_payload as _validate_artigo_payload,
+                               registrar_rejeicao_supabase as _registrar_rejeicao_sb)
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
@@ -571,13 +572,18 @@ def processar_pdf(pdf_path: Path, dry_run: bool, gerar_assets: bool) -> str:
             ]),
         },
     }
-    payload, _warns = _validate_artigo_payload(
+    payload, _warns, _is_valid = _validate_artigo_payload(
         payload,
         analysis_json=_analysis_bridge,
         article_type=analise.get("tipo_estudo", ""),
     )
     for w in _warns:
         print(f"   🔎 validação {w}")
+    if not _is_valid:
+        _erros = [w for w in _warns if w.startswith("[ERRO]")]
+        _registrar_rejeicao_sb(payload, _erros)
+        print(f"   🚫 Artigo BARRADO pelo portão — gravado em artigos_rejeitados")
+        return "barrado_validacao"
 
     print("   💾 Inserindo no Supabase…")
     if not inserir_artigo(payload):
