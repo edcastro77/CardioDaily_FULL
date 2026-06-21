@@ -220,7 +220,9 @@ def check_artigos(quick: bool) -> tuple[str, list[str]]:
     s = _semaforo(sem_titulo, 5, 50)
     linhas.append(f"   {s} Sem titulo:           {sem_titulo:,} (null={sem_titulo_null}, vazio={sem_titulo_vazio})")
     if sem_titulo > 0:
-        comandos.append(f"Títulos ausentes ({sem_titulo}): python3 scripts/backfill_titulos.py")
+        linhas.append(f"   ⚠️  ATENÇÃO: {sem_titulo} artigo(s) com título ausente — com portão de validação "
+                      f"ativo, deveriam ter sido barrados na ingestão e gravados em artigos_rejeitados. "
+                      f"Reparo pontual se necessário (NÃO usar backfill aposentado em archive/).")
 
     # Títulos genéricos — busca em lotes, avalia localmente
     genericos = _detectar_titulos_genericos(quick=quick)
