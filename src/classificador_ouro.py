@@ -246,21 +246,25 @@ def classificar(pasta, dry_run=True, max_n=0):
         novo = _novo_nome(meta_nome, nome) if meta_nome else nome
         alvo = os.path.join(dest_dir, novo)
 
-        # DEDUP (GOLDEN GATE: nada sobrescreve calado). DOI só é identidade se CONFIÁVEL:
+        # DEDUP (GOLDEN GATE: nada sobrescreve calado). DOI é a IDENTIDADE — só conta se CONFIÁVEL:
         # não emprestado por editorial/carta (rotulado) e não em balde que mantém nome original.
         chave_doi = doi if (doi and not rotulado and destino not in ("DESCARTE", "REVISAO", "RETRY")) else None
-        dup_de = None
         if chave_doi and chave_doi in vistos_doi:
-            dup_de = vistos_doi[chave_doi]
-        elif alvo in alvos_usados:
-            dup_de = alvos_usados[alvo]
-        if dup_de:
-            destino, marca, via = "DUPLICATA", "👯", f"duplicata de: {dup_de}"
+            # MESMO DOI = duplicata real
+            destino, marca, via = "DUPLICATA", "👯", f"duplicata de: {vistos_doi[chave_doi]}"
             dest_dir = os.path.join(pasta, SUB_DUP)
             novo = nome  # mantém original, não sobrescreve o primeiro
         else:
             if chave_doi:
                 vistos_doi[chave_doi] = novo
+            # COLISÃO de nome entre identidades DIFERENTES (ex.: 2 capítulos Clinics cujo título
+            # trunca igual) → NÃO é duplicata: desambigua o nome pra não sobrescrever nem perder.
+            alvo = os.path.join(dest_dir, novo)
+            if alvo in alvos_usados:
+                base, ext = os.path.splitext(novo)
+                cauda = doi.split("/")[-1].replace(".", "_") if doi else f"n{i}"
+                novo = f"{base}__{cauda}{ext}"
+                alvo = os.path.join(dest_dir, novo)
             alvos_usados[alvo] = novo
 
         rel = os.path.relpath(dest_dir, pasta)

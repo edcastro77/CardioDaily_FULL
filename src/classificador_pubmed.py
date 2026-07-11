@@ -278,7 +278,15 @@ def _novo_nome(meta, original):
              "01": "01", "02": "02", "03": "03", "04": "04", "05": "05", "06": "06",
              "07": "07", "08": "08", "09": "09", "10": "10", "11": "11", "12": "12"}
     mes = meses.get((ym.group(2) or "").lower(), "01") if ym else "01"
-    rev, tit = _slug(meta.get("journal", ""), 24), _slug(meta.get("title", ""), 50)
+    titulo = meta.get("title", "")
+    rev, tit = _slug(meta.get("journal", ""), 24), _slug(titulo, 80)
+    # Revisões em partes ("... - Part 1" / "Part Two"): o diferenciador costuma cair FORA do corte.
+    # Preserva o "Part N" pra o título ficar verídico E distinto (Cardiology/HF/Interv. Clinics).
+    mp = re.search(r"\bpart\s+(\d+|one|two|three|four|five|[ivx]+)\b", titulo, re.I)
+    if mp:
+        parte = "Part_" + mp.group(1).capitalize()
+        if parte.lower() not in tit.lower():
+            tit = f"{tit}_{parte}"
     if rev == "SEM_TITULO" and tit == "SEM_TITULO":
         return original
     return f"{ano}-{mes}-{rev}-{tit}.pdf"
