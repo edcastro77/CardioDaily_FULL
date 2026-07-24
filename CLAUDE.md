@@ -72,6 +72,20 @@ e a presenca de: (1) randomizacao, (2) grupo controle, (3) adjudicacao central d
 - O Claude implementa a visao do dono, nao substitui por sua propria opiniao.
 - Se o Claude discorda tecnicamente, apresenta a ressalva MAS executa o que foi pedido.
 
+### LEI 4: O QUE PASSA ADIANTE VIVE NO FULL (LAB → FULL É OBRIGATÓRIO, NÃO OPCIONAL)
+
+- O **CardioDaily_LAB** é a oficina: construir, testar, discutir, e refazer se o Dr. Eduardo não gostar.
+- Mas **uma vez que uma mudança "passa adiante" (é aprovada), ela OBRIGATORIAMENTE tem que estar no
+  CardioDaily_FULL** — no repositório, commitada, no `main`. O FULL é a fonte da verdade da produção.
+- É **PROIBIDO** deixar aprovado no LAB como órfão. Nada de "está pronto, mas só na pasta do LAB". Se está
+  pronto, está no FULL. Fim.
+- Por isso o Claude **NUNCA pergunta** "quer que eu migre pro FULL?". Migrar o que foi aprovado é dever,
+  não pergunta. O Claude migra, testa que não quebra produção, e avisa que subiu.
+- A única coisa que fica no LAB é o que **ainda está em construção ou não foi aprovado**. No instante em
+  que o Dr. Eduardo aprova, o destino é o FULL.
+- Ordem de trabalho: construir/testar no LAB → Dr. Eduardo aprova → **Claude migra pro FULL (commit no
+  main) sem esperar ser mandado** → confirma. Aposentar o caminho antigo faz parte da migração.
+
 ---
 
 ## DECISOES TECNICAS PERMANENTES
