@@ -529,8 +529,14 @@ except ImportError:
         GOOGLE_SDK_AVAILABLE = False
         print("⚠️  google-genai não instalado. Execute: pip install google-genai")
 
-# Importar módulos de podcast
-from podcast_script_generator import PodcastScriptGenerator
+# Importar módulos de podcast (opcional — casca a reconstruir; áudio é elo 6)
+try:
+    from podcast_script_generator import PodcastScriptGenerator
+    PODCAST_GEN_AVAILABLE = True
+except ImportError:
+    PODCAST_GEN_AVAILABLE = False
+    PodcastScriptGenerator = None
+    print("⚠️  podcast_script_generator não encontrado (áudio desativado — elo 6).")
 
 # Importar classificador robusto
 try:
@@ -592,21 +598,19 @@ from taxonomy import TAXONOMY_CATEGORIES, TAXONOMY_SET as _TAXONOMY_SET, PROMPT_
 # CONFIGURAÇÃO DE CLIENTES E MODELOS
 # ============================================================================
 
-# Modelos por tipo de artigo (ATUALIZADO DEZ/2025)
-# - Revisões e Guidelines: Claude Sonnet 4 (análise profunda)
-# - Artigos Originais e Meta-análises: Gemini 2.5 Pro (poder estatístico)
+# Modelos por tipo de artigo — o _call_model roteia pela CONFIG CENTRAL (modelos.py) + cliente unificado.
+# 26/Jul/2026: migrado dos modelos mortos (gemini-2.5-pro / sonnet-4.6) → Sonnet 5. Decisão do Dr. Eduardo:
+# análise de artigo = Sonnet 5 (cadeia ESCRITA, com fallback cross-provider pela LEI DA EQUIVALÊNCIA).
 MODEL_CONFIG = {
-    # Revisões e Guidelines - Claude Sonnet 4.6
-    'revisao_geral': 'claude-sonnet-4-6',
-    'guideline': 'claude-sonnet-4-6',
-    'ponto_de_vista': 'claude-sonnet-4-6',
-    # Meta-análises e originais -> Gemini 2.5 Pro
-    'revisao_sistematica_meta_analise': 'gemini-2.5-pro',
-    'artigo_original': 'gemini-2.5-pro',
+    'revisao_geral': 'claude-sonnet-5',
+    'guideline': 'claude-sonnet-5',
+    'ponto_de_vista': 'claude-sonnet-5',
+    'revisao_sistematica_meta_analise': 'claude-sonnet-5',
+    'artigo_original': 'claude-sonnet-5',
 }
 
 # Fallback model (caso nenhuma API esteja configurada)
-FALLBACK_MODEL = os.environ.get('OPENAI_MODEL', 'gemini-2.5-pro')
+FALLBACK_MODEL = os.environ.get('OPENAI_MODEL', 'claude-sonnet-4-6')
 
 # Cliente OpenAI (fallback)
 _openai_key = os.environ.get('OPENAI_API_KEY')
@@ -1121,7 +1125,7 @@ class ArticleAnalyzer:
     
     def _get_model_for_type(self, article_type):
         """Retorna o modelo apropriado para o tipo de artigo."""
-        return self.model_config.get(article_type, 'gemini-2.5-pro')
+        return self.model_config.get(article_type, 'claude-sonnet-4-6')
     
     def _is_claude_model(self, model_name):
         """Verifica se é um modelo Claude."""
@@ -1326,36 +1330,24 @@ class ArticleAnalyzer:
         raise last_exc
 
     def _call_model(self, model_name, prompt, system_message=None, temperature=0.3, max_tokens=16000):
+        """Roteia via CLIENTE UNIFICADO (llm_client) + CONFIG CENTRAL (modelos.py). É aqui que roda a
+        LEI DA EQUIVALÊNCIA: a cadeia cross-provider (Claude 5 → GPT-5.6 → Gemini 3.x Pro) tenta cada
+        modelo até um responder, e o temperature é removido onde o modelo de raciocínio rejeita.
+        Migração 26/Jul/2026 — mata gemini-2.5-pro (morto) e o crash de temperature do Sonnet 5.
+
+        model_name vira só o TIER (haiku/flash→RAPIDO, opus/sol→PROFUNDO, resto→ESCRITA). O master
+        prompt entra como CONTEXTO cacheável (estável entre artigos → leitura a ~10%); o artigo, como instrução.
         """
-        Chama o modelo apropriado baseado no nome.
-        
-        Esta é a função principal que roteia para Claude, Gemini ou OpenAI.
-        """
-        # Se é modelo Claude
-        if self._is_claude_model(model_name):
-            if self.use_claude:
-                try:
-                    return self._call_claude(model_name, prompt, system_message, temperature, max_tokens)
-                except Exception as e:
-                    # Não parar o lote por falha do Claude (ex.: quota/crédito/rate-limit)
-                    if self.use_gemini and self._should_fallback_from_claude(e):
-                        print(f"   ⚠️  Claude falhou ({type(e).__name__}: {e}); usando Gemini 2.5 Pro como fallback...")
-                        return self._call_gemini('gemini-2.5-pro', prompt, system_message, temperature, max_tokens)
-                    raise
-            else:
-                print("   ⚠️  Claude não disponível; usando Gemini 2.5 Pro como fallback...")
-                return self._call_gemini('gemini-2.5-pro', prompt, system_message, temperature, max_tokens)
-        
-        # Se é modelo Gemini
-        if 'gemini' in model_name.lower():
-            if self.use_gemini:
-                return self._call_gemini_with_retry(model_name, prompt, system_message, temperature, max_tokens)
-            else:
-                print(f"   ⚠️  Gemini não disponível, usando OpenAI como fallback...")
-                return self._call_openai_fallback(self.fallback_model, prompt, system_message, temperature, max_tokens)
-        
-        # Fallback para OpenAI
-        return self._call_openai_fallback(model_name, prompt, system_message, temperature, max_tokens)
+        import modelos as M, llm_client
+        nome = (model_name or "").lower()
+        if any(t in nome for t in ("haiku", "flash", "luna")):
+            chain = M.RAPIDO
+        elif any(t in nome for t in ("opus", "-sol")):
+            chain = M.PROFUNDO
+        else:
+            chain = M.ESCRITA
+        return llm_client.gerar(chain, prompt, contexto=system_message,
+                                max_tokens=max_tokens, temperatura=temperature)
     
     def _call_openai_fallback(self, model_name, prompt, system_message=None, temperature=0.3, max_tokens=8000):
         """Fallback para OpenAI quando Gemini não está disponível."""
@@ -1504,10 +1496,10 @@ class ArticleAnalyzer:
             def llm_call(prompt):
                 try:
                     return self._call_model(
-                        model_name='gemini-2.5-pro',
+                        model_name='claude-sonnet-4-6',
                         prompt=prompt,
                         temperature=0.1,
-                        max_tokens=8000  # Gemini 2.5 Pro usa thinking tokens internos (~5k), mais ~3k para resposta
+                        max_tokens=8000  # movido de Gemini (zerado) pro Claude
                     )
                 except Exception as e:
                     print(f"      ⚠️ Erro ao chamar LLM: {e}")
@@ -1619,10 +1611,10 @@ class ArticleAnalyzer:
 
         try:
             response_text = self._call_model(
-                model_name='gemini-2.5-pro',
+                model_name='claude-sonnet-4-6',
                 prompt=prompt,
                 temperature=0.1,
-                max_tokens=8000,  # Gemini 2.5 Pro usa thinking tokens internos (~5k), mais ~3k para resposta
+                max_tokens=8000,  # movido de Gemini (zerado) pro Claude
             )
 
             if not response_text:
