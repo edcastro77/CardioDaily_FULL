@@ -822,7 +822,7 @@ class RadarPubMed:
             f"## ARTIGOS COMPLETOS ({len(artigos)}):\n{resumos}\n\n"
             f"CONTEXTO: {contexto}"
         )
-        return self._chamar_gemini(prompt)
+        return self._escrever(prompt)
 
     def gerar_script_numero(self, journal: str, volume: str, issue: str,
                             artigos: list[dict]) -> str:
@@ -863,79 +863,25 @@ class RadarPubMed:
             f'## ARTIGOS:\n\n{contexto_str}\n\n---\n'
             f'Gere o roteiro completo agora:'
         )
-        return self._chamar_gemini(prompt)
+        return self._escrever(prompt)
 
-    def _chamar_llm(self, prompt: str) -> str:
-        """Claude Sonnet 4.6 (primário). Gemini como fallback se Claude indisponível."""
+    def _chamar_llm(self, prompt: str, chain=None) -> str:
+        """Delega ao CLIENTE UNIFICADO (cadeia cross-provider do modelos.py).
+        Se um provedor cai (crédito/cota), pula pro próximo — outro dono, mesmo tier. Gemini NUNCA é primário.
+        Default = RAPIDO (triagem/volume). Roteiros usam _escrever (tier ESCRITA)."""
         self._check_configured()
+        import modelos as M
+        import llm_client
+        return llm_client.gerar(chain if chain is not None else M.RAPIDO, prompt, max_tokens=8192)
 
-        # ── Claude Sonnet 4.6 ────────────────────────────────────────────────
-        if self._claude:
-            max_tentativas = 5
-            for tentativa in range(1, max_tentativas + 1):
-                try:
-                    if tentativa > 1:
-                        print(f"   🔄 Tentativa {tentativa}/{max_tentativas} [claude-sonnet-4-6]…")
-                    msg = self._claude.messages.create(
-                        model='claude-sonnet-4-6',
-                        max_tokens=8192,
-                        messages=[{'role': 'user', 'content': prompt}],
-                    )
-                    return msg.content[0].text
-                except Exception as e:
-                    msg_e = str(e)
-                    is_retry = ('529' in msg_e or '503' in msg_e or 'overloaded' in msg_e.lower()
-                                or '429' in msg_e or 'rate' in msg_e.lower())
-                    if is_retry and tentativa < max_tentativas:
-                        espera = 30 * tentativa  # 30s, 60s, 90s, 120s
-                        print(f"   ⏳ Claude sobrecarregado — aguardando {espera}s…")
-                        time.sleep(espera)
-                        continue
-                    print(f"   ⚠️  Claude falhou: {msg_e[:120]}")
-                    break  # tenta Gemini como fallback
+    def _chamar_gemini(self, prompt: str, chain=None) -> str:
+        """Alias legado (usado pela triagem). Passa a cadeia adiante."""
+        return self._chamar_llm(prompt, chain=chain)
 
-        # ── Gemini (fallback) ────────────────────────────────────────────────
-        if self._gemini:
-            modelos = [self._modelo]
-            if 'pro' in self._modelo.lower():
-                modelos.append('gemini-2.0-flash')
-            max_tentativas = 3
-            espera_base = 15
-            for modelo in modelos:
-                for tentativa in range(1, max_tentativas + 1):
-                    try:
-                        if tentativa > 1:
-                            print(f"   🔄 Tentativa {tentativa}/{max_tentativas} [{modelo}]…")
-                        response = self._gemini.models.generate_content(
-                            model=modelo,
-                            contents=prompt,
-                            config=types.GenerateContentConfig(
-                                temperature=0.7,
-                                max_output_tokens=32768,
-                            ),
-                        )
-                        print(f"   ✅ Respondido por fallback Gemini: {modelo}")
-                        return response.text
-                    except Exception as e:
-                        msg_e = str(e)
-                        is_retry = ('503' in msg_e or 'UNAVAILABLE' in msg_e
-                                    or '429' in msg_e or 'RESOURCE_EXHAUSTED' in msg_e)
-                        if is_retry and tentativa < max_tentativas:
-                            espera = espera_base * tentativa
-                            print(f"   ⏳ Gemini indisponível ({modelo}) — aguardando {espera}s…")
-                            time.sleep(espera)
-                            continue
-                        elif tentativa == max_tentativas:
-                            print(f"   ⚠️  {modelo} falhou após {max_tentativas} tentativas: {msg_e[:120]}")
-                            break
-                        else:
-                            raise
-
-        raise RuntimeError("Nenhum LLM disponível (Claude + Gemini falharam). Tente novamente mais tarde.")
-
-    # manter alias para não quebrar chamadas internas legadas
-    def _chamar_gemini(self, prompt: str) -> str:
-        return self._chamar_llm(prompt)
+    def _escrever(self, prompt: str) -> str:
+        """Roteiros de narração — voz editorial fixa → tier ESCRITA (Sonnet 5)."""
+        import modelos as M
+        return self._chamar_llm(prompt, chain=M.ESCRITA)
 
     # ── Áudio ─────────────────────────────────────────────────────────────────
 
