@@ -438,8 +438,8 @@ Conteúdo: {resumo_md[:5000]}
 Responda APENAS com JSON (sem markdown):
 {{"category": "categoria exata da lista", "palavras_chave": ["termo1", "termo2", "termo3"], "population": ["lista"], "intervention": ["lista"]}}"""
     try:
-        response = claude.messages.create(model="claude-sonnet-4-20250514", max_tokens=500, messages=[{"role": "user", "content": prompt}])
-        raw = response.content[0].text.strip()
+        response = claude.messages.create(model="claude-sonnet-5", max_tokens=2000, messages=[{"role": "user", "content": prompt}])
+        raw = "".join(b.text for b in response.content if getattr(b, "type", "") == "text").strip()
         json_match = re.search(r'\{.*\}', raw, re.DOTALL)
         if not json_match:
             raise ValueError("Nenhum objeto JSON encontrado na resposta")

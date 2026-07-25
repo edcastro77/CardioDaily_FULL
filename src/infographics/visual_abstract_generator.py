@@ -3,7 +3,7 @@
 Visual Abstract Generator — CardioDaily
 
 Gera Visual Abstracts de 1 página a partir de analysis.md/analysis.json.
-Extração via Claude Sonnet 4 → Jinja2 HTML → Playwright PNG.
+Extração via Claude Sonnet 5 → Jinja2 HTML → Playwright PNG.
 
 Uso:
     # Gerar para um artigo específico
@@ -51,7 +51,7 @@ def upload_visual_abstract_supabase(doc_id: str, png_path: Path) -> str | None:
     Retorna a URL pública ou None em caso de erro.
     """
     supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    svc_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
+    svc_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
 
     if not supabase_url or not svc_key:
         print("  ⚠️  SUPABASE_URL ou SUPABASE_SERVICE_KEY não configurados")
@@ -116,7 +116,7 @@ def upload_visual_abstract_supabase(doc_id: str, png_path: Path) -> str | None:
 def atualizar_campo_supabase(doc_id: str, campo: str, valor: str) -> bool:
     """Atualiza um campo na tabela artigos do Supabase."""
     supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    svc_key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
+    svc_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
 
     if not supabase_url or not svc_key:
         return False
@@ -308,7 +308,7 @@ _REVIEW_SUBTYPES = {
 # ============================================================
 
 class VisualAbstractGenerator:
-    """Gera Visual Abstracts: Claude Sonnet 4 extração → Jinja2 → Playwright PNG."""
+    """Gera Visual Abstracts: Claude Sonnet 5 extração → Jinja2 → Playwright PNG."""
 
     TEMPLATE_NAME = "visual_abstract_template.html"
     CACHE_FILENAME = "visual_abstract_data.json"
@@ -365,7 +365,7 @@ class VisualAbstractGenerator:
     def extrair_dados(self, article_dir: Path, force: bool = False,
                       canonical_type: str | None = None) -> dict:
         """
-        Extrai dados estruturados do analysis.md via Claude Sonnet 4.
+        Extrai dados estruturados do analysis.md via Claude Sonnet 5.
         Usa cache em assets/visual_abstract_data.json se disponível.
 
         canonical_type: quando passado pelo article_analyzer ("original",
@@ -427,7 +427,7 @@ class VisualAbstractGenerator:
         prompt_label = "revisão/meta-análise" if is_review else "artigo original"
         print(f"  📋 Tipo detectado: {prompt_label}")
 
-        # Chamar Claude Sonnet 4 (com retry para timeouts)
+        # Chamar Claude Sonnet 5 (com retry para timeouts)
         prompt = template.format(content=content)
 
         response = None
@@ -435,8 +435,8 @@ class VisualAbstractGenerator:
         for attempt in range(1, 4):  # até 3 tentativas
             try:
                 response = self.anthropic_client.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=2500,
+                    model="claude-sonnet-5",   # 26/Jul/2026: sonnet-4-20250514 morto (404); teto folgado p/ thinking
+                    max_tokens=6000,
                     system=SYSTEM_PROMPT,
                     messages=[{"role": "user", "content": prompt}],
                 )
@@ -451,7 +451,7 @@ class VisualAbstractGenerator:
         if response is None:
             raise last_exc
 
-        raw_response = response.content[0].text
+        raw_response = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")  # thinking-safe (Sonnet 5)
 
         # Extrair JSON da resposta (robusto contra texto extra)
         match = re.search(r"\{.*\}", raw_response, re.DOTALL)
@@ -493,7 +493,7 @@ class VisualAbstractGenerator:
         return template.render(data=data)
 
     def gerar_png(self, article_dir: Path, force: bool = False, open_file: bool = False,
-                  canonical_type: str | None = None) -> Path:
+                  canonical_type: str | None = None, upload_supabase: bool = True) -> Path:
         """
         Pipeline completo: extração → HTML → PNG.
         Retorna o path do PNG gerado.
@@ -512,7 +512,7 @@ class VisualAbstractGenerator:
             return output_path
 
         # 1. Extrair dados
-        print(f"  🔍 Extraindo dados via Claude Sonnet 4...")
+        print(f"  🔍 Extraindo dados via Claude Sonnet 5...")
         data = self.extrair_dados(article_dir, force=force, canonical_type=canonical_type)
 
         # 2. Renderizar HTML
@@ -538,7 +538,9 @@ class VisualAbstractGenerator:
         print(f"     Título: {titulo}")
         print(f"     NAC: {nota}/10 | Cor: {cor}")
 
-        # Upload automático para Supabase Storage
+        # Upload para Supabase Storage — no CHAIN NOVO o Publicador é o dono (staging é local, GOLDEN GATE).
+        if not upload_supabase:
+            return output_path
         try:
             doc_id = article_dir.name
             public_url = upload_visual_abstract_supabase(doc_id, output_path)

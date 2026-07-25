@@ -223,13 +223,12 @@ def extrair_estrutura(conteudo: str, titulo: str, nota: int) -> dict | None:
 
     try:
         resp = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",   # QUARENTENA (CLAUDE.md); modelo OpenAI antigo aposentado; reasoning ⇒ max_completion_tokens
             messages=[
                 {"role": "system", "content": PROMPT_EXTRACAO},
                 {"role": "user",   "content": mensagem},
             ],
-            temperature=0.3,
-            max_tokens=2000,
+            max_completion_tokens=3000,
             response_format={"type": "json_object"},
         )
         raw = resp.choices[0].message.content

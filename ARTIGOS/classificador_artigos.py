@@ -418,7 +418,7 @@ def unique_path(path: str) -> str:
 class GeminiVisionClassifier:
     """Classifica artigos enviando imagem da primeira pagina ao Gemini."""
 
-    def __init__(self, api_key: str = None, model: str = "gemini-2.5-flash",
+    def __init__(self, api_key: str = None, model: str = "gemini-3.6-flash",
                  verbose: bool = False, call_interval: float = 1.0):
         self.api_key = api_key or os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')
         self.model = model
@@ -765,7 +765,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Apenas simular")
     parser.add_argument("--no-rename", action="store_true", help="Nao renomear arquivos")
     parser.add_argument("--dest-root", help="Pasta de destino")
-    parser.add_argument("--model", default="gemini-2.5-flash", help="Modelo Gemini (default: gemini-2.5-flash)")
+    parser.add_argument("--model", default="gemini-3.6-flash", help="Modelo Gemini (default: gemini-3.6-flash)")
     parser.add_argument("--intervalo", type=float, default=1.0, metavar="S",
                         help="Segundos entre chamadas Gemini (default: 1 — tier pago suporta ~60 RPM)")
     parser.add_argument("--lote", type=int, default=0, metavar="N",

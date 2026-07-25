@@ -197,11 +197,10 @@ Lembre: tempo proporcional à qualidade. Seja generoso com os bons, impiedoso co
 
     raw_parts = []
     with client.messages.stream(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",   # 26/Jul: sonnet-4-6 velho → sonnet-5; thinking on ⇒ sem temperature (rejeitado)
         system=SYSTEM_BRIEFING,
         messages=[{"role": "user", "content": user_prompt}],
-        max_tokens=16000,
-        temperature=0.7,   # mais alto que o radar — queremos personalidade
+        max_tokens=24000,          # folga p/ thinking + briefing longo (antes 16000, sem thinking)
     ) as stream:
         for text in stream.text_stream:
             raw_parts.append(text)

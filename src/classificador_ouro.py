@@ -35,7 +35,7 @@ SUB_DUP = "DUPLICATAS"       # mesmo DOI/artigo 2x: não sobrescreve (GOLDEN GAT
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(_ROOT, ".env"), override=True)
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-SONNET = "claude-sonnet-4-6"
+# classificação usa a cadeia EXTRACAO da modelos.py (via llm_client) — modelo vivo + thinking tratados lá
 
 # ============================ CAMADA A — MAPA DE REVISTA ============================
 # prefixo do DOI -> resultado determinístico (sem ler o abstract)
@@ -138,14 +138,9 @@ def classify_sonnet(texto):
     if not ANTHROPIC_KEY or not texto:
         return None
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-        msg = client.messages.create(
-            model=SONNET,
-            max_tokens=20,
-            messages=[{"role": "user", "content": _PROMPT.format(texto=texto[:5000])}],
-        )
-        out = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip().lower()
+        import llm_client, modelos as M              # cadeia EXTRACAO (sonnet-5) + fallback; teto folgado p/ thinking
+        out = llm_client.gerar(M.EXTRACAO, _PROMPT.format(texto=texto[:5000]),
+                               max_tokens=2000).strip().lower()
         for cat in ("revisao_sistematica_meta_analise", "artigo_original", "revisao_geral",
                     "guideline", "ponto_de_vista", "carta_de_pesquisa", "relato_de_caso"):
             if cat in out:

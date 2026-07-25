@@ -599,7 +599,7 @@ from taxonomy import TAXONOMY_CATEGORIES, TAXONOMY_SET as _TAXONOMY_SET, PROMPT_
 # ============================================================================
 
 # Modelos por tipo de artigo — o _call_model roteia pela CONFIG CENTRAL (modelos.py) + cliente unificado.
-# 26/Jul/2026: migrado dos modelos mortos (gemini-2.5-pro / sonnet-4.6) → Sonnet 5. Decisão do Dr. Eduardo:
+# 26/Jul/2026: migrado para Sonnet 5 (cadeia ESCRITA via cliente unificado). Decisão do Dr. Eduardo:
 # análise de artigo = Sonnet 5 (cadeia ESCRITA, com fallback cross-provider pela LEI DA EQUIVALÊNCIA).
 MODEL_CONFIG = {
     'revisao_geral': 'claude-sonnet-5',
@@ -610,7 +610,7 @@ MODEL_CONFIG = {
 }
 
 # Fallback model (caso nenhuma API esteja configurada)
-FALLBACK_MODEL = os.environ.get('OPENAI_MODEL', 'claude-sonnet-4-6')
+FALLBACK_MODEL = os.environ.get('OPENAI_MODEL', 'claude-sonnet-5')
 
 # Cliente OpenAI (fallback)
 _openai_key = os.environ.get('OPENAI_API_KEY')
@@ -1125,7 +1125,7 @@ class ArticleAnalyzer:
     
     def _get_model_for_type(self, article_type):
         """Retorna o modelo apropriado para o tipo de artigo."""
-        return self.model_config.get(article_type, 'claude-sonnet-4-6')
+        return self.model_config.get(article_type, 'claude-sonnet-5')
     
     def _is_claude_model(self, model_name):
         """Verifica se é um modelo Claude."""
@@ -1166,7 +1166,7 @@ class ArticleAnalyzer:
         Chama o modelo Claude usando SDK da Anthropic.
         
         Args:
-            model_name: Nome do modelo (claude-sonnet-4-5-20250929, etc.)
+            model_name: Nome do modelo (claude-sonnet-5, etc.)
             prompt: Prompt do usuário
             system_message: Mensagem de sistema
             temperature: Temperatura de geração
@@ -1190,7 +1190,7 @@ class ArticleAnalyzer:
                     system=system_message if system_message else "",
                     messages=[{"role": "user", "content": prompt}]
                 )
-                return message.content[0].text
+                return "".join(b.text for b in message.content if getattr(b, "type", "") == "text")  # thinking-safe
             except Exception as e:
                 last_exc = e
                 if attempt <= len(delays):
@@ -1204,7 +1204,7 @@ class ArticleAnalyzer:
         Chama o modelo Gemini usando SDK nativo.
         
         Args:
-            model_name: Nome do modelo (gemini-2.5-pro, claude-sonnet-4-5, etc.)
+            model_name: Nome do modelo (claude-sonnet-5, gemini-3.1-pro-preview, etc.)
             prompt: Prompt do usuário
             system_message: Mensagem de sistema (será concatenada ao prompt)
             temperature: Temperatura de geração
@@ -1290,10 +1290,10 @@ class ArticleAnalyzer:
 
         Estratégia:
           - 3 retries no modelo solicitado (2.5 Pro) com backoff crescente
-          - Se ainda falhar, 1 tentativa com gemini-2.5-flash (mais disponível)
+          - Se ainda falhar, 1 tentativa com gemini-3.6-flash (mais disponível)
           - Se Flash também falhar, levanta exceção
         """
-        FLASH_FALLBACK = 'gemini-2.5-flash'
+        FLASH_FALLBACK = 'gemini-3.6-flash'
         delays = [15, 45, 120]  # 3 tentativas no modelo original
         last_exc = None
         is_transient = lambda e: any(k in str(e).lower() for k in (
@@ -1333,7 +1333,7 @@ class ArticleAnalyzer:
         """Roteia via CLIENTE UNIFICADO (llm_client) + CONFIG CENTRAL (modelos.py). É aqui que roda a
         LEI DA EQUIVALÊNCIA: a cadeia cross-provider (Claude 5 → GPT-5.6 → Gemini 3.x Pro) tenta cada
         modelo até um responder, e o temperature é removido onde o modelo de raciocínio rejeita.
-        Migração 26/Jul/2026 — mata gemini-2.5-pro (morto) e o crash de temperature do Sonnet 5.
+        Migração 26/Jul/2026 — cliente unificado (mata modelos mortos e o crash de temperature do Sonnet 5).
 
         model_name vira só o TIER (haiku/flash→RAPIDO, opus/sol→PROFUNDO, resto→ESCRITA). O master
         prompt entra como CONTEXTO cacheável (estável entre artigos → leitura a ~10%); o artigo, como instrução.
@@ -1496,7 +1496,7 @@ class ArticleAnalyzer:
             def llm_call(prompt):
                 try:
                     return self._call_model(
-                        model_name='claude-sonnet-4-6',
+                        model_name='claude-sonnet-5',
                         prompt=prompt,
                         temperature=0.1,
                         max_tokens=8000  # movido de Gemini (zerado) pro Claude
@@ -1611,7 +1611,7 @@ class ArticleAnalyzer:
 
         try:
             response_text = self._call_model(
-                model_name='claude-sonnet-4-6',
+                model_name='claude-sonnet-5',
                 prompt=prompt,
                 temperature=0.1,
                 max_tokens=8000,  # movido de Gemini (zerado) pro Claude

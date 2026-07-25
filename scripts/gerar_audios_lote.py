@@ -172,10 +172,9 @@ Escreva APENAS o texto que será falado.
 Crie o script agora:"""
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5.6-terra",   # modelo OpenAI antigo aposentado; reasoning ⇒ sem temperature, max_completion_tokens
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
-        max_tokens=6000,
+        max_completion_tokens=8000,
     )
     return response.choices[0].message.content
 

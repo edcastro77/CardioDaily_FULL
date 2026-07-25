@@ -309,13 +309,12 @@ def analisar_com_gpt4o(texto: str, meta: dict) -> dict | None:
 
     try:
         resp = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",   # SUPERSEDED (corrente modular assume); modelo OpenAI antigo aposentado; reasoning ⇒ max_completion_tokens
             messages=[
                 {"role": "system", "content": PROMPT_ANALISE},
                 {"role": "user",   "content": content},
             ],
-            temperature=0.2,
-            max_tokens=3000,
+            max_completion_tokens=4000,
             response_format={"type": "json_object"},
         )
         return json.loads(resp.choices[0].message.content)
@@ -386,13 +385,12 @@ def gerar_script_podcast(analise: dict, texto_pdf: str) -> str:
     entrada = json.dumps(campos, ensure_ascii=False, indent=2)
 
     resp = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5.6-terra",   # SUPERSEDED (corrente modular assume); modelo OpenAI antigo aposentado; reasoning ⇒ max_completion_tokens
         messages=[
             {"role": "system", "content": prompt_sistema},
             {"role": "user",   "content": entrada},
         ],
-        temperature=0.3,
-        max_tokens=500,
+        max_completion_tokens=2000,
     )
     return resp.choices[0].message.content
 

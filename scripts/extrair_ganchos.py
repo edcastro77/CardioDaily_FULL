@@ -61,7 +61,7 @@ CORPUS_DIR = Path(__file__).parent.parent / "outputs" / "corpus"
 LOG_DIR = Path(__file__).parent.parent / "archive" / "logs_operacionais"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-MODELO = "gemini-2.5-flash"
+MODELO = "gemini-3.6-flash"
 MAX_CHARS_GANCHO = 90
 
 if not (SUPABASE_URL and SUPABASE_SERVICE_KEY and GOOGLE_API_KEY):

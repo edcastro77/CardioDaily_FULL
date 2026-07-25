@@ -86,12 +86,8 @@ def extrair_conteudo_marketing(analysis_md: str, artigo: dict) -> dict | None:
     prompt = PROMPT.replace("{analysis_md}", contexto + analysis_md[:12000])
 
     try:
-        resp = CLIENT.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        texto = resp.content[0].text.strip()
+        import llm_client, modelos as M              # cadeia EXTRACAO (sonnet-5): modelo vivo + thinking/temp tratados
+        texto = llm_client.gerar(M.EXTRACAO, prompt, max_tokens=4000).strip()
 
         # Extrair bloco JSON da resposta
         if "```json" in texto:

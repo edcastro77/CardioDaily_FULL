@@ -591,11 +591,11 @@ class RadarPubMed:
         self._elevenlabs_key = None
         self._ncbi_key = None
         self._email = None
-        self._modelo = 'gemini-2.5-pro'
+        self._modelo = 'claude-sonnet-5'
         self._configured = False
 
     def configure(self, gemini_key: str = '', email: str = '', ncbi_key: str = '',
-                  elevenlabs_key: str = '', modelo: str = 'gemini-2.5-pro',
+                  elevenlabs_key: str = '', modelo: str = 'claude-sonnet-5',
                   openai_key: str = '', anthropic_key: str = '',
                   cartesia_key: str = ''):
         """Configura APIs. Deve ser chamado antes de usar."""
