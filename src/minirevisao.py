@@ -16,7 +16,7 @@ estatística). Aqui o valor é outro, e é o método do Dr. Eduardo (o "caderno 
 
 Uso:  python minirevisao.py <ARTIGO.pdf> [pasta_saida]
 """
-import os, sys, json, subprocess, shutil, tempfile
+import os, sys, json, subprocess, shutil, tempfile, base64, glob, html as _html
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -242,6 +242,84 @@ def render_mermaid(codigo, out_png):
         return None
 
 
+_FAIXA_ROTULO = {0: "0 · vaselina (retido)", 1: "1 · consolida + acrescenta útil", 2: "2 · grande interesse (modelo prático)"}
+
+
+def montar_card(dst, base, r):
+    """Escreve o ENTREGÁVEL LEGÍVEL da minirevisão: card em Markdown + HTML (fluxograma embutido).
+    É o que o Dr. lê — não o JSON cru. Gera só p/ faixa ≥1 (faixa 0 é vaselina/retido)."""
+    faixa = int(r.get("faixa", 0))
+    rot = _FAIXA_ROTULO.get(faixa, str(faixa))
+    cond = r.get("condutas") or []
+    inc = r.get("incertezas") or []
+    dlt = r.get("delta") or []
+    fontes = " · ".join(r.get("fontes_baseline") or []) or "—"
+    png = glob.glob(os.path.join(dst, base + "_fluxograma.png"))
+
+    # ---------- Markdown (portável, git-friendly) ----------
+    md = [f"# {r.get('titulo','(sem título)')}",
+          f"\n**Tema:** {r.get('tema','')}  \n**Faixa:** {rot}",
+          f"\n> {r.get('faixa_justificativa','')}",
+          "\n## Condutas práticas"]
+    md += [f"- {c}" for c in cond] or ["- (nenhuma)"]
+    if png:
+        md.append(f"\n## Fluxograma da estratégia de abordagem\n\n![fluxograma]({os.path.basename(png[0])})")
+    if inc:
+        md.append("\n## Incertezas (o que fica em aberto)"); md += [f"- {x}" for x in inc]
+    if r.get("aplicabilidade_brasil"):
+        md.append(f"\n## Aplicabilidade no Brasil\n\n{r['aplicabilidade_brasil']}")
+    if dlt:
+        md.append("\n## O que a revisão acrescenta à diretriz (delta)"); md += [f"- {x}" for x in dlt]
+    md.append(f"\n---\n_Baseline (diretriz vigente): {fontes}. Trilha minirevisão CardioDaily — não sobe no Supabase. "
+              f"Conteúdo educativo; não substitui julgamento clínico._")
+    open(os.path.join(dst, base + "_card.md"), "w", encoding="utf-8").write("\n".join(md))
+
+    # ---------- HTML (bonito, autocontido, fluxograma embutido) ----------
+    def esc(s): return _html.escape(str(s or ""))
+    img = ""
+    if png:
+        b64 = base64.b64encode(open(png[0], "rb").read()).decode()
+        img = (f'<h2>Fluxograma da estratégia de abordagem</h2>'
+               f'<div class="flow"><img alt="fluxograma" src="data:image/png;base64,{b64}"></div>')
+    li_cond = "".join(f"<li>{esc(c)}</li>" for c in cond)
+    li_inc = "".join(f"<li>{esc(x)}</li>" for x in inc)
+    li_del = "".join(f"<li>{esc(x)}</li>" for x in dlt)
+    aplic = f'<div class="aplic"><b>Aplicabilidade no Brasil.</b> {esc(r.get("aplicabilidade_brasil"))}</div>' if r.get("aplicabilidade_brasil") else ""
+    html_doc = f"""<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc(r.get('titulo'))} — Minirevisão CardioDaily</title><style>
+:root{{--azul:#0B3D91;--verm:#C00000;--ink:#16233a;--muted:#5a6b85;--bg:#fff;--surf:#f4f7fc;--bd:#d6dfef}}
+*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Helvetica,Arial,sans-serif}}
+.wrap{{max-width:860px;margin:0 auto;padding:28px 20px 64px}}
+.kick{{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--verm);font-weight:700}}
+h1{{color:var(--azul);font-size:26px;margin:6px 0 4px;line-height:1.18}}
+.tema{{color:var(--muted);font-size:14px}}
+.badge{{display:inline-block;margin-top:10px;border:1px solid var(--azul);color:var(--azul);border-radius:999px;padding:4px 13px;font-weight:700;font-size:13px}}
+.just{{background:var(--surf);border-left:4px solid var(--azul);border-radius:10px;padding:12px 15px;margin:16px 0;font-size:14px}}
+h2{{color:var(--azul);font-size:17px;margin:26px 0 8px}}
+ul.cond{{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}}
+ul.cond li{{background:var(--surf);border:1px solid var(--bd);border-left:3px solid var(--verm);border-radius:9px;padding:10px 13px;font-size:14px}}
+ul.mini{{padding-left:18px;color:var(--muted);font-size:13.5px}}ul.mini li{{margin-bottom:5px}}
+.aplic{{background:#eaf0fa;border:1px solid var(--bd);border-radius:10px;padding:12px 14px;font-size:13.5px;margin-top:10px}}.aplic b{{color:var(--azul)}}
+.flow{{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:12px;overflow-x:auto;text-align:center}}
+.flow img{{max-width:100%;height:auto}}
+.foot{{margin-top:26px;font-size:12px;color:var(--muted);border-top:1px solid var(--bd);padding-top:12px}}
+</style></head><body><div class="wrap">
+<div class="kick">CardioDaily · minirevisão · opinião de especialista</div>
+<h1>{esc(r.get('titulo'))}</h1><div class="tema">Tema: {esc(r.get('tema'))}</div>
+<div class="badge">Faixa {esc(rot)}</div>
+<div class="just">{esc(r.get('faixa_justificativa'))}</div>
+<h2>Condutas práticas</h2><ul class="cond">{li_cond}</ul>
+{img}
+{'<h2>Incertezas (o que fica em aberto)</h2><ul class="mini">'+li_inc+'</ul>' if li_inc else ''}
+{aplic}
+{'<h2>O que a revisão acrescenta à diretriz</h2><ul class="mini">'+li_del+'</ul>' if li_del else ''}
+<div class="foot">Baseline (diretriz vigente): {esc(fontes)}. Trilha minirevisão CardioDaily — não sobe no Supabase. Conteúdo educativo; não substitui julgamento clínico.</div>
+</div></body></html>"""
+    open(os.path.join(dst, base + "_card.html"), "w", encoding="utf-8").write(html_doc)
+    return os.path.join(dst, base + "_card.html")
+
+
 def processar_pdf(pdf, saida_base):
     """Processa 1 PDF de minirevisão → pasta própria em saida_base. Faixa 0 fica retido (sem fluxograma).
     NÃO sobe no Supabase (é ferramenta standalone, como o Pesquisador). Devolve (faixa, sobe)."""
@@ -259,8 +337,25 @@ def processar_pdf(pdf, saida_base):
     if sobe:
         png = render_mermaid(r["fluxograma_mermaid"], os.path.join(dst, base + "_fluxograma.png"))
         print(f"    fluxograma: {os.path.basename(png) if png else '.mmd (render pendente)'}")
+        card = montar_card(dst, base, r)             # ENTREGÁVEL LEGÍVEL (md + html) — o que se lê
+        print(f"    card: {os.path.basename(card)}")
     open(os.path.join(dst, "_OK"), "w").write("")
     return faixa, sobe
+
+
+def refazer_cards(saida):
+    """Pós-passo: (re)gera os cards legíveis a partir dos *_minirev.json já produzidos (sem re-analisar)."""
+    jsons = glob.glob(os.path.join(saida, "*", "*_minirev.json"))
+    n = 0
+    for j in jsons:
+        r = json.load(open(j, encoding="utf-8"))
+        if int(r.get("faixa", 0)) < 1:              # faixa 0 é retido, sem card
+            continue
+        dst = os.path.dirname(j)
+        base = os.path.basename(j).replace("_minirev.json", "")
+        montar_card(dst, base, r); n += 1
+    print(f"cards (re)gerados: {n} · em {saida}")
+    return n
 
 
 def _pdfs(caminho):
@@ -276,7 +371,11 @@ def _pdfs(caminho):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("uso: python minirevisao.py <PDF|pasta> [saida]"); sys.exit(1)
+        print("uso: python minirevisao.py <PDF|pasta> [saida]  |  --cards <saida>"); sys.exit(1)
+    if sys.argv[1] == "--cards":                     # pós-passo: regenera cards dos JSONs existentes
+        saida = os.path.expanduser(sys.argv[2]) if len(sys.argv) > 2 else \
+            os.path.abspath(os.path.join(_HERE, "..", "outputs", "MINIRREVISOES"))
+        refazer_cards(saida); sys.exit(0)
     entrada = os.path.expanduser(sys.argv[1])
     saida = os.path.expanduser(sys.argv[2]) if len(sys.argv) > 2 else \
         os.path.abspath(os.path.join(_HERE, "..", "outputs", "MINIRREVISOES"))
