@@ -13,5 +13,7 @@ logs/
 .env
 inputs/
 .venv/
-chaves/
+chaves/config.sh
+chaves/LEIA-ME.md
+chaves/.DS_Store
 *_fatos.json
