@@ -37,6 +37,15 @@ def cacar_ingles(texto):
     return sorted(set(achados), key=str.lower)
 
 
+def _transitorio_tts(e):
+    """Erro de rede/carga no TTS que vale re-tentar (não é erro de conteúdo). Cobre o
+    'incomplete chunked read' (conexão fechada no meio do streaming) que derrubava artigo ≥8."""
+    s = str(e).lower()
+    return any(k in s for k in ("timeout", "timed out", "connection", "network", "overloaded",
+                                "incomplete", "chunked", "peer closed", "protocol", "reset",
+                                "rate limit", "429", "500", "502", "503", "504", "temporarily"))
+
+
 def falar(texto, caminho_mp3):
     """Gera o MP3 do roteiro com a config de TTS do .env (OpenAI). ElevenLabs é EXCLUSIVO do Radar.
     Lê: OPENAI_TTS_MODEL, OPENAI_TTS_VOICE, OPENAI_TTS_SPEED, OPENAI_TTS_INSTRUCTIONS."""
@@ -50,21 +59,55 @@ def falar(texto, caminho_mp3):
     except ValueError:
         speed = 1.0
     cli = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
-    base = dict(model=model, voice=voice, input=texto[:4000])
-    if instr:
-        base["instructions"] = instr                     # steering de voz (só gpt-4o-*-tts)
-    # tenta com speed; se o modelo não aceitar, refaz sem speed
-    for kwargs in ({**base, "speed": speed}, base):
-        try:
-            with cli.audio.speech.with_streaming_response.create(**kwargs) as resp:
-                resp.stream_to_file(caminho_mp3)
-            return caminho_mp3
-        except TypeError:
-            continue
-        except Exception as e:
-            if "speed" in str(e).lower() and "speed" in kwargs:
-                continue
-            raise
+
+    def _falar_pedaco(txt, destino):
+        import time
+        base = dict(model=model, voice=voice, input=txt)
+        if instr:
+            base["instructions"] = instr                 # steering de voz (só gpt-4o-*-tts)
+        for kwargs in ({**base, "speed": speed}, base):  # tenta com speed; refaz sem se o modelo não aceitar
+            for tentativa in (1, 2, 3, 4):               # rede pode cair NO MEIO do streaming (chunked read)
+                try:
+                    with cli.audio.speech.with_streaming_response.create(**kwargs) as resp:
+                        resp.stream_to_file(destino)
+                    return
+                except TypeError:
+                    break                                # kwarg não aceito → tenta a próxima variante
+                except Exception as e:
+                    if "speed" in str(e).lower() and "speed" in kwargs:
+                        break                            # tira o speed → próxima variante
+                    if _transitorio_tts(e) and tentativa < 4:
+                        time.sleep(3 * tentativa); continue   # blip de rede → espera e refaz o MESMO pedaço
+                    raise
+        raise RuntimeError("TTS não gerou o áudio após as tentativas")
+
+    # O TTS aceita ~4000 chars por chamada. Roteiro maior é FATIADO em FRASES (nunca corta no meio)
+    # e os pedaços são emendados — antes o texto era truncado e o áudio terminava no meio da frase.
+    pedacos, atual = [], ""
+    for frase in re.split(r"(?<=[.!?])\s+", (texto or "").strip()):
+        if len(atual) + len(frase) + 1 > 3800 and atual:
+            pedacos.append(atual); atual = frase
+        else:
+            atual = f"{atual} {frase}".strip()
+    if atual:
+        pedacos.append(atual)
+    if not pedacos:
+        return caminho_mp3
+
+    if len(pedacos) == 1:
+        _falar_pedaco(pedacos[0], caminho_mp3)
+        return caminho_mp3
+
+    partes = []
+    for i, p in enumerate(pedacos):
+        tmp = f"{caminho_mp3}.parte{i}"
+        _falar_pedaco(p, tmp)
+        partes.append(tmp)
+    with open(caminho_mp3, "wb") as saida:               # emenda os MP3 (frames sequenciais)
+        for p in partes:
+            with open(p, "rb") as f:
+                saida.write(f.read())
+            os.remove(p)
     return caminho_mp3
 
 

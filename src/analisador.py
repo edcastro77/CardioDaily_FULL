@@ -49,9 +49,14 @@ def _gerar(prompt_file, contexto, max_tokens):
                   .replace("{veredito}", "(use o VEREDITO do contexto acima)")
                   .replace("{article_text}", "(use o TEXTO do contexto acima)"))
     txt = llm_client.gerar(M.ESCRITA, instrucao, contexto=contexto, max_tokens=max_tokens, temperatura=0.4)
-    if not txt or not txt.strip():                       # thinking do Sonnet 5 pode sufocar a saída → falha falado
-        raise ValueError(f"{prompt_file}: modelo {llm_client._ULTIMO_MODELO[0]} devolveu VAZIO "
-                         f"(max_tokens={max_tokens}). Aumente o teto ou verifique o prompt.")
+    # PISO DE TAMANHO: o thinking do Sonnet 5 come tokens antes de escrever — saída vazia OU truncada
+    # não pode passar como se fosse boa (perícia capenga no site). Falha falado e o artigo volta pra fila.
+    minimo = {"redator_prompt.md": 3000, "acri_prompt.md": 400, "script_audio_prompt.md": 900}.get(prompt_file, 1)
+    n = len((txt or "").strip())
+    if n < minimo:
+        raise ValueError(f"{prompt_file}: saída CURTA demais ({n} chars, mínimo {minimo}) — "
+                         f"modelo {llm_client._ULTIMO_MODELO[0]}, max_tokens={max_tokens}. "
+                         f"Provável truncamento pelo thinking; artigo volta pra fila.")
     return txt
 
 
@@ -75,12 +80,12 @@ def processar(pdf, staging):
                 f"VEREDITO DO MOTOR (use estes números, não invente outros):\n{ver}\n\n"
                 f"TEXTO DO ARTIGO:\n{texto[:40000]}")
 
-    P.registro_canonico(pdf)                                   # canônico SEMPRE (retido ou publicado)
+    P.registro_canonico(pdf, fatos)                            # canônico SEMPRE (retido ou publicado) — MESMOS fatos/nota da porta
     shutil.move(os.path.join(_HERE, base + "_CANONICO.md"), os.path.join(dst, base + "_CANONICO.md"))
 
     if sobe:                                                   # ≥6
-        open(os.path.join(dst, base + "_ACRI.txt"), "w").write(_gerar("acri_prompt.md", contexto, 3000))
-        open(os.path.join(dst, base + "_analise.md"), "w").write(_gerar("redator_prompt.md", contexto, 6000))
+        open(os.path.join(dst, base + "_ACRI.txt"), "w").write(_gerar("acri_prompt.md", contexto, 8000))
+        open(os.path.join(dst, base + "_analise.md"), "w").write(_gerar("redator_prompt.md", contexto, 16000))
         try:                                                   # PDF da análise crítica (peça central do site)
             from pdf_analise import gerar_pdf_de_pasta
             gerar_pdf_de_pasta(dst)
@@ -93,12 +98,39 @@ def processar(pdf, staging):
             print(f"       ⚠️  Visual Abstract não gerado ({type(e).__name__}: {e}) — rende na Mac")
     if r["aplic"] >= 8:                                        # áudio
         from voz_utils import cacar_ingles, falar
-        roteiro = _gerar("script_audio_prompt.md", contexto, 3000)
+        roteiro = _gerar("script_audio_prompt.md", contexto, 8000)
         open(os.path.join(dst, base + "_roteiro_audio.txt"), "w").write(roteiro)
         if cacar_ingles(roteiro):
             open(os.path.join(dst, "_REVISAR_termos_ingles.txt"), "w").write(", ".join(cacar_ingles(roteiro)))
         falar(roteiro, os.path.join(dst, base + "_audio.mp3"))   # config do .env; ElevenLabs = só Radar
+    _conferir_entregaveis(dst, base, r["aplic"])              # BURACO ZERO: faltou algo → erro, volta pra fila
+    open(os.path.join(dst, "_OK"), "w").write("")             # só aqui: artigo COMPLETO de verdade
     return base, r["aplic"], r["muda_conduta"], ents, sobe
+
+
+def _conferir_entregaveis(dst, base, nota):
+    """BURACO ZERO no nível do artigo: só é 'pronto' se TUDO que a porta manda existir e ter tamanho.
+    Antes o _OK era escrito mesmo faltando peça (ex.: nota ≥7 sem Visual Abstract), e o artigo saía da
+    fila incompleto — depois era recusado no Publicador. Agora falha aqui e volta pra fila."""
+    def _ok(padrao, minimo):
+        import glob
+        achados = glob.glob(os.path.join(dst, padrao))
+        return any(os.path.getsize(a) >= minimo for a in achados)
+
+    faltando = []
+    if not _ok(base + "_CANONICO.md", 200):
+        faltando.append("canônico")
+    if nota >= 6:
+        if not _ok(base + "_ACRI.txt", 400):      faltando.append("ACRI")
+        if not _ok(base + "_analise.md", 3000):   faltando.append("perícia (≥3k)")
+        if not _ok(base + "_analise.pdf", 10000): faltando.append("PDF da perícia")
+    if nota >= 7 and not _ok(base + "_visual.png", 50000):
+        faltando.append("Visual Abstract")
+    if nota >= 8 and not _ok(base + "_audio.mp3", 100000):
+        faltando.append("áudio")
+    if faltando:
+        raise RuntimeError(f"INCOMPLETO (nota {nota}) — faltou: {', '.join(faltando)}. "
+                           f"Artigo volta pra fila (buraco zero).")
 
 
 def _gerar_visual_abstract(fatos, r, dst, base):
@@ -153,6 +185,10 @@ if __name__ == "__main__":
         print(f"ANALISADOR — {len(pdfs)} artigo(s)  →  {staging}")
         print("(GOLDEN GATE: revise o staging antes de publicar)\n")
         for pdf in pdfs:
+            base = os.path.splitext(os.path.basename(pdf))[0]
+            if os.path.exists(os.path.join(staging, base, "_OK")):   # RETOMÁVEL: pula os já concluídos
+                print(f"  {base[:46]:46} ⏭️  já pronto (pulado)")
+                continue
             try:
                 base, nota, mc, ents, sobe = processar(pdf, staging)
                 print(f"  {base[:46]:46} nota {nota:>2} · {'SOBE' if sobe else 'FICA'} · {' + '.join(ents)}")

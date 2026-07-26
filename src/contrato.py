@@ -55,10 +55,13 @@ def validar(ficha, checar_arquivos=True):
     elif dp not in TEMAS:
         v.append(f"doenca_principal fora da lista do site: '{dp}'")
 
-    # 4) nota (motor de rigor)
+    # 4) nota (motor de rigor) — e a PORTA: nota <6 FICA retido, não vai pro site.
     n = ficha.get("nota_aplicabilidade")
     if not isinstance(n, int) or not (1 <= n <= 10):
         v.append(f"nota_aplicabilidade inválida: {n!r} (int 1–10)")
+    elif n < 6:
+        v.append(f"nota {n} < 6: por regra o artigo FICA retido (não publica). "
+                 f"Bug real: um nota 5 foi parar no Supabase em 25/07.")
 
     # 5) keywords
     kw = ficha.get("keywords")

@@ -63,8 +63,66 @@ def _bloco_acri(acri, letra):
 
 
 def _frases(t, minlen=25, maxlen=240):
-    partes = re.split(r"(?<=[.;])\s+", t)
-    return [p.strip() for p in partes if minlen <= len(p.strip()) <= maxlen]
+    """Frases acionáveis p/ bullets/gancho. Frase densa que passa de `maxlen` NÃO é descartada
+    (era o buraco que zerava os bullets de artigo bem escrito → contrato recusava): é SEGMENTADA
+    em cláusulas legíveis — travessão/;/: primeiro, vírgula só se ainda estourar, palavra no extremo."""
+    out = []
+    for p in re.split(r"(?<=[.;!?])\s+", (t or "").strip()):
+        p = p.strip()
+        if not p:
+            continue
+        if len(p) <= maxlen:
+            if len(p) >= minlen:
+                out.append(p)
+        else:
+            out.extend(_segmentar(p, minlen, maxlen))
+    return out
+
+
+def _push(out, frag, minlen, maxlen):
+    frag = frag.strip(" ,;:—–")
+    if not frag:
+        return
+    if len(frag) < minlen:                                   # curto demais → cola no anterior se couber
+        if out and len(out[-1]) + 1 + len(frag) <= maxlen:
+            out[-1] = f"{out[-1]} {frag}"
+    else:
+        out.append(frag)
+
+
+def _por_palavra(c, maxlen):
+    pedacos, buf = [], ""
+    for w in c.split():
+        cand = f"{buf} {w}".strip()
+        if len(cand) <= maxlen:
+            buf = cand
+        elif buf:
+            pedacos.append(buf); buf = w
+        else:
+            buf = w
+    if buf:
+        pedacos.append(buf)
+    return pedacos
+
+
+def _segmentar(frase, minlen=25, maxlen=240):
+    """Quebra uma frase longa demais em cláusulas dentro de [minlen, maxlen], sem perder conteúdo."""
+    out = []
+    for forte in re.split(r"\s*[—–;:]\s*", frase):           # 1) marcadores fortes (não vírgula)
+        forte = forte.strip(" ,;:—–")
+        if not forte:
+            continue
+        if len(forte) <= maxlen:
+            _push(out, forte, minlen, maxlen)
+            continue
+        for sub in re.split(r",\s+", forte):                 # 2) só agora a vírgula
+            sub = sub.strip(" ,")
+            if len(sub) <= maxlen:
+                _push(out, sub, minlen, maxlen)
+            else:                                            # 3) extremo: quebra por palavra
+                for w in _por_palavra(sub, maxlen):
+                    _push(out, w, minlen, maxlen)
+    return out
 
 
 def _tema(selo, keywords):

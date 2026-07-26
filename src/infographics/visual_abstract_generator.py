@@ -453,12 +453,24 @@ class VisualAbstractGenerator:
 
         raw_response = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")  # thinking-safe (Sonnet 5)
 
-        # Extrair JSON da resposta (robusto contra texto extra)
+        # Extrair JSON da resposta, tolerando as malformações comuns de LLM (mesma classe de falha
+        # que derrubou a extração em 25/07: vírgula sobrando, caractere de controle, comentário //).
         match = re.search(r"\{.*\}", raw_response, re.DOTALL)
         if not match:
             raise ValueError(f"Claude não retornou JSON válido: {raw_response[:200]}")
-
-        data = json.loads(match.group())
+        _bruto = match.group()
+        for _arruma in (lambda s: s,
+                        lambda s: re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", s),
+                        lambda s: re.sub(r",(\s*[}\]])", r"\1", s),
+                        lambda s: re.sub(r",(\s*[}\]])", r"\1",
+                                         re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", s)),
+                        lambda s: re.sub(r"//[^\n]*", "", re.sub(r",(\s*[}\]])", r"\1", s))):
+            try:
+                data = json.loads(_arruma(_bruto), strict=False); break
+            except Exception:
+                data = None
+        if data is None:
+            raise ValueError(f"JSON do Visual Abstract não pôde ser lido: {_bruto[:200]}")
 
         # Sobrescrever nota com a do pipeline (mais confiável)
         if nota_existente and nota_existente > 0:

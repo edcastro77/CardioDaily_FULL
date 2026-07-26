@@ -13,3 +13,5 @@ logs/
 .env
 inputs/
 .venv/
+chaves/
+*_fatos.json

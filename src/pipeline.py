@@ -9,7 +9,10 @@ import os, sys, json, re, fitz
 import analise as A, notas_prototipo as N
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_DOI = re.compile(r"10\.\d{4,9}/[-._;()/:A-Za-z0-9]+")
+# DOI: UMA fonte só — a função endurecida do classificador (commit "6 travas": aguenta DOI quebrado
+# em duas linhas pelo PDF, valida caractere a caractere). Havia aqui uma regex crua DUPLICADA que
+# nunca recebeu as travas — foi ela que gravou "10.1056/NEJMoa0904327)" no Supabase. Duplicata eliminada.
+from classificador_pubmed import extrair_doi
 
 _TIPO = {"rct": "artigo_original", "coorte": "artigo_original", "registro": "artigo_original",
          "transversal": "artigo_original", "caso_controle": "artigo_original",
@@ -20,15 +23,16 @@ def yaml_list(xs):
     return "[" + ", ".join(f'"{x}"' for x in xs) + "]"
 
 
-def registro_canonico(pdf):
+def registro_canonico(pdf, fatos=None):
+    """Monta o CANÔNICO. `fatos` deve vir de quem JÁ extraiu (o analisador) — assim há UMA extração
+    e UMA nota por artigo (o canônico NUNCA diverge da porta que decidiu os entregáveis). Só quando
+    chamado solto (CLI `python pipeline.py <pdf>`) é que extrai aqui."""
     base = os.path.splitext(os.path.basename(pdf))[0]
-    cache = os.path.join(_HERE, base + "_fatos.json")
-    fatos = json.load(open(cache)) if (os.path.exists(cache) and "keywords" in json.load(open(cache))) \
-        else A.extrair_fatos(pdf)
-    json.dump(fatos, open(cache, "w"), ensure_ascii=False)
+    if fatos is None:
+        fatos = A.extrair_fatos(pdf)
     r = N.score(fatos)
     texto = "".join(p.get_text() for p in fitz.open(pdf))
-    m = _DOI.search(texto); doi = re.sub(r"/\d{6,}$", "", m.group(0).rstrip(".")) if m else "n/a"
+    doi = extrair_doi(texto) or "n/a"      # sem DOI NÃO trava: o doc_id cai no slug do título (ficha_site)
 
     y = []
     y.append("---")

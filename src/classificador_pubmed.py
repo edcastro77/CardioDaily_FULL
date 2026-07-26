@@ -113,6 +113,15 @@ def extrair_doi(texto):
             break
     doi = "".join(out).rstrip(".")
     doi = re.sub(r"/\d{6,}$", "", doi)  # apara id de manuscrito espúrio (ex: Oxford .../oeag107/8724699)
+    # PARÊNTESE DE CITAÇÃO: '(doi:10.1056/NEJMoa0904327)' deixava o ')' colado no DOI — e o doc_id é a
+    # CHAVE do upsert no Supabase (bug real visto no banco em 25/07). Mas parêntese é LEGÍTIMO em DOI
+    # (ex.: 10.1016/S0140-6736(01)05627-6), então só tiramos o que está DESBALANCEADO.
+    while doi.endswith((")", "]", "}")):
+        abre, fecha = {")": "(", "]": "[", "}": "{"}[doi[-1]], doi[-1]
+        if doi.count(abre) >= doi.count(fecha):
+            break                        # balanceado → o parêntese é PARTE do DOI, mantém
+        doi = doi[:-1]
+    doi = doi.rstrip(".,;:")
     return doi or None
 
 

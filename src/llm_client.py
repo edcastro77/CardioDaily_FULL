@@ -31,14 +31,63 @@ def gerar(chain, instrucao, contexto=None, max_tokens=2000, temperatura=0.4):
         fn = {"anthropic": _anthropic, "openai": _openai, "google": _gemini}.get(prov)
         if fn is None:
             erros.append(f"{mod}: provedor desconhecido"); continue
-        try:
-            txt = fn(mod, instrucao, contexto, max_tokens, temperatura)
-            _ULTIMO_MODELO[0] = mod
-            return txt
-        except Exception as e:
-            erros.append(f"{mod}: {type(e).__name__}: {str(e)[:140]}")
-            continue
+        for tentativa in (1, 2, 3):                   # retry com espera crescente antes de trocar de modelo
+            try:
+                txt = fn(mod, instrucao, contexto, max_tokens, temperatura)
+                _ULTIMO_MODELO[0] = mod
+                return txt
+            except Exception as e:
+                if _transitorio(e) and tentativa < 3:  # rede/429/sobrecarga → espera e tenta o MESMO modelo
+                    import time; time.sleep(5 * tentativa); continue
+                erros.append(f"{mod}: {type(e).__name__}: {str(e)[:140]}")
+                break
     raise RuntimeError("Todos os modelos da cadeia falharam:\n  " + "\n  ".join(erros))
+
+
+def _transitorio(e):
+    """Erro de rede/carga que vale re-tentar (não é erro de lógica)."""
+    s = str(e).lower()
+    return any(k in s for k in ("timeout", "timed out", "connection", "network", "overloaded",
+                                "rate limit", "429", "500", "502", "503", "504", "temporarily"))
+
+
+def gerar_json(chain, instrucao, schema, contexto=None, max_tokens=8000, nome="extrair"):
+    """Devolve DICT — não texto. Usa TOOL USE (saída estruturada): a API OBRIGA o modelo a entregar
+    o objeto no formato do schema. JSON malformado (vírgula sobrando, caractere de controle, preâmbulo,
+    comentário) deixa de ser POSSÍVEL — não é reparo, é impossibilidade. Mata a classe inteira de falha.
+
+    Fallback: se um provedor não suportar tool use, cai no caminho de texto + parsing tolerante.
+    """
+    erros = []
+    for mod in chain:
+        if M.provedor(mod) != "anthropic":          # tool use implementado p/ Anthropic; outros → texto
+            continue
+        for tentativa in (1, 2, 3):                  # retry com espera crescente (rede/429/sobrecarga)
+            try:
+                import anthropic
+                cli = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+                if contexto:
+                    content = [{"type": "text", "text": contexto, "cache_control": {"type": "ephemeral"}},
+                               {"type": "text", "text": instrucao}]
+                else:
+                    content = instrucao
+                r = cli.messages.create(
+                    model=mod, max_tokens=max_tokens,
+                    tools=[{"name": nome, "description": "Devolve os dados estruturados pedidos.",
+                            "input_schema": schema}],
+                    tool_choice={"type": "tool", "name": nome},   # OBRIGA o uso da ferramenta
+                    messages=[{"role": "user", "content": content}])
+                for b in r.content:
+                    if getattr(b, "type", "") == "tool_use":
+                        _ULTIMO_MODELO[0] = mod
+                        return b.input                            # já é dict validado pelo schema
+                raise RuntimeError("modelo não devolveu tool_use")
+            except Exception as e:
+                if _transitorio(e) and tentativa < 3:
+                    import time; time.sleep(5 * tentativa); continue
+                erros.append(f"{mod}: {type(e).__name__}: {str(e)[:120]}")
+                break
+    raise RuntimeError("gerar_json falhou em toda a cadeia:\n  " + "\n  ".join(erros or ["sem modelo Anthropic na cadeia"]))
 
 
 def _anthropic(mod, instrucao, contexto, max_tokens, temperatura):
