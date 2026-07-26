@@ -206,7 +206,7 @@ def montar(pasta):
 
     return {                                    # nomes = colunas REAIS da tabela artigos (Supabase)
         "doc_id": doi if doi and doi != "n/a" else slugify(titulo),
-        "doi": doi if doi and doi != "n/a" else "",
+        "doi": doi if doi and doi != "n/a" else None,   # SEM doi → NULL (não ""): dois "" colidem na UNIQUE(doi)
         "titulo": titulo,
         "revista": revista,
         "data_publicacao": ano,

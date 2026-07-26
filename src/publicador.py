@@ -36,14 +36,19 @@ def _payload_site(ficha):
 
 
 def _upsert_supabase(payload):
-    """Upsert idempotente na tabela artigos (merge por doc_id). Service role via .env — NUNCA hardcoded."""
+    """Upsert idempotente na tabela artigos. A tabela tem DUAS únicas: UNIQUE(doi) e UNIQUE(doc_id).
+    Sem `on_conflict` o PostgREST resolve pela PK (id) — e o DOI existente bate na única → 409 (linha antiga
+    do sistema velho tinha doc_id='doi_<hash>' e o DOI real na coluna doi). Então resolvemos NO conflito certo:
+    tem DOI → on_conflict=doi (atualiza a linha existente, mesmo com doc_id antigo diferente); sem DOI → doc_id.
+    Service role via .env — NUNCA hardcoded."""
     import requests
     url = os.getenv("SUPABASE_URL", "").rstrip("/")
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     if not url or not key:
         raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes no .env")
+    conflito = "doi" if payload.get("doi") else "doc_id"   # DOI é a identidade forte; sem DOI cai no doc_id
     r = requests.post(
-        f"{url}/rest/v1/artigos",
+        f"{url}/rest/v1/artigos?on_conflict={conflito}",
         headers={"apikey": key, "Authorization": f"Bearer {key}",
                  "Content-Type": "application/json",
                  "Prefer": "resolution=merge-duplicates,return=minimal"},
