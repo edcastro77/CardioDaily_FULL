@@ -28,7 +28,8 @@ KW_TEMA = [
     (("atrial fibrillation", "ablation", "arrhythm", "pacing", "icd", "flutter"), "Arritmias"),
     (("valve", "tavr", "tavi", "mitral", "aortic stenosis"), "Valvopatias"),
     (("hypertension", "blood pressure"), "Hipertensão"),
-    (("prevention", "statin", "lipid", "cholesterol", "aspirin"), "Cardiologia Preventiva"),
+    (("prevention", "statin", "lipid", "cholesterol", "aspirin", "diabetes", "tirzepatide",
+      "semaglutide", "glp-1", "glp1", "obesity", "cardiometabolic", "lipoprotein", "pcsk9"), "Cardiologia Preventiva"),
     (("mri", "ct", "imaging", "echocard", "strain"), "Imagem Cardíaca"),
 ]
 
@@ -134,7 +135,7 @@ def _tema(selo, keywords):
     for termos, tema in KW_TEMA:
         if any(x in kws for x in termos):
             return tema
-    return ""
+    return "Outros"   # último recurso: 'Outros' é tema VÁLIDO do site. Nunca "" (recusaria nota≥6 no contrato)
 
 
 def _data_valida(ano):
