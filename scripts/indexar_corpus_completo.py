@@ -522,6 +522,11 @@ def verificar_e_limpar_incompletos(processados: set) -> int:
 
 
 def importar_supabase(metadata):
+    # ⛔ APOSENTADO como ESCRITOR do Supabase (26/07/2026) — era portão paralelo (POST artigos por fora
+    # do contrato). Só o publicador (portão único) escreve artigo. Ver CLAUDE.md — LEI DO PORTÃO ÚNICO.
+    raise RuntimeError(
+        "indexar_corpus_completo NÃO escreve mais no Supabase (era 2º portão). "
+        "Publique pelo portão único: src/rodar_em_blocos.py → publicador.")
     try:
         # on_conflict=doc_id → upsert: usa doc_id como chave de conflito (não a PK serial)
         url = f"{SUPABASE_URL}/rest/v1/artigos?on_conflict=doc_id"
@@ -598,6 +603,12 @@ def importar_supabase(metadata):
         return False
 
 def main():
+    # ⛔ APOSENTADO (26/07/2026) — 2º portão (inseria/apagava artigo no Supabase por fora do contrato).
+    raise SystemExit(
+        "\n⛔ indexar_corpus_completo APOSENTADO — era 2º portão do Supabase.\n"
+        "   Portão ÚNICO:  python src/rodar_em_blocos.py ARTIGOS/CLASSIFICADOS\n"
+        "   (Só o publicador escreve/atualiza artigo. Ver CLAUDE.md — LEI DO PORTÃO ÚNICO.)\n")
+
     log("="*60)
     log("🚀 CARDIODAILY - INDEXAÇÃO")
     log("="*60)

@@ -152,8 +152,9 @@ if [ "$N_META" -gt 0 ]; then
 fi
 
 # ── 6. Sync Supabase ───────────────────────────────────────
-echo "── Sync Supabase ──"
-python3 scripts/indexar_corpus_completo.py && echo "  ✅ Supabase sincronizado." || echo "  ⚠️  Sync Supabase falhou."
+# A corrente nova (rodar_em_blocos → publicador) JÁ publica pelo portão único durante a análise.
+# O indexar_corpus_completo foi aposentado (era 2º portão). Nada a sincronizar por fora.
+echo "── Sync Supabase: feito pelo portão único durante a análise (sem portão paralelo). ──"
 
 # ── 7. Resumo ──────────────────────────────────────────────
 FIM=$(date +%s)

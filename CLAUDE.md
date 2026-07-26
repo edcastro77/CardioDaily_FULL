@@ -86,6 +86,26 @@ e a presenca de: (1) randomizacao, (2) grupo controle, (3) adjudicacao central d
 - Ordem de trabalho: construir/testar no LAB → Dr. Eduardo aprova → **Claude migra pro FULL (commit no
   main) sem esperar ser mandado** → confirma. Aposentar o caminho antigo faz parte da migração.
 
+### LEI 5: PORTÃO ÚNICO PARA O SUPABASE (A REGRA-MÃE DOS BURACOS)
+
+**Só UM programa pode ESCREVER linha de artigo no Supabase: o `publicador.py`** (via `contrato` +
+`preflight` + upsert idempotente). Ele é o ÚNICO portão de entrada da tabela `artigos`.
+
+- É **PROIBIDO** qualquer outro programa dar INSERT/UPSERT/DELETE em `artigos`. Dois portões alimentando
+  o mesmo Supabase foi a **causa raiz dos buracos** que quase mataram o CardioDaily (análise divergente,
+  registro em branco, nota 5 publicada, DOI duplicado).
+- Quem precisar publicar/atualizar artigo **chama o portão** (`rodar_em_blocos` → `publicador`), nunca
+  REST cru pra `/rest/v1/artigos`.
+- **Portões já fechados (aposentados com guarda):** `article_analyzer.py` (analisador antigo),
+  `scripts/ingerir_artigos.py` (pipeline GPT-4o paralelo), `scripts/indexar_corpus_completo.py` (indexador
+  que inseria/apagava).
+- **Portas laterais sob revisão** (PATCH de mídia — áudio/pdf/gancho): `scripts/gerar_audios_lote.py`,
+  `gerar_pdfs_lote.py`, `gerar_ganchos_abertura.py`, `extrair_ganchos.py`, `reparar_podcasts_revisoes.py`.
+  Só podem ATUALIZAR URL de mídia de linha existente — NUNCA criar/apagar artigo. Em dúvida, passar pelo portão.
+- **Só leem (ok):** `web_biblioteca.py`, `lista_whatsapp.py`, `whatsapp/daily_sender.py`.
+- Antes de aprovar QUALQUER programa novo que fale com o Supabase: ele escreve em `artigos`? Se sim e não é
+  o publicador → **é um buraco, recusar.**
+
 ---
 
 ## DECISOES TECNICAS PERMANENTES

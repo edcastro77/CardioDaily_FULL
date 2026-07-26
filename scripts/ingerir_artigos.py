@@ -664,6 +664,14 @@ def processar_pdf(pdf_path: Path, dry_run: bool, gerar_assets: bool) -> str:
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    # ⛔ APOSENTADO (26/07/2026) — era um 2º PORTÃO: pipeline paralelo (PDF→GPT-4o→INSERE no Supabase)
+    # por FORA do contrato/preflight. Dois portões alimentando o mesmo Supabase = os buracos do CardioDaily.
+    # UM PORTÃO SÓ: classifique e rode a corrente nova (publicador é o único que escreve artigo).
+    raise SystemExit(
+        "\n⛔ ingerir_artigos APOSENTADO — era um 2º portão (inseria no Supabase sem contrato).\n"
+        "   Portão ÚNICO:  python src/classificador_ouro.py <pasta>  →  python src/rodar_em_blocos.py ARTIGOS/CLASSIFICADOS\n"
+        "   (Só o publicador escreve artigo no Supabase. Ver CLAUDE.md — LEI DO PORTÃO ÚNICO.)\n")
+
     parser = argparse.ArgumentParser(description="CardioDaily — Ingestão de Artigos em PDF")
     parser.add_argument("--dry-run",    action="store_true", help="Só lista, não processa")
     parser.add_argument("--limite",     type=int, default=50)
