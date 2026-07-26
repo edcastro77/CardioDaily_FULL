@@ -126,28 +126,28 @@ ERROS=0
 if [ "$N_ORIG" -gt 0 ]; then
     echo "── Artigos Originais ($N_ORIG PDFs) ──"
     export LOCAL_ARTICLES_DIR="$PROJECT_ROOT/ARTIGOS/ARTIGOS_ORIGINAIS"
-    python3 src/article_analyzer.py || ERROS=$((ERROS + 1))
+    python3 src/rodar_em_blocos.py "$LOCAL_ARTICLES_DIR" || ERROS=$((ERROS + 1))
     echo ""
 fi
 
 if [ "$N_GUIDE" -gt 0 ]; then
     echo "── Guidelines ($N_GUIDE PDFs) ──"
     export LOCAL_ARTICLES_DIR="$PROJECT_ROOT/ARTIGOS/GUIDELINES"
-    python3 src/article_analyzer.py || ERROS=$((ERROS + 1))
+    python3 src/rodar_em_blocos.py "$LOCAL_ARTICLES_DIR" || ERROS=$((ERROS + 1))
     echo ""
 fi
 
 if [ "$N_REV" -gt 0 ]; then
     echo "── Revisões ($N_REV PDFs) ──"
     export LOCAL_ARTICLES_DIR="$PROJECT_ROOT/ARTIGOS/REVISOES"
-    python3 src/article_analyzer.py || ERROS=$((ERROS + 1))
+    python3 src/rodar_em_blocos.py "$LOCAL_ARTICLES_DIR" || ERROS=$((ERROS + 1))
     echo ""
 fi
 
 if [ "$N_META" -gt 0 ]; then
     echo "── Meta-análises ($N_META PDFs) ──"
     export LOCAL_ARTICLES_DIR="$PROJECT_ROOT/ARTIGOS/META_ANALISES"
-    python3 src/article_analyzer.py || ERROS=$((ERROS + 1))
+    python3 src/rodar_em_blocos.py "$LOCAL_ARTICLES_DIR" || ERROS=$((ERROS + 1))
     echo ""
 fi
 

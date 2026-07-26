@@ -24,6 +24,27 @@ P._carregar_env()
 FILA_FORA = ("_PUBLICADOS", "_RECUSADOS")   # subpastas que NÃO são fila (já processados)
 
 
+def analisar_e_publicar_um(pdf, staging=None, publicar=True):
+    """Adaptador de 1 artigo para a CORRENTE NOVA — o ponto único que aposenta o article_analyzer.
+    Analisa (analisador) → publica pelo portão (publicador: contrato + preflight) → devolve o doc_id.
+    Usado pelo webhook do WhatsApp (on-demand). Devolve (doc_id | None, status, nota).
+    nota <6 fica RETIDO (não publica, sem doc_id)."""
+    from analisador import processar
+    import publicador as P
+    import ficha_site as F
+    P._carregar_env()
+    if staging is None:
+        staging = os.path.abspath(os.path.join(_HERE, "..", "outputs", "STAGING"))
+    os.makedirs(staging, exist_ok=True)
+    base, nota, _mc, _ents, sobe = processar(pdf, staging)
+    if not sobe:                                    # ≤5: retido por regra, não vai pro site
+        return None, "RETIDO(<6)", nota
+    pasta = os.path.join(staging, base)
+    status, nota, _viol = P.processar_pasta(pasta, publicar=publicar)
+    doc_id = F.montar(pasta).get("doc_id") if str(status).startswith(("PUBLICADO", "APROVADO")) else None
+    return doc_id, status, nota
+
+
 def _pdfs_na_fila(classificados):
     """Todos os PDFs ainda por fazer (ignora o que já saiu p/ _PUBLICADOS / _RECUSADOS)."""
     fila = []

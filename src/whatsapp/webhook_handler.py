@@ -175,29 +175,20 @@ def _analisar_pdf_async(phone: str, pdf_path: Path, filename: str):
     """Roda análise completa em thread separada e envia resultado ao usuário."""
     try:
         sys.path.insert(0, str(ROOT / "src"))
-        from article_analyzer import ArticleAnalyzer
+        from rodar_em_blocos import analisar_e_publicar_um   # corrente NOVA (aposentou o article_analyzer)
         import os as _os
 
         # Diretório temporário para este artigo
         tmp_dir = pdf_path.parent
 
-        analyzer = ArticleAnalyzer(input_local_dir=str(tmp_dir))
-        file_info = {
-            "name": filename,
-            "path": str(pdf_path),
-            "local": True,
-            "id": None,
-        }
+        # Analisa → publica pelo portão (contrato + preflight) → doc_id. nota <6 fica retido (sem doc_id).
+        log.info(f"[{phone}] Iniciando análise (corrente nova): {filename}")
+        doc_id, status, nota_ap = analisar_e_publicar_um(str(pdf_path), staging=str(tmp_dir), publicar=True)
 
-        log.info(f"[{phone}] Iniciando análise: {filename}")
-        resultado = analyzer.process_article(file_info)
-
-        if not resultado:
+        if not doc_id:
+            log.info(f"[{phone}] {filename}: {status} (nota {nota_ap}) — não publicado")
             zapi.send_text(phone, MSG_PDF_ERRO)
             return
-
-        # Buscar artigo recém-indexado no Supabase pelo doc_id
-        doc_id = resultado if isinstance(resultado, str) else None
 
         # Tentar obter URLs do Supabase
         sb_url = _os.getenv("SUPABASE_URL", "").rstrip("/")

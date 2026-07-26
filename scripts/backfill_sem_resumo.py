@@ -180,14 +180,11 @@ def main():
                 removidos += 1
     print(f"   → {removidos} arquivos removidos\n")
 
-    # Chamar article_analyzer.py
-    cmd = [sys.executable, str(PROJECT_ROOT / "src" / "article_analyzer.py"),
-           "--local-dir", str(TEMP_DIR)]
+    # Chamar a CORRENTE NOVA (article_analyzer aposentado): analisa + publica pelo portão
+    cmd = [sys.executable, str(PROJECT_ROOT / "src" / "rodar_em_blocos.py"), str(TEMP_DIR)]
     env = os.environ.copy()
-    env["CARDIODAILY_SKIP_BRIEFING"] = "1"
-    env["CARDIODAILY_FORCE_REANALYZE"] = "1"
 
-    print(f"🚀 Iniciando article_analyzer.py com {len(com_pdf)} artigos...")
+    print(f"🚀 Iniciando corrente nova (rodar_em_blocos) com {len(com_pdf)} artigos...")
     print(f"   (pode demorar — ~{len(com_pdf)*4//60} minutos estimados)\n")
     result = subprocess.run(cmd, env=env, cwd=str(PROJECT_ROOT))
 

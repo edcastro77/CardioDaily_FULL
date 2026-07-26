@@ -2054,11 +2054,21 @@ class ArticleAnalyzer:
         Returns:
             True se processado com sucesso, False caso contrário
         """
+        # APOSENTADO (25/07/2026): este é o analisador ANTIGO. Publicava no mesmo Supabase que a
+        # corrente nova → análise divergente do mesmo artigo. A análise+publicação vive AGORA só na
+        # corrente nova (rodar_em_blocos.analisar_e_publicar_um / Chave 2). Os HELPERS deste módulo
+        # (_upload_pdf_supabase, aplicar_teto_nac, extract_podcast_article_title) seguem válidos.
+        raise RuntimeError(
+            "article_analyzer APOSENTADO: a análise+publicação agora é da corrente nova. "
+            "Use `python src/rodar_em_blocos.py ARTIGOS/CLASSIFICADOS` (lote) ou "
+            "`rodar_em_blocos.analisar_e_publicar_um(pdf)` (1 artigo). Motivo: dois analisadores no "
+            "mesmo Supabase geram análise divergente.")
+
         filename = file_info['name']
         base_name = os.path.splitext(filename)[0]
         is_local = file_info.get('local', False)
         file_id = file_info.get('id')
-        
+
         print("\n" + "=" * 80)
         print(f"📄 PROCESSANDO: {filename}")
         print("=" * 80)
@@ -3014,6 +3024,11 @@ class ArticleAnalyzer:
         Returns:
             Estatísticas do processamento
         """
+        raise RuntimeError(
+            "article_analyzer APOSENTADO: lote de análise agora é da corrente nova. "
+            "Use `python src/rodar_em_blocos.py ARTIGOS/CLASSIFICADOS`. "
+            "(Dois analisadores no mesmo Supabase geram análise divergente.)")
+
         print("\n" + "=" * 80)
         if self.input_local_dir:
             print("🔍 BUSCANDO ARTIGOS NA PASTA LOCAL")
@@ -3146,7 +3161,14 @@ class ArticleAnalyzer:
 # Função principal
 if __name__ == "__main__":
     import sys
-    
+
+    # APOSENTADO (25/07/2026): o analisador antigo não roda mais como CLI de análise/publicação.
+    # A corrente nova é a única fonte de verdade da produção (evita dois analisadores no mesmo Supabase).
+    print("\n⛔ article_analyzer APOSENTADO — a análise+publicação agora é da corrente nova.")
+    print("   Use:  python src/rodar_em_blocos.py ARTIGOS/CLASSIFICADOS")
+    print("   (Chave 2 · Analisador → Publicador, com portão contrato+preflight.)\n")
+    sys.exit(2)
+
     import argparse
 
     print("\n" + "=" * 80)
