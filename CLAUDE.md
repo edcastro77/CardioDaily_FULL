@@ -107,12 +107,23 @@ O modelo de card 1080×1080px via HTML/CSS + Playwright foi testado para WhatsAp
 
 ---
 
-### ÚNICO ARTEFATO VISUAL PERMITIDO: VISUAL ABSTRACT 8 SEÇÕES — LEI ABSOLUTA
+### ARTEFATOS VISUAIS PERMITIDOS — LEI ABSOLUTA
 
-**ÚNICO formato visual de artigo permitido no CardioDaily é o Visual Abstract de 8 seções:**
+São permitidos DOIS artefatos visuais, e SÓ estes dois:
+
+**1. Visual Abstract de 8 seções** (artigos originais, meta, revisão — a maioria):
 - Arquivo: `src/infographics/visual_abstract_generator.py`
 - Template: `src/infographics/templates/visual_abstract_template.html`
 - Output: `assets/visual_abstract.png`
+
+**2. Fluxograma de conduta em Mermaid** (EXCLUSIVO da trilha MINIRREVISÃO / opinião de especialista) —
+   aprovado pelo Dr. Eduardo em 25/07/2026:
+- Motor: **Mermaid**, tematizado CardioDaily (azul #0B3D91 / vermelho #C00000, Helvetica), renderizado
+  offline (mmdc / mermaid-cli).
+- Por que Mermaid e NÃO HTML/CSS: o layout é do motor → consistência garantida, nunca "quebra feio".
+  Foi a variabilidade do HTML/CSS feito à mão (caixa vazia, texto de tamanho variável) que reprovou os
+  cards — o mesmo princípio do buraco zero. É o ÚNICO uso permitido de fluxograma.
+- Escopo: só a trilha minirevisão. NÃO usar fluxograma em artigo original/meta.
 
 **TODOS os outros geradores de imagem/gráfico estão em QUARENTENA PERMANENTE:**
 - `InfographicPortrait` (portrait_visualmed) — PROIBIDO
