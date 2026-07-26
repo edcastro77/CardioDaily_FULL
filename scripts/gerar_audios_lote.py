@@ -277,6 +277,10 @@ def processar_artigo(artigo: dict, dry_run: bool) -> str:
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    raise SystemExit(
+        "\n⛔ gerar_audios_lote APOSENTADO — escrevia caminho_audio no Supabase por fora do PORTÃO ÚNICO (LEI 5).\n"
+        "   O portão já gera e sobe o áudio (nota≥8). Pra (re)gerar: python src/rodar_em_blocos.py ARTIGOS/CLASSIFICADOS\n")
+
     parser = argparse.ArgumentParser(description="CardioDaily — Áudios em Lote")
     parser.add_argument("--dry-run",  action="store_true", help="Lista elegíveis sem gerar")
     parser.add_argument("--limite",   type=int, default=200, help="Máx de artigos a processar (padrão: 200)")

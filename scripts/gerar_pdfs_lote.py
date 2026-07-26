@@ -230,6 +230,11 @@ def processar_artigo(artigo: dict, dry_run: bool, forcar: bool = False) -> str:
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    raise SystemExit(
+        "\n⛔ gerar_pdfs_lote APOSENTADO — escrevia caminho_pdf no Supabase por fora do PORTÃO ÚNICO (LEI 5).\n"
+        "   O portão já gera e sobe o PDF (nota≥6). Pra (re)gerar: python src/rodar_em_blocos.py ARTIGOS/CLASSIFICADOS\n"
+        "   (Os helpers de render — conteudo_para_html/gerar_pdf_playwright — seguem importáveis.)\n")
+
     global _ADMIN_PROC
     parser = argparse.ArgumentParser(description="CardioDaily — PDFs em Lote")
     parser.add_argument("--dry-run",  action="store_true")

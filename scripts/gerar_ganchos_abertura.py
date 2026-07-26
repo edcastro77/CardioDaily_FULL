@@ -198,6 +198,11 @@ def processar(artigo: dict, dry_run: bool) -> tuple[str, str | None, str]:
 # Main
 # -----------------------------------------------------------------------------
 def main():
+    raise SystemExit(
+        "\n⛔ gerar_ganchos_abertura APOSENTADO — escrevia gancho_abertura no Supabase por fora do PORTÃO ÚNICO (LEI 5).\n"
+        "   AGORA o gancho de abertura é gerado DENTRO do portão (análise nota≥8 → gancho_abertura_prompt.md →\n"
+        "   ficha_site → publicador). Pra (re)gerar: python src/rodar_em_blocos.py ARTIGOS/CLASSIFICADOS\n")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--nota-min", type=int, default=8)
     ap.add_argument("--apenas-vazios", action="store_true", default=True)

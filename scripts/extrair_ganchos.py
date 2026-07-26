@@ -214,6 +214,10 @@ def processar_artigo(artigo: dict, dry_run: bool) -> tuple[str, str | None, str]
 # Main
 # -----------------------------------------------------------------------------
 def main():
+    raise SystemExit(
+        "\n⛔ extrair_ganchos APOSENTADO — escrevia gancho_lista no Supabase por fora do PORTÃO ÚNICO (LEI 5).\n"
+        "   O gancho_lista já é gerado pelo portão (ficha_site). Pra (re)gerar: python src/rodar_em_blocos.py ARTIGOS/CLASSIFICADOS\n")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--nota-min", type=int, default=7)
     ap.add_argument("--apenas-vazios", action="store_true", default=True)

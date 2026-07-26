@@ -103,6 +103,11 @@ def processar(pdf, staging):
         if cacar_ingles(roteiro):
             open(os.path.join(dst, "_REVISAR_termos_ingles.txt"), "w").write(", ".join(cacar_ingles(roteiro)))
         falar(roteiro, os.path.join(dst, base + "_audio.mp3"))   # config do .env; ElevenLabs = só Radar
+        try:                                                    # gancho de abertura (distribuição diária) — no PORTÃO, não por fora
+            gancho = _gerar("gancho_abertura_prompt.md", contexto, 300).strip()[:200]
+            open(os.path.join(dst, base + "_gancho_abertura.txt"), "w").write(gancho)
+        except Exception as e:
+            print(f"       ⚠️  gancho de abertura não gerado ({type(e).__name__}: {e})")
     _conferir_entregaveis(dst, base, r["aplic"])              # BURACO ZERO: faltou algo → erro, volta pra fila
     open(os.path.join(dst, "_OK"), "w").write("")             # só aqui: artigo COMPLETO de verdade
     return base, r["aplic"], r["muda_conduta"], ents, sobe

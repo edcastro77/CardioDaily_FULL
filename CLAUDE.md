@@ -96,12 +96,15 @@ e a presenca de: (1) randomizacao, (2) grupo controle, (3) adjudicacao central d
   registro em branco, nota 5 publicada, DOI duplicado).
 - Quem precisar publicar/atualizar artigo **chama o portão** (`rodar_em_blocos` → `publicador`), nunca
   REST cru pra `/rest/v1/artigos`.
-- **Portões já fechados (aposentados com guarda):** `article_analyzer.py` (analisador antigo),
-  `scripts/ingerir_artigos.py` (pipeline GPT-4o paralelo), `scripts/indexar_corpus_completo.py` (indexador
-  que inseria/apagava).
-- **Portas laterais sob revisão** (PATCH de mídia — áudio/pdf/gancho): `scripts/gerar_audios_lote.py`,
-  `gerar_pdfs_lote.py`, `gerar_ganchos_abertura.py`, `extrair_ganchos.py`, `reparar_podcasts_revisoes.py`.
-  Só podem ATUALIZAR URL de mídia de linha existente — NUNCA criar/apagar artigo. Em dúvida, passar pelo portão.
+- **Portões/portas já FECHADOS (aposentados com guarda que recusa):**
+  - Portões completos: `article_analyzer.py` (analisador antigo), `scripts/ingerir_artigos.py` (pipeline
+    GPT-4o paralelo), `scripts/indexar_corpus_completo.py` (indexador que inseria/apagava).
+  - Portas laterais de mídia: `scripts/gerar_audios_lote.py`, `gerar_pdfs_lote.py`, `gerar_ganchos_abertura.py`,
+    `extrair_ganchos.py`, `reparar_podcasts_revisoes.py` — o portão já faz áudio (≥8)/PDF (≥6)/gancho_lista;
+    e o **gancho_abertura foi ABSORVIDO no portão** (análise nota≥8 gera `gancho_abertura_prompt.md` → ficha_site).
+- Pra (re)gerar mídia/gancho de um artigo, **rode o portão** (`rodar_em_blocos`), nunca escreva por fora.
+- Regra de produto pendente: áudio de REVISÃO/GUIDELINE com nota<8 (o portão só faz áudio ≥8). Se for pra ter,
+  muda a PORTA do áudio no analisador — não se escreve por fora.
 - **Só leem (ok):** `web_biblioteca.py`, `lista_whatsapp.py`, `whatsapp/daily_sender.py`.
 - Antes de aprovar QUALQUER programa novo que fale com o Supabase: ele escreve em `artigos`? Se sim e não é
   o publicador → **é um buraco, recusar.**

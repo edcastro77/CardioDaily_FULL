@@ -195,6 +195,8 @@ def montar(pasta):
     visual = arq("*_visual*") or arq("*_INFOGRAFICO.png") or arq("*_infografico*")
     md = arq("*_analise.md")
     resumo = open(md, encoding="utf-8").read() if md else ""     # → resumo_markdown
+    gab = arq("*_gancho_abertura.txt")                           # gancho de abertura (nota≥8) — gerado no PORTÃO
+    gancho_abertura = open(gab, encoding="utf-8").read().strip() if gab else None
 
     # campos extras que a tabela REAL usa (a tabela NÃO tem 'slug')
     ano = _data_valida(_campo(canon, "ano"))
@@ -222,6 +224,7 @@ def montar(pasta):
         "impacto_conduta": i_bloco,
         "bullets_praticos": bullets,
         "gancho_lista": gancho,
+        "gancho_abertura": gancho_abertura,     # abertura provocativa (nota≥8) — gerada no portão, não por fora
         "mcid_avaliacao": mcid,
         "resumo_markdown": resumo,
         "caminho_pdf": pdf,

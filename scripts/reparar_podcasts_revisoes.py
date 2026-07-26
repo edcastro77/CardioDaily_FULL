@@ -204,6 +204,11 @@ def gerar_podcast_para_artigo(doc_id: str, artigo: dict, script_gen, audio_gen, 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
+    raise SystemExit(
+        "\n⛔ reparar_podcasts_revisoes APOSENTADO — escrevia caminho_audio no Supabase por fora do PORTÃO ÚNICO (LEI 5).\n"
+        "   O portão gera áudio para nota≥8 (qualquer tipo). Se REVISÃO/GUIDELINE deve ter áudio mesmo com nota<8,\n"
+        "   isso é REGRA DO PORTÃO (decisão do Dr.) — mudar a porta do áudio no analisador, não escrever por fora.\n")
+
     parser = argparse.ArgumentParser(description="Gerar podcasts para revisões sem áudio")
     parser.add_argument("--dry-run", action="store_true", help="Só lista, não gera nada")
     parser.add_argument("--nota", type=int, default=8, metavar="N", help="Nota mínima (padrão: 8)")
