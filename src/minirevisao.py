@@ -147,6 +147,8 @@ Faça:
 6) FLUXOGRAMA (Mermaid) — desenhe a ESTRATÉGIA DE ABORDAGEM do tema (não o tratamento em si) como
    'flowchart TD'. Use rótulos curtos com <b>título</b><br/>detalhe. Marque nós de DECISÃO com :::dec
    e condutas TERMINAIS com :::term. NÃO inclua cabeçalho de tema nem bloco %%{init}%% (eu adiciono o tema).
+   ENVOLVA todo rótulo entre ASPAS DUPLAS — ex.: A["texto (com parênteses) ok"]:::term e B{"Lp(a) ≥ 50?"}:::dec
+   — senão parêntese/%/: quebram o Mermaid.
    Mantenha português, siglas do dia a dia (PA, HAS, TC), e fidelidade ao que a revisão + baseline dizem.
 
 Não invente número que não esteja na revisão ou no baseline. Se a faixa for 0, o fluxograma pode ser mínimo.
@@ -174,17 +176,34 @@ def _tema_e_termos(texto):
     return llm_client.gerar_json(M.RAPIDO, p, _SCHEMA_TEMA, max_tokens=500, nome="tema_minirev")
 
 
+def _aspar_rotulos(corpo):
+    """Aspa TODO rótulo de nó [..] e {..} não-aspeado. Sem isso, parêntese no texto (Lp(a), (~50 mg/dL),
+    (>40%)) quebra o parser do Mermaid — foi o que derrubou 4 renders no batch de 45. Já-aspeados: ignora."""
+    import re
+    def q(m):
+        return m.group(0)[0] + '"' + m.group(1).strip() + '"' + m.group(0)[-1]
+    corpo = re.sub(r'\[([^\[\]"\n]+?)\]', q, corpo)   # retângulos / terminais
+    corpo = re.sub(r'\{([^{}"\n]+?)\}', q, corpo)     # decisões (losango)
+    # rótulos de ARESTA também quebram com parêntese/vírgula: -->|texto| e -- texto -->
+    corpo = re.sub(r'\|([^|"\n]+?)\|', lambda m: '|"' + m.group(1).strip() + '"|', corpo)
+    corpo = re.sub(r'--\s+([^"|>\n][^\n]*?)\s+-->', lambda m: '-- "' + m.group(1).strip() + '" -->', corpo)
+    return corpo
+
+
 def montar_mermaid(corpo):
-    """Embrulha o corpo do LLM com o TEMA CardioDaily + classDefs. O motor garante o layout."""
+    """Embrulha o corpo do LLM com o TEMA CardioDaily + classDefs. IDEMPOTENTE: tira init/classDef que
+    já existam (dá pra reprocessar um mermaid já montado). O motor garante o layout."""
+    import re
     corpo = (corpo or "").strip()
-    # tira cerca ```mermaid e um possível %%{init}%% que o modelo tenha posto mesmo assim
-    if corpo.startswith("```"):
+    if corpo.startswith("```"):                        # tira cerca ```mermaid
         corpo = corpo.strip("`")
         corpo = corpo.split("\n", 1)[1] if "\n" in corpo else corpo
-    import re
-    corpo = re.sub(r"%%\{init[^\n]*\}%%\s*", "", corpo).strip()
+    corpo = re.sub(r"%%\{init[^\n]*\}%%\s*", "", corpo)          # tira init (meu, se reprocessando)
+    corpo = re.sub(r"(?m)^\s*classDef\s+.*$", "", corpo)         # tira classDef (meu)
+    corpo = "\n".join(l for l in corpo.splitlines() if l.strip()).strip()
     if not corpo.lower().startswith("flowchart"):
         corpo = "flowchart TD\n" + corpo
+    corpo = _aspar_rotulos(corpo)                       # blindagem contra parêntese/% em rótulo
     return _MERMAID_TEMA + corpo + _MERMAID_CLASSDEF
 
 
