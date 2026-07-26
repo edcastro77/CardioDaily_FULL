@@ -21,7 +21,8 @@ import analisador as A          # carrega o .env no import
 import publicador as P
 P._carregar_env()
 
-FILA_FORA = ("_PUBLICADOS", "_RECUSADOS")   # subpastas que NÃO são fila (já processados)
+FILA_FORA = ("_PUBLICADOS", "_RECUSADOS", "MINIRREVISOES")   # NÃO são fila do publicador
+# (MINIRREVISOES é a trilha da minirevisão/opinião: condutas+fluxograma via minirevisao.py, não sobe no Supabase)
 
 
 def analisar_e_publicar_um(pdf, staging=None, publicar=True):

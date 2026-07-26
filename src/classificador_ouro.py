@@ -44,7 +44,7 @@ _MAPA_PREFIXO = [
     ("10.1016/j.hfc",    "revisao_geral"),  # Heart Failure Clinics
     ("10.1016/j.ccep",   "revisao_geral"),  # Cardiac Electrophysiology Clinics
     ("10.1016/j.iccl",   "revisao_geral"),  # Interventional Cardiology Clinics
-    ("10.1093/eurheartjsupp", "revisao_geral"),  # European Heart Journal Supplements — minirevisões de hot topics (curtas, às vezes com caso ilustrativo → o Sonnet as confundia com relato de caso e DESCARTAVA)
+    ("10.1093/eurheartjsupp", "minirevisao"),  # European Heart Journal Supplements — minirevisões de hot topics → trilha minirevisão (condutas+fluxograma, não sobe no Supabase)
     ("10.1016/j.jaccas", "DESCARTE"),       # JACC: Case Reports (Dr. Eduardo "nem abre")
 ]
 # diretrizes/scientific statements da AHA usam DOI 10.1161/CIR.0000000000######
@@ -227,6 +227,12 @@ def classificar(pasta, dry_run=True, max_n=0):
                 destino, marca, via = tipo, "🤖", "Sonnet (1ª página)"
             else:
                 destino, marca, via = "REVISAO", "🔴", f"ambíguo (Sonnet={tipo})"
+
+        # EXPERT OPINION / editorial → trilha MINIRREVISÃO (Dr. Eduardo 26/07): JACC/Circulation/NEJM
+        # trazem minirevisões rotuladas como opinião. Vão pra ferramenta minirevisao (condutas+fluxograma),
+        # NÃO pro Supabase. (EHJ Supplements já vem como 'minirevisao' pelo mapa de revista.)
+        if destino == "ponto_de_vista":
+            destino, via = "minirevisao", via + " → minirevisão"
 
         # destino tentativo → pasta
         if destino == "DESCARTE":

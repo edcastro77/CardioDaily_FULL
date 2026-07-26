@@ -229,11 +229,11 @@ def render_mermaid(codigo, out_png):
         pass
     cfg = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
     cfg.write('{"args":["--no-sandbox"]}'); cfg.close()
+    # mmdc instalado (global) é rápido; senão npx baixa na hora (lento, mas funciona)
+    cmd = (["mmdc"] if shutil.which("mmdc") else ["npx", "-y", "@mermaid-js/mermaid-cli"])
     try:
-        subprocess.run(
-            ["npx", "-y", "@mermaid-js/mermaid-cli", "-i", mmd, "-o", out_png,
-             "-b", "white", "-p", cfg.name],
-            check=True, env=env, capture_output=True, timeout=180)
+        subprocess.run(cmd + ["-i", mmd, "-o", out_png, "-b", "white", "-p", cfg.name],
+                       check=True, env=env, capture_output=True, timeout=180)
         return out_png if os.path.exists(out_png) else None
     except Exception as e:
         msg = getattr(e, "stderr", b"")
@@ -242,22 +242,53 @@ def render_mermaid(codigo, out_png):
         return None
 
 
-if __name__ == "__main__":
-    pdf = os.path.expanduser(sys.argv[1])
-    saida = os.path.expanduser(sys.argv[2]) if len(sys.argv) > 2 else os.path.dirname(pdf)
-    os.makedirs(saida, exist_ok=True)
+def processar_pdf(pdf, saida_base):
+    """Processa 1 PDF de minirevisão → pasta própria em saida_base. Faixa 0 fica retido (sem fluxograma).
+    NÃO sobe no Supabase (é ferramenta standalone, como o Pesquisador). Devolve (faixa, sobe)."""
     base = os.path.splitext(os.path.basename(pdf))[0]
-    print(f"MINIRREVISÃO — {base[:60]}")
+    dst = os.path.join(saida_base, base); os.makedirs(dst, exist_ok=True)
+    if os.path.exists(os.path.join(dst, "_OK")):        # retomável: pula os já feitos
+        print(f"  ⏭️  {base[:54]} já processado"); return None, None
+    print(f"\n▶ {base[:60]}")
     r = analisar(pdf)
-    print(f"\n=== FAIXA {r['faixa']} — {'SOBE' if r['sobe'] else 'RETIDO (vaselina)'} ===")
-    print(f"  {r['faixa_justificativa']}")
-    print(f"\n  Condutas ({len(r.get('condutas') or [])}):")
-    for c in (r.get("condutas") or []):
-        print(f"   • {c}")
-    if r.get("incertezas"):
-        print(f"\n  Incertezas: " + " · ".join(r["incertezas"]))
-    json.dump(r, open(os.path.join(saida, base + "_minirev.json"), "w"), ensure_ascii=False, indent=2)
-    if r["sobe"]:
-        png = render_mermaid(r["fluxograma_mermaid"], os.path.join(saida, base + "_fluxograma.png"))
-        print(f"\n  Fluxograma: {'PNG ' + os.path.basename(png) if png else '.mmd salvo (render pendente)'}")
-    print(f"\n  JSON: {base}_minirev.json")
+    json.dump(r, open(os.path.join(dst, base + "_minirev.json"), "w"), ensure_ascii=False, indent=2)
+    faixa = r.get("faixa"); sobe = r.get("sobe")
+    print(f"  FAIXA {faixa} — {'SOBE (condutas+fluxograma)' if sobe else 'RETIDO (vaselina, sem valor prático novo)'}")
+    for c in (r.get("condutas") or [])[:8]:
+        print(f"    • {c[:110]}")
+    if sobe:
+        png = render_mermaid(r["fluxograma_mermaid"], os.path.join(dst, base + "_fluxograma.png"))
+        print(f"    fluxograma: {os.path.basename(png) if png else '.mmd (render pendente)'}")
+    open(os.path.join(dst, "_OK"), "w").write("")
+    return faixa, sobe
+
+
+def _pdfs(caminho):
+    if os.path.isfile(caminho):
+        return [caminho]
+    achados = []
+    for root, _, files in os.walk(caminho):
+        for f in sorted(files):
+            if f.lower().endswith(".pdf") and not f.startswith("._"):
+                achados.append(os.path.join(root, f))
+    return sorted(achados)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("uso: python minirevisao.py <PDF|pasta> [saida]"); sys.exit(1)
+    entrada = os.path.expanduser(sys.argv[1])
+    saida = os.path.expanduser(sys.argv[2]) if len(sys.argv) > 2 else \
+        os.path.abspath(os.path.join(_HERE, "..", "outputs", "MINIRREVISOES"))
+    os.makedirs(saida, exist_ok=True)
+    pdfs = _pdfs(entrada)
+    print(f"TRILHA MINIRREVISÃO — {len(pdfs)} artigo(s)  →  {saida}\n(condutas + fluxograma · NÃO sobe no Supabase)")
+    sobem = retidos = 0
+    for pdf in pdfs:
+        try:
+            faixa, sobe = processar_pdf(pdf, saida)
+            if sobe is True: sobem += 1
+            elif sobe is False: retidos += 1
+        except Exception as e:
+            print(f"  ⚠️  {os.path.basename(pdf)[:54]} ERRO: {type(e).__name__}: {e}")
+    print(f"\nFIM · {sobem} com valor prático (faixa ≥1) · {retidos} retidos (vaselina). Saída em {saida}")

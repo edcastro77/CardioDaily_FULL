@@ -49,6 +49,9 @@ FOLDERS = {
     "revisao_geral": "REVISOES",
     "guideline": "GUIDELINES",
     "ponto_de_vista": "EDITORIAIS",
+    # Trilha MINIRREVISÃO / opinião de especialista: analisada pela ferramenta minirevisao.py
+    # (condutas + fluxograma), NÃO publica no Supabase. Fora da fila do publicador (ver rodar_em_blocos).
+    "minirevisao": "MINIRREVISOES",
 }
 SUB_ANALISE, SUB_DESCARTE, SUB_REVISAO = "CLASSIFICADOS", "DESCARTADOS", "REVISAO_HUMANA"
 SUB_FILA = "FILA_ESPERA"   # ahead-of-print: espera o PubMed catalogar (re-check diário)
