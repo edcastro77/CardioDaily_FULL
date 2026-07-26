@@ -114,7 +114,11 @@ def upload_visual_abstract_supabase(doc_id: str, png_path: Path) -> str | None:
 
 
 def atualizar_campo_supabase(doc_id: str, campo: str, valor: str) -> bool:
-    """Atualiza um campo na tabela artigos do Supabase."""
+    """FECHADO (LEI 5 — PORTÃO ÚNICO). O gerador de Visual Abstract é BIBLIOTECA do portão: gera o PNG,
+    mas NÃO escreve em `artigos`. Quem sobe a mídia e grava caminho_visual_abstract é o publicador
+    (_subir_midia), o único portão. O gate chama gerar_png(upload_supabase=False); isto aqui não roda."""
+    print("       ⛔ visual_abstract_generator NÃO escreve no Supabase (LEI 5). Publique pelo portão (rodar_em_blocos).")
+    return False
     supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
     svc_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
 
@@ -505,7 +509,7 @@ class VisualAbstractGenerator:
         return template.render(data=data)
 
     def gerar_png(self, article_dir: Path, force: bool = False, open_file: bool = False,
-                  canonical_type: str | None = None, upload_supabase: bool = True) -> Path:
+                  canonical_type: str | None = None, upload_supabase: bool = False) -> Path:  # LEI 5: default NÃO sobe; só o portão sobe mídia
         """
         Pipeline completo: extração → HTML → PNG.
         Retorna o path do PNG gerado.

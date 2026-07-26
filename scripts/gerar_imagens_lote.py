@@ -740,6 +740,10 @@ def processar_artigo(artigo: dict, dry_run: bool, forcar: bool = False) -> str:
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    raise SystemExit(
+        "\n⛔ gerar_imagens_lote APOSENTADO — escrevia caminho_visual_abstract no Supabase por fora do PORTÃO ÚNICO (LEI 5).\n"
+        "   O portão já gera e sobe o Visual Abstract (nota≥7). Pra (re)gerar: python src/rodar_em_blocos.py ARTIGOS/CLASSIFICADOS\n")
+
     parser = argparse.ArgumentParser(description="CardioDaily — Visual Abstracts em Lote")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limite",  type=int, default=500)
