@@ -44,6 +44,7 @@ _MAPA_PREFIXO = [
     ("10.1016/j.hfc",    "revisao_geral"),  # Heart Failure Clinics
     ("10.1016/j.ccep",   "revisao_geral"),  # Cardiac Electrophysiology Clinics
     ("10.1016/j.iccl",   "revisao_geral"),  # Interventional Cardiology Clinics
+    ("10.1093/eurheartjsupp", "revisao_geral"),  # European Heart Journal Supplements — minirevisões de hot topics (curtas, às vezes com caso ilustrativo → o Sonnet as confundia com relato de caso e DESCARTAVA)
     ("10.1016/j.jaccas", "DESCARTE"),       # JACC: Case Reports (Dr. Eduardo "nem abre")
 ]
 # diretrizes/scientific statements da AHA usam DOI 10.1161/CIR.0000000000######
