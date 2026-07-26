@@ -46,11 +46,23 @@ def _upsert_supabase(payload):
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     if not url or not key:
         raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes no .env")
+    hdr = {"apikey": key, "Authorization": f"Bearer {key}"}
     conflito = "doi" if payload.get("doi") else "doc_id"   # DOI é a identidade forte; sem DOI cai no doc_id
+    # PRESERVA o doc_id EXISTENTE: a linha antiga (sistema velho) tem doc_id='doi_<hash>' e pode estar
+    # referenciada na tabela `entregas` (FK). Trocar o doc_id no update quebra a FK (23503). Então, se o
+    # artigo já existe (por doi), reusa o doc_id que já está lá — o conteúdo atualiza, a entrega não órfãoza.
+    if payload.get("doi"):
+        try:
+            g = requests.get(f"{url}/rest/v1/artigos", headers=hdr, timeout=15,
+                             params={"doi": f"eq.{payload['doi']}", "select": "doc_id"})
+            rows = g.json() if g.status_code == 200 else []
+            if rows and rows[0].get("doc_id"):
+                payload = {**payload, "doc_id": rows[0]["doc_id"]}
+        except Exception:
+            pass
     r = requests.post(
         f"{url}/rest/v1/artigos?on_conflict={conflito}",
-        headers={"apikey": key, "Authorization": f"Bearer {key}",
-                 "Content-Type": "application/json",
+        headers={**hdr, "Content-Type": "application/json",
                  "Prefer": "resolution=merge-duplicates,return=minimal"},
         json=payload, timeout=30)
     if r.status_code >= 400:                              # mostra a mensagem REAL do Supabase (coluna/constraint)

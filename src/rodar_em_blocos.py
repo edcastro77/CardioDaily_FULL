@@ -67,10 +67,12 @@ def _tirar_da_fila(pdf, classificados, subpasta):
         print(f"      (aviso: não moveu {os.path.basename(pdf)}: {e})")
 
 
-def main(classificados, tam_bloco=20):
+def main(classificados, tam_bloco=20, maximo=0):
     staging = os.path.abspath(os.path.join(_HERE, "..", "outputs", "STAGING"))
     os.makedirs(staging, exist_ok=True)
     fila = _pdfs_na_fila(classificados)
+    if maximo:                                          # teste de confiança: só os primeiros N
+        fila = fila[:maximo]
     total = len(fila)
     if total == 0:
         print("Fila vazia — nada a fazer (tudo já concluído, ou pasta sem PDF).")
@@ -82,9 +84,15 @@ def main(classificados, tam_bloco=20):
         bloco = fila[i:i + tam_bloco]
         nb = i // tam_bloco + 1
         print(f"═══ BLOCO {nb}/{n_blocos} · artigos {i+1}–{i+len(bloco)} de {total} ═══")
-        # 1) analisa o bloco (local, no staging)
+        # 1) analisa o bloco (local, no staging). RETOMÁVEL: staging com _OK é reaproveitado (não re-analisa).
         analisados = []
         for pdf in bloco:
+            base = os.path.splitext(os.path.basename(pdf))[0]
+            pasta = os.path.join(staging, base)
+            if os.path.exists(os.path.join(pasta, "_OK")):
+                analisados.append((pdf, pasta))
+                print(f"   reusado    {base[:42]:42} (staging pronto)")
+                continue
             try:
                 base, nota, mc, ents, sobe = A.processar(pdf, staging)
                 analisados.append((pdf, os.path.join(staging, base)))
@@ -111,8 +119,10 @@ def main(classificados, tam_bloco=20):
 
 
 if __name__ == "__main__":
-    cl = os.path.expanduser(sys.argv[1]) if len(sys.argv) > 1 else ""
-    tb = int(sys.argv[2]) if len(sys.argv) > 2 else 20
+    args = [a for a in sys.argv[1:] if not a.startswith("--max")]
+    mx = next((int(a.split("=")[1]) for a in sys.argv[1:] if a.startswith("--max=")), 0)
+    cl = os.path.expanduser(args[0]) if args else ""
+    tb = int(args[1]) if len(args) > 1 else 20
     if not cl or not os.path.isdir(cl):
-        print("uso: python rodar_em_blocos.py <pasta_CLASSIFICADOS> [tam_bloco=20]"); sys.exit(1)
-    main(cl, tb)
+        print("uso: python rodar_em_blocos.py <pasta_CLASSIFICADOS> [tam_bloco=20] [--max=N]"); sys.exit(1)
+    main(cl, tb, mx)
