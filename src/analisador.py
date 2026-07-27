@@ -96,9 +96,23 @@ def processar(pdf, staging):
             print("       ↻ fatos reaproveitados (staging) — não re-extrai")
         else:
             print("       ↻ fatos do cache SEM schema atual (fracao_ejecao/retrospectivo) — re-extraindo")
+    reextraiu = False
     if fatos is None:
         fatos = A.extrair_fatos(pdf)
         json.dump(fatos, open(fatos_cache, "w", encoding="utf-8"), ensure_ascii=False)
+        reextraiu = True
+    if reextraiu:
+        # FATOS NOVOS → todos os derivados (canônico/ACRI/perícia/PDF/visual/áudio/ficha) estão OBSOLETOS:
+        # foram feitos com fatos/nota/prompts VELHOS (ICFER, nota sem teto LEI 0). Apaga p/ regerar limpo —
+        # senão o _peca reusa a perícia velha e o conserto não pega. (buraco de reuso, 27/07)
+        for nome in (base + "_CANONICO.md", base + "_ACRI.txt", base + "_analise.md",
+                     base + "_analise.pdf", base + "_analise.html", base + "_visual.png",
+                     base + "_audio.mp3", base + "_gancho_abertura.txt",
+                     "_SITE.json", "_OK", "_REVISAR_publicacao.txt"):
+            try: os.remove(os.path.join(dst, nome))
+            except OSError: pass
+        shutil.rmtree(os.path.join(dst, "assets"), ignore_errors=True)
+        print("       ↻ derivados velhos apagados (re-extração) — regerando limpos")
     r = N.score(fatos)
     ents, sobe = decidir_entregaveis(r["aplic"])
     ver = (f"Nota {r['aplic']}/10 | Rigor {r['trabalho']}/10 | Muda conduta {r['muda_conduta']} | "

@@ -13,7 +13,7 @@ falta; o que saiu da fila, acabou. Reiniciar = continuar de onde parou, sem conf
 
 Uso (o botão faz):  python rodar_em_blocos.py <pasta_CLASSIFICADOS> [tam_bloco=20]
 """
-import os, sys, shutil
+import os, sys, shutil, glob, json
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -23,6 +23,20 @@ P._carregar_env()
 
 FILA_FORA = ("_PUBLICADOS", "_RECUSADOS", "MINIRREVISOES")   # NÃO são fila do publicador
 # (MINIRREVISOES é a trilha da minirevisão/opinião: condutas+fluxograma via minirevisao.py, não sobe no Supabase)
+
+
+def _staging_atual(pasta):
+    """O marcador _OK só vale se o staging foi feito com o SCHEMA ATUAL. Sinal: os fatos têm 'fracao_ejecao'
+    (campo mais novo). Sem ele, a nota/análise são PRÉ-CONSERTO — sem teto LEI 0 de retrospectivo, sem
+    glossário de FE — e o _OK republicaria conteúdo velho com cara nova. Nesse caso NÃO reusa: re-analisa.
+    Correção do buraco de 27/07: 254 de 268 _OK eram de schema velho e furavam os consertos por reuso."""
+    fj = glob.glob(os.path.join(pasta, "*_fatos.json"))
+    if not fj:
+        return False
+    try:
+        return "fracao_ejecao" in json.load(open(fj[0], encoding="utf-8"))
+    except Exception:
+        return False
 
 
 def analisar_e_publicar_um(pdf, staging=None, publicar=True):
@@ -89,7 +103,7 @@ def main(classificados, tam_bloco=20, maximo=0):
         for pdf in bloco:
             base = os.path.splitext(os.path.basename(pdf))[0]
             pasta = os.path.join(staging, base)
-            if os.path.exists(os.path.join(pasta, "_OK")):
+            if os.path.exists(os.path.join(pasta, "_OK")) and _staging_atual(pasta):
                 analisados.append((pdf, pasta))
                 print(f"   reusado    {base[:42]:42} (staging pronto)")
                 continue
