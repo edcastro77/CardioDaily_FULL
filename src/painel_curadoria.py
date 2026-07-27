@@ -167,8 +167,10 @@ usar_data = sb.checkbox("Filtrar por data")
 campo_data = data_de = data_ate = None
 if usar_data:
     campo_data = sb.radio("Filtrar pela data de", ["Publicação na revista", "Análise (entrou na base)"], index=0)
-    data_de = sb.date_input("De", value=datetime.date(2026, 1, 1))
-    data_ate = sb.date_input("Até", value=datetime.date.today())
+    _hoje = datetime.date.today()
+    _mes_passado = (_hoje.replace(day=1) - datetime.timedelta(days=1)).replace(day=1)   # 1º dia do mês anterior
+    data_de = sb.date_input("De", value=_mes_passado)     # padrão útil: ~2 meses recentes (não jan do ano)
+    data_ate = sb.date_input("Até", value=_hoje)
 
 
 def _parse_data(s):
@@ -235,7 +237,7 @@ with dirt:
         if art.get("caminho_pdf"): r1.link_button("📄 Abrir PDF", art["caminho_pdf"], use_container_width=True)
         if art.get("caminho_audio"): r2.link_button("🔊 Ouvir áudio", art["caminho_audio"], use_container_width=True)
         if art.get("caminho_visual_abstract"):
-            st.image(art["caminho_visual_abstract"], use_column_width=True)
+            st.image(art["caminho_visual_abstract"], use_container_width=True)
         with st.expander("Prévia da análise (texto)"):
             st.markdown((art.get("resumo_markdown") or "—")[:4000])
 
