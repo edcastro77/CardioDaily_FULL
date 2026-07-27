@@ -130,6 +130,8 @@ revistas = sorted({(a.get("revista") or "").replace("_", " ") for a in dados if 
 rev_sel = sb.multiselect("Revista", revistas)
 temas = sorted({a.get("doenca_principal") for a in dados if a.get("doenca_principal")})
 tema_sel = sb.multiselect("Tema", temas)
+tipos = sorted({a.get("tipo_estudo") for a in dados if a.get("tipo_estudo")})
+tipo_sel = sb.multiselect("Tipo de artigo (original / meta / revisão / guideline)", tipos)
 so_mcid = sb.checkbox("Só com MCID preenchido")
 status = sb.radio("No grupo de médicos", ["Todos", "Ainda não enviados", "Já enviados"], index=0)
 
@@ -155,6 +157,7 @@ def _passa(a: dict) -> bool:
     if not (nmin <= n <= nmax): return False
     if rev_sel and (a.get("revista") or "").replace("_", " ") not in rev_sel: return False
     if tema_sel and a.get("doenca_principal") not in tema_sel: return False
+    if tipo_sel and a.get("tipo_estudo") not in tipo_sel: return False
     if so_mcid and not (a.get("mcid_avaliacao") or "").strip(): return False
     ja = a["doc_id"] in enviados
     if status == "Ainda não enviados" and ja: return False
