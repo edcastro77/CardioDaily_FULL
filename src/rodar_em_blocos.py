@@ -103,7 +103,7 @@ def main(classificados, tam_bloco=20, maximo=0):
         for pdf in bloco:
             base = os.path.splitext(os.path.basename(pdf))[0]
             pasta = os.path.join(staging, base)
-            if os.path.exists(os.path.join(pasta, "_OK")) and _staging_atual(pasta):
+            if os.path.exists(os.path.join(pasta, "_OK")):
                 analisados.append((pdf, pasta))
                 print(f"   reusado    {base[:42]:42} (staging pronto)")
                 continue
