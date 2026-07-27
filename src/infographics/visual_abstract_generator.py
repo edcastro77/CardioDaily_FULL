@@ -580,28 +580,39 @@ class VisualAbstractGenerator:
     # ------ Playwright ------
 
     def _html_to_png(self, html: str, output_path: Path):
-        """Renderiza HTML para PNG via Playwright."""
-        from playwright.sync_api import sync_playwright
+        """Renderiza HTML para PNG via Playwright — COM RETRY (buraco zero).
+        Um hang transitório do chromium (set_content em 'networkidle' estourando o timeout) NÃO pode
+        virar INCOMPLETO: era tiro único, 30s, sem segunda chance. Agora: 3 tentativas, browser novo a
+        cada uma; a 1ª usa 'networkidle' (espera fontes/rede assentar), as seguintes caem pra 'load' —
+        que renderiza o mesmo HTML self-contained sem ficar refém de uma conexão que não fecha.
+        Só o TimeoutError re-tenta; erro de HTML sobe na hora (não mascara bug real)."""
+        from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page(
-                viewport={"width": 1080, "height": 800},
-                device_scale_factor=2,
-            )
-            page.set_content(html, wait_until="networkidle")
-
-            # Esperar fontes carregarem
-            page.wait_for_timeout(1500)
-
-            # Capturar elemento .container (altura dinâmica)
-            container = page.query_selector(".container")
-            if container:
-                container.screenshot(path=str(output_path))
-            else:
-                page.screenshot(path=str(output_path), full_page=True)
-
-            browser.close()
+        ultimo = None
+        for tentativa in (1, 2, 3):
+            espera = "networkidle" if tentativa == 1 else "load"
+            try:
+                with sync_playwright() as p:
+                    browser = p.chromium.launch()
+                    try:
+                        page = browser.new_page(
+                            viewport={"width": 1080, "height": 800},
+                            device_scale_factor=2,
+                        )
+                        page.set_content(html, wait_until=espera, timeout=60000)
+                        page.wait_for_timeout(1500)   # fontes assentarem
+                        container = page.query_selector(".container")
+                        if container:
+                            container.screenshot(path=str(output_path))
+                        else:
+                            page.screenshot(path=str(output_path), full_page=True)
+                    finally:
+                        browser.close()             # nunca vaza processo chromium, mesmo em erro
+                return
+            except PWTimeout as e:
+                ultimo = e
+                continue
+        raise ultimo
 
     # ------ Helpers ------
 
