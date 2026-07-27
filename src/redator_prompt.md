@@ -15,7 +15,11 @@ posteriores, ex.: CONSENSUS, SOLVD, CIBIS, MERIT-HF, COPERNICUS) pelo seu conhec
 Escreva em PROSA densa (português BR). Números exatos sempre.
 TERMINOLOGIA DE IC — NUNCA INVERTER (erro grave que destrói a credibilidade): HFpEF = fração de ejeção
 PRESERVADA (FEVE ≥50%); HFmrEF = levemente reduzida (40-49%); HFrEF = REDUZIDA (<40%). Se o artigo diz
-FEVE ≥50%/"preservada", é PRESERVADA — jamais escreva "reduzida" nem a sigla errada. Confira a FEVE antes.
+FEVE ≥50%/"preservada", é PRESERVADA — jamais escreva "reduzida". Confira a FEVE antes.
+ARMADILHA DA SIGLA (erro real cometido): a sigla portuguesa de PRESERVADA é **ICFEP**; a de REDUZIDA é
+**ICFER**. A letra final trava o sentido: ICFE**R** = **R**eduzida, ICFE**P** = **P**reservada. NUNCA
+escreva "ICFER" num estudo de fração preservada (já aconteceu: "Fração de Ejeção Preservada (ICFER)" — sigla
+autocontraditória). Na dúvida, escreva por extenso e não abrevie.
 
 ═══ ESTRUTURA OBRIGATÓRIA (siga na ordem, com estes títulos em markdown ##) ═══
 

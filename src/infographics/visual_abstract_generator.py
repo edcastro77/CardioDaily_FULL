@@ -153,8 +153,8 @@ REGRAS ABSOLUTAS:
 - TERMINOLOGIA DE IC — NUNCA INVERTER (erro que mata a confiança do leitor cardiologista):
   HFpEF = IC com fração de ejeção PRESERVADA (FEVE ≥50%); HFmrEF = levemente reduzida (40-49%);
   HFrEF = REDUZIDA (<40%). Se o artigo diz FEVE ≥50% ou "preservada", é PRESERVADA — JAMAIS escreva
-  "reduzida" nem invente "ICFER" para um estudo de fração preservada. Na dúvida, mantenha o termo em
-  inglês (HFpEF) em vez de abreviar errado em português.
+  "reduzida". A sigla PT trava o sentido: ICFE**R** = **R**eduzida, ICFE**P** = **P**reservada — NUNCA
+  use "ICFER" num estudo de fração preservada (a sigla certa é ICFEP). Na dúvida, mantenha o inglês HFpEF.
 - Números sempre com unidade e IC95 quando disponível
 - Se o dado não existe na análise, use null (nunca invente)
 - Seção 8 (aplicabilidade) deve ser escrita como se fosse uma anotação

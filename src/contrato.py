@@ -99,22 +99,25 @@ def validar(ficha, checar_arquivos=True):
     if not _txt(ficha.get("created_at")):
         v.append("created_at vazio")
 
-    # 9) TRAVA DE FRAÇÃO DE EJEÇÃO — cadeado determinístico contra a inversão clínica (buraco real 27/07:
-    #    visual abstract chamou HFpEF/preservada de "ICFER"/reduzida, invertendo o sentido do estudo).
-    #    O fenótipo (_fracao_ejecao) é FATO da extração. Se o texto que o leitor vê (título/gancho/contexto)
-    #    afirma o OPOSTO e NUNCA afirma o certo, é contradição → RECUSA. Lock, não súplica ao modelo.
+    # 9) TRAVA DE FRAÇÃO DE EJEÇÃO — cadeado determinístico contra SIGLA TROCADA (buraco real 27/07:
+    #    análise de HFpEF/preservada rotulada "ICFER" — e ICFER SIGNIFICA reduzida; a correta é ICFEP).
+    #    A sigla tem sentido FIXO: ICFER/HFrEF = reduzida; ICFEP/HFpEF = preservada. Se a sigla no texto
+    #    contradiz o fenótipo (FATO da extração), é inversão clínica → RECUSA — MESMO que a palavra certa
+    #    apareche junto ("Preservada (ICFER)"). Olha a SIGLA, não a palavra solta (palavra pode ser contraste).
+    #    Corrige o furo da 1ª versão, que exigia "nunca dizer preservada" e deixava passar "Preservada (ICFER)".
     fe = ficha.get("_fracao_ejecao")
     if fe in ("preservada", "reduzida"):
         alvo = " ".join(str(ficha.get(c, "")) for c in
-                        ("titulo", "gancho_lista", "contexto_tema", "aplicabilidade_pratica", "impacto_conduta"))
-        diz_reduzida = re.search(r"reduzid|ICFER|IC-?FER|HFrEF", alvo, re.I)
-        diz_preservada = re.search(r"preservad|ICFEP|IC-?FEP|HFpEF", alvo, re.I)
-        if fe == "preservada" and diz_reduzida and not diz_preservada:
-            v.append("INVERSÃO FE: fatos dizem fração PRESERVADA (HFpEF) mas o texto diz 'reduzida'/'ICFER' "
-                     "e nunca 'preservada' — inversão clínica, buraco zero recusa")
-        if fe == "reduzida" and diz_preservada and not diz_reduzida:
-            v.append("INVERSÃO FE: fatos dizem fração REDUZIDA (HFrEF) mas o texto diz 'preservada'/'HFpEF' "
-                     "e nunca 'reduzida' — inversão clínica, buraco zero recusa")
+                        ("titulo", "gancho_lista", "contexto_tema", "aplicabilidade_pratica",
+                         "impacto_conduta", "resumo_markdown"))
+        sigla_reduzida = re.search(r"\bIC-?FE[Rr]\b|\bHFrEF\b", alvo, re.I)      # ICFER, IC-FER, ICFEr, HFrEF
+        sigla_preservada = re.search(r"\bIC-?FE[Pp]\b|\bHFpEF\b", alvo, re.I)    # ICFEP, IC-FEP, ICFEp, HFpEF
+        if fe == "preservada" and sigla_reduzida:
+            v.append(f"INVERSÃO FE: estudo de fração PRESERVADA mas o texto usa a sigla "
+                     f"'{sigla_reduzida.group()}' (que significa REDUZIDA) — sigla trocada, buraco zero recusa")
+        if fe == "reduzida" and sigla_preservada:
+            v.append(f"INVERSÃO FE: estudo de fração REDUZIDA mas o texto usa a sigla "
+                     f"'{sigla_preservada.group()}' (que significa PRESERVADA) — sigla trocada, buraco zero recusa")
 
     return v
 
