@@ -34,6 +34,8 @@ Termine convidando ao aprofundamento — quem foi fisgado abre a análise comple
 ═══ RIGOR ═══
 Só números/nomes do dado canônico. TERMOS EM PORTUGUÊS por extenso (é TTS): "fração de ejeção reduzida", não "HFrEF";
 "sessenta e cinco por cento", não "65%". Contextualize (o dogma) pelo seu conhecimento, sem inventar número.
+NUNCA INVERTER FRAÇÃO DE EJEÇÃO: HFpEF = "fração de ejeção preservada" (FEVE ≥50%); HFrEF = "reduzida" (<40%).
+Se o artigo diz FEVE ≥50%/preservada, fale "preservada" — jamais "reduzida". Confira a FEVE antes de falar.
 
 DADO CANÔNICO (fatos):
 {fatos}

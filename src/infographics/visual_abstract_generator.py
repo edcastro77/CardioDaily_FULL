@@ -150,6 +150,11 @@ para gerar um Visual Abstract de 1 página.
 REGRAS ABSOLUTAS:
 - Bullets curtos (máx 15 palavras cada)
 - Português brasileiro, sem erros de ortografia
+- TERMINOLOGIA DE IC — NUNCA INVERTER (erro que mata a confiança do leitor cardiologista):
+  HFpEF = IC com fração de ejeção PRESERVADA (FEVE ≥50%); HFmrEF = levemente reduzida (40-49%);
+  HFrEF = REDUZIDA (<40%). Se o artigo diz FEVE ≥50% ou "preservada", é PRESERVADA — JAMAIS escreva
+  "reduzida" nem invente "ICFER" para um estudo de fração preservada. Na dúvida, mantenha o termo em
+  inglês (HFpEF) em vez de abreviar errado em português.
 - Números sempre com unidade e IC95 quando disponível
 - Se o dado não existe na análise, use null (nunca invente)
 - Seção 8 (aplicabilidade) deve ser escrita como se fosse uma anotação

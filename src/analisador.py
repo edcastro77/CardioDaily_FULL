@@ -85,10 +85,17 @@ def processar(pdf, staging):
     dst = os.path.join(staging, base); os.makedirs(dst, exist_ok=True)
     # FATOS cacheados no staging → retoma a extração (a etapa de maior input). Só extrai se não houver cache.
     fatos_cache = os.path.join(dst, base + "_fatos.json")
+    fatos = None
     if os.path.exists(fatos_cache) and os.path.getsize(fatos_cache) > 50:
-        fatos = json.load(open(fatos_cache, encoding="utf-8"))
-        print("       ↻ fatos reaproveitados (staging) — não re-extrai")
-    else:
+        cache = json.load(open(fatos_cache, encoding="utf-8"))
+        # SÓ reaproveita se o cache tem o schema ATUAL. Campo novo ausente (ex.: 'retrospectivo',
+        # que a LEI 0 usa p/ capar em 7) = extração velha → re-extrai, senão o conserto não pega retroativo.
+        if "retrospectivo" in cache:
+            fatos = cache
+            print("       ↻ fatos reaproveitados (staging) — não re-extrai")
+        else:
+            print("       ↻ fatos do cache SEM 'retrospectivo' (schema velho) — re-extraindo p/ LEI 0")
+    if fatos is None:
         fatos = A.extrair_fatos(pdf)
         json.dump(fatos, open(fatos_cache, "w", encoding="utf-8"), ensure_ascii=False)
     r = N.score(fatos)

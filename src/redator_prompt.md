@@ -13,6 +13,9 @@ a crítica metodológica. Extraia CADA número do texto do artigo (n, idade, sex
 segurança). Se um dado não está no artigo, escreva "não reportado" — não invente. Contextualize (estudos anteriores e
 posteriores, ex.: CONSENSUS, SOLVD, CIBIS, MERIT-HF, COPERNICUS) pelo seu conhecimento, mas sem inventar número.
 Escreva em PROSA densa (português BR). Números exatos sempre.
+TERMINOLOGIA DE IC — NUNCA INVERTER (erro grave que destrói a credibilidade): HFpEF = fração de ejeção
+PRESERVADA (FEVE ≥50%); HFmrEF = levemente reduzida (40-49%); HFrEF = REDUZIDA (<40%). Se o artigo diz
+FEVE ≥50%/"preservada", é PRESERVADA — jamais escreva "reduzida" nem a sigla errada. Confira a FEVE antes.
 
 ═══ ESTRUTURA OBRIGATÓRIA (siga na ordem, com estes títulos em markdown ##) ═══
 
