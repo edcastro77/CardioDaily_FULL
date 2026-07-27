@@ -6,7 +6,7 @@ Puro, sem dependências, testável. O Publicador NUNCA sobe nada que não passe 
 Por que existe: no modelo antigo, o pipeline subia registro em branco pro Supabase e o site
 renderizava card fantasma ("buracos ... supabase em branco destruía tudo"). Aqui o incompleto é RECUSADO.
 """
-import os
+import os, re
 
 # Campos = colunas REAIS da tabela artigos (Supabase). A tabela NÃO tem 'slug'.
 CAMPOS = [
@@ -98,6 +98,23 @@ def validar(ficha, checar_arquivos=True):
     # 8) created_at
     if not _txt(ficha.get("created_at")):
         v.append("created_at vazio")
+
+    # 9) TRAVA DE FRAÇÃO DE EJEÇÃO — cadeado determinístico contra a inversão clínica (buraco real 27/07:
+    #    visual abstract chamou HFpEF/preservada de "ICFER"/reduzida, invertendo o sentido do estudo).
+    #    O fenótipo (_fracao_ejecao) é FATO da extração. Se o texto que o leitor vê (título/gancho/contexto)
+    #    afirma o OPOSTO e NUNCA afirma o certo, é contradição → RECUSA. Lock, não súplica ao modelo.
+    fe = ficha.get("_fracao_ejecao")
+    if fe in ("preservada", "reduzida"):
+        alvo = " ".join(str(ficha.get(c, "")) for c in
+                        ("titulo", "gancho_lista", "contexto_tema", "aplicabilidade_pratica", "impacto_conduta"))
+        diz_reduzida = re.search(r"reduzid|ICFER|IC-?FER|HFrEF", alvo, re.I)
+        diz_preservada = re.search(r"preservad|ICFEP|IC-?FEP|HFpEF", alvo, re.I)
+        if fe == "preservada" and diz_reduzida and not diz_preservada:
+            v.append("INVERSÃO FE: fatos dizem fração PRESERVADA (HFpEF) mas o texto diz 'reduzida'/'ICFER' "
+                     "e nunca 'preservada' — inversão clínica, buraco zero recusa")
+        if fe == "reduzida" and diz_preservada and not diz_reduzida:
+            v.append("INVERSÃO FE: fatos dizem fração REDUZIDA (HFrEF) mas o texto diz 'preservada'/'HFpEF' "
+                     "e nunca 'reduzida' — inversão clínica, buraco zero recusa")
 
     return v
 

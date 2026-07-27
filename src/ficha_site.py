@@ -9,7 +9,7 @@ Mapa canônico → contrato do site (interface Artigo):
   ACRI[selo] → doenca_principal                    ACRI[A] → contexto_tema, gancho_lista
   ACRI[I] → impacto_conduta, bullets_praticos      arquivos → caminho_pdf/audio/visual_abstract
 """
-import os, re, glob, unicodedata, datetime
+import os, re, glob, unicodedata, datetime, json
 
 # selo do ACRI → tema do site (cardiodaily.ts → TEMAS)
 SELO_TEMA = {
@@ -159,6 +159,15 @@ def montar(pasta):
     acri_f = glob.glob(os.path.join(pasta, "*_ACRI.txt"))
     acri = open(acri_f[0], encoding="utf-8").read() if acri_f else ""
 
+    # fenótipo de fração de ejeção (fato da extração) — vira a TRAVA do portão contra a inversão HFpEF↔reduzida
+    fatos_f = glob.glob(os.path.join(pasta, "*_fatos.json"))
+    fracao_ejecao = None
+    if fatos_f:
+        try:
+            fracao_ejecao = json.load(open(fatos_f[0], encoding="utf-8")).get("fracao_ejecao")
+        except Exception:
+            fracao_ejecao = None
+
     titulo = _campo(canon, "titulo")
     revista = _campo(canon, "revista")
     doi = _campo(canon, "doi")
@@ -233,4 +242,5 @@ def montar(pasta):
         "publicar_no_site": False,              # sobe como rascunho; você libera no Administrador/site
         "descartado": False,
         "created_at": datetime.date.today().isoformat(),
+        "_fracao_ejecao": fracao_ejecao,        # METADADO (prefixo _ → NÃO sobe): trava de inversão FE no contrato
     }

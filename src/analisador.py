@@ -88,13 +88,14 @@ def processar(pdf, staging):
     fatos = None
     if os.path.exists(fatos_cache) and os.path.getsize(fatos_cache) > 50:
         cache = json.load(open(fatos_cache, encoding="utf-8"))
-        # SÓ reaproveita se o cache tem o schema ATUAL. Campo novo ausente (ex.: 'retrospectivo',
-        # que a LEI 0 usa p/ capar em 7) = extração velha → re-extrai, senão o conserto não pega retroativo.
-        if "retrospectivo" in cache:
+        # SÓ reaproveita se o cache tem o schema ATUAL. Checa o campo MAIS NOVO ('fracao_ejecao', que
+        # alimenta a trava de inversão no portão): sua presença garante também 'retrospectivo' (LEI 0).
+        # Ausente = extração velha → re-extrai, senão os consertos não pegam retroativo.
+        if "fracao_ejecao" in cache:
             fatos = cache
             print("       ↻ fatos reaproveitados (staging) — não re-extrai")
         else:
-            print("       ↻ fatos do cache SEM 'retrospectivo' (schema velho) — re-extraindo p/ LEI 0")
+            print("       ↻ fatos do cache SEM schema atual (fracao_ejecao/retrospectivo) — re-extraindo")
     if fatos is None:
         fatos = A.extrair_fatos(pdf)
         json.dump(fatos, open(fatos_cache, "w", encoding="utf-8"), ensure_ascii=False)
