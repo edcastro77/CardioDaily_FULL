@@ -28,6 +28,8 @@ KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
 HDR = {"apikey": KEY, "Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
 AGENDA = os.path.join(_HERE, "..", "outputs", "agenda_curadoria.json")
 DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+# Grupo WhatsApp "CardioDaily" (Z-API). Sobrescreve com ZAPI_GRUPO_ID no .env se mudar.
+GRUPO_WPP = os.getenv("ZAPI_GRUPO_ID", "120363402464114458-group")
 
 st.set_page_config(page_title="CardioDaily · Curadoria", page_icon="🫀", layout="wide")
 
@@ -210,7 +212,8 @@ with dir:
             st.toast(enviar_telegram(art))
 
         w1, w2 = st.columns([0.6, 0.4])
-        phone = w1.text_input("WhatsApp (número ou ID do grupo)", key="wpp_" + art["doc_id"])
+        phone = w1.text_input("WhatsApp (grupo CardioDaily por padrão)", value=GRUPO_WPP,
+                              key="wpp_" + art["doc_id"])
         if w2.button("💬 Enviar no WhatsApp", use_container_width=True, disabled=not phone):
             st.toast(enviar_whatsapp(art, phone.strip()))
 
