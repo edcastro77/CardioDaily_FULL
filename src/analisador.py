@@ -48,16 +48,17 @@ def _gerar(prompt_file, contexto, max_tokens):
     instrucao = (p.replace("{fatos}", "(use os FATOS do contexto acima)")
                   .replace("{veredito}", "(use o VEREDITO do contexto acima)")
                   .replace("{article_text}", "(use o TEXTO do contexto acima)"))
-    txt = llm_client.gerar(M.ESCRITA, instrucao, contexto=contexto, max_tokens=max_tokens, temperatura=0.4)
-    # PISO DE TAMANHO: o thinking do Sonnet 5 come tokens antes de escrever — saída vazia OU truncada
-    # não pode passar como se fosse boa (perícia capenga no site). Falha falado e o artigo volta pra fila.
+    # PISO DE TAMANHO: saída vazia/truncada não pode passar como boa. Com o thinking DESLIGADO (llm_client)
+    # isso praticamente não ocorre mais; mesmo assim RETENTAMOS 1x antes de desistir (rede de segurança).
     minimo = {"redator_prompt.md": 3000, "acri_prompt.md": 400, "script_audio_prompt.md": 900}.get(prompt_file, 1)
-    n = len((txt or "").strip())
-    if n < minimo:
-        raise ValueError(f"{prompt_file}: saída CURTA demais ({n} chars, mínimo {minimo}) — "
-                         f"modelo {llm_client._ULTIMO_MODELO[0]}, max_tokens={max_tokens}. "
-                         f"Provável truncamento pelo thinking; artigo volta pra fila.")
-    return txt
+    txt, n = "", 0
+    for tentativa in (1, 2):
+        txt = llm_client.gerar(M.ESCRITA, instrucao, contexto=contexto, max_tokens=max_tokens, temperatura=0.4)
+        n = len((txt or "").strip())
+        if n >= minimo:
+            return txt
+    raise ValueError(f"{prompt_file}: saída CURTA demais ({n} chars, mínimo {minimo}) — "
+                     f"modelo {llm_client._ULTIMO_MODELO[0]}, max_tokens={max_tokens} (após 2 tentativas).")
 
 
 def processar(pdf, staging):

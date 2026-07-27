@@ -98,13 +98,17 @@ def _anthropic(mod, instrucao, contexto, max_tokens, temperatura):
                    {"type": "text", "text": instrucao}]
     else:
         content = instrucao
-    for kw in (M.temp_kwargs(mod, temperatura), {}):     # com temp; refaz sem se rejeitar
+    # THINKING OFF na ESCRITA: o thinking do Sonnet 5 vinha LIGADO por padrão e comia todo o max_tokens,
+    # devolvendo saída VAZIA (ACRI 0 chars → artigo caía pra fila) e ainda QUEIMANDO tokens à toa. Escrita
+    # factual ("dados e fatos, sem firula") não precisa de thinking. Desligar aqui mata a saída vazia E corta
+    # o custo. Degrada: se o modelo rejeitar o param 'thinking', tenta sem. (extração/gerar_json não passa aqui.)
+    for extra in ({"thinking": {"type": "disabled"}}, {}):
         try:
             r = cli.messages.create(model=mod, max_tokens=max_tokens,
-                                    messages=[{"role": "user", "content": content}], **kw)
+                                    messages=[{"role": "user", "content": content}], **extra)
             return "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
         except Exception as e:
-            if kw and _erro_de_sampling(e):
+            if extra and "thinking" in str(e).lower():   # modelo não aceita o param → tenta sem
                 continue
             raise
 
