@@ -132,8 +132,22 @@ temas = sorted({a.get("doenca_principal") for a in dados if a.get("doenca_princi
 tema_sel = sb.multiselect("Tema", temas)
 so_mcid = sb.checkbox("Só com MCID preenchido")
 status = sb.radio("No grupo de médicos", ["Todos", "Ainda não enviados", "Já enviados"], index=0)
-data_de = sb.text_input("Data publicação DE (AAAA-MM-DD)", "")
-data_ate = sb.text_input("Data publicação ATÉ (AAAA-MM-DD)", "")
+
+usar_data = sb.checkbox("Filtrar por data")
+campo_data = data_de = data_ate = None
+if usar_data:
+    campo_data = sb.radio("Data de", ["Análise (entrou na base)", "Publicação na revista"], index=0)
+    data_de = sb.date_input("De", value=datetime.date(2026, 1, 1))
+    data_ate = sb.date_input("Até", value=datetime.date.today())
+
+
+def _parse_data(s):
+    """AAAA-MM-DD → date; aceita também AAAA-MM e AAAA; não reconhecível → None."""
+    s = (s or "").strip()
+    for n, fmt in ((10, "%Y-%m-%d"), (7, "%Y-%m"), (4, "%Y")):
+        try: return datetime.datetime.strptime(s[:n], fmt).date()
+        except Exception: continue
+    return None
 
 
 def _passa(a: dict) -> bool:
@@ -145,9 +159,10 @@ def _passa(a: dict) -> bool:
     ja = a["doc_id"] in enviados
     if status == "Ainda não enviados" and ja: return False
     if status == "Já enviados" and not ja: return False
-    dp = a.get("data_publicacao") or ""
-    if data_de and dp and dp < data_de: return False
-    if data_ate and dp and dp > data_ate: return False
+    if usar_data:
+        bruto = a.get("created_at") if (campo_data or "").startswith("Análise") else a.get("data_publicacao")
+        d = _parse_data(bruto)
+        if d is None or d < data_de or d > data_ate: return False
     return True
 
 
