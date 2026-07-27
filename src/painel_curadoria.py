@@ -12,7 +12,7 @@ grupo de WhatsApp. "Não publicado" = ainda não foi pro grupo.
 Rodar:  streamlit run src/painel_curadoria.py   (ou a Chave 5)
 """
 from __future__ import annotations
-import os, json, datetime
+import os, json, datetime, re
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -32,11 +32,20 @@ GRUPO_WPP = os.getenv("ZAPI_GRUPO_ID", "120363402464114458-group")
 st.set_page_config(page_title="CardioDaily · Curadoria", page_icon="🫀", layout="wide")
 
 TIPOS = ["Original", "Meta-análise", "Revisão", "Guideline", "Outro"]
+# Sinais FORTES no título — reclassificam mesmo que o banco diga "original" (o campo tipo_estudo erra).
+_TIT_GUIDE = re.compile(r"guideline|diretriz|consensus|consenso|scientific statement|position (paper|statement)", re.I)
+_TIT_META = re.compile(r"meta-?analys|meta-?anális|metanál|systematic review|revisão sistemática|network meta", re.I)
+_TIT_REV = re.compile(r"narrative review|scoping review|:\s*a review\b|state[- ]of[- ]the[- ]art|umbrella review", re.I)
 
 
-def tipo_norm(t: str | None) -> str:
-    """Normaliza o tipo_estudo bagunçado do banco (original/artigo_original/metanalise/
-    revisao_sistematica_meta_analise/...) em 4 categorias limpas. Ordem importa: 'meta' antes de 'revis'."""
+def tipo_norm(t: str | None, titulo: str | None = None) -> str:
+    """Normaliza o tipo em 4 categorias. Primeiro confia no TÍTULO quando ele grita revisão/meta/guideline
+    (o campo tipo_estudo do banco erra: rotula revisão como 'original'). Só depois cai no campo do banco.
+    Ordem importa: guideline → meta → revisão → original."""
+    tt = titulo or ""
+    if _TIT_GUIDE.search(tt): return "Guideline"
+    if _TIT_META.search(tt): return "Meta-análise"
+    if _TIT_REV.search(tt): return "Revisão"
     t = (t or "").lower()
     if "guide" in t or "diretriz" in t: return "Guideline"
     if "meta" in t: return "Meta-análise"
@@ -143,7 +152,7 @@ revistas = sorted({(a.get("revista") or "").replace("_", " ") for a in dados if 
 rev_sel = sb.multiselect("Revista", revistas)
 temas = sorted({a.get("doenca_principal") for a in dados if a.get("doenca_principal")})
 tema_sel = sb.multiselect("Tema", temas)
-presentes = [t for t in TIPOS if any(tipo_norm(a.get("tipo_estudo")) == t for a in dados)]
+presentes = [t for t in TIPOS if any(tipo_norm(a.get("tipo_estudo"), a.get("titulo")) == t for a in dados)]
 tipo_sel = sb.multiselect("Tipo de artigo", presentes)
 so_mcid = sb.checkbox("Só com MCID preenchido")
 status = sb.radio("No grupo de médicos", ["Todos", "Ainda não enviados", "Já enviados"], index=0)
@@ -151,7 +160,7 @@ status = sb.radio("No grupo de médicos", ["Todos", "Ainda não enviados", "Já 
 usar_data = sb.checkbox("Filtrar por data")
 campo_data = data_de = data_ate = None
 if usar_data:
-    campo_data = sb.radio("Data de", ["Análise (entrou na base)", "Publicação na revista"], index=0)
+    campo_data = sb.radio("Filtrar pela data de", ["Publicação na revista", "Análise (entrou na base)"], index=0)
     data_de = sb.date_input("De", value=datetime.date(2026, 1, 1))
     data_ate = sb.date_input("Até", value=datetime.date.today())
 
@@ -170,7 +179,7 @@ def _passa(a: dict) -> bool:
     if not (nmin <= n <= nmax): return False
     if rev_sel and (a.get("revista") or "").replace("_", " ") not in rev_sel: return False
     if tema_sel and a.get("doenca_principal") not in tema_sel: return False
-    if tipo_sel and tipo_norm(a.get("tipo_estudo")) not in tipo_sel: return False
+    if tipo_sel and tipo_norm(a.get("tipo_estudo"), a.get("titulo")) not in tipo_sel: return False
     if so_mcid and not (a.get("mcid_avaliacao") or "").strip(): return False
     ja = a["doc_id"] in enviados
     if status == "Ainda não enviados" and ja: return False
