@@ -33,9 +33,15 @@ st.set_page_config(page_title="CardioDaily · Curadoria", page_icon="🫀", layo
 
 TIPOS = ["Original", "Meta-análise", "Revisão", "Guideline", "Outro"]
 # Sinais FORTES no título — reclassificam mesmo que o banco diga "original" (o campo tipo_estudo erra).
-_TIT_GUIDE = re.compile(r"guideline|diretriz|consensus|consenso|scientific statement|position (paper|statement)", re.I)
-_TIT_META = re.compile(r"meta-?analys|meta-?anális|metanál|systematic review|revisão sistemática|network meta", re.I)
-_TIT_REV = re.compile(r"narrative review|scoping review|:\s*a review\b|state[- ]of[- ]the[- ]art|umbrella review", re.I)
+# ALTA PRECISÃO: 'guideline' só conta como TIPO de documento, não em 'guideline-directed/recommended/based'
+# (frase comum em estudo ORIGINAL). Idem consenso/position statement, que são o tipo do trabalho.
+_TIT_GUIDE = re.compile(
+    r"clinical practice guideline|practice guidelines?\b|\bguidelines?\b(?![-\s]*(direct|recommend|base|adher|concord|eligib))"
+    r"|consensus (statement|document|conference)|expert consensus|scientific statement"
+    r"|position (paper|statement)|\bdiretriz(es)?\b", re.I)
+_TIT_META = re.compile(r"meta-?analys|meta-?anális|metanál|network meta", re.I)
+_TIT_REV = re.compile(r"systematic review|narrative review|scoping review|umbrella review"
+                      r"|revisão sistemática|:\s*a review\b|state[- ]of[- ]the[- ]art", re.I)
 
 
 def tipo_norm(t: str | None, titulo: str | None = None) -> str:
