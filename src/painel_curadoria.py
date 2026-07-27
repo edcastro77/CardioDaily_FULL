@@ -182,6 +182,19 @@ def _parse_data(s):
     return None
 
 
+def data_efetiva(a) -> tuple:
+    """Regra do Dr. Eduardo: usar a data de PUBLICAÇÃO real. Mas quando o banco só tem o ANO
+    (vira placeholder AAAA-01-01, típico de ahead-of-print/pré-publicação) ou não tem data, cai na
+    data de ANÁLISE (created_at) — porque o trabalho é recente (jun/jul), não de janeiro.
+    Devolve (date, fonte) com fonte em {'publicação', 'análise'}."""
+    d = _parse_data(a.get("data_publicacao"))
+    placeholder = d is not None and d.month == 1 and d.day == 1   # só-ano defaulta pra 01/01
+    if d is None or placeholder:
+        da = _parse_data(a.get("created_at"))
+        if da: return da, "análise"
+    return d, "publicação"
+
+
 def _passa(a: dict) -> bool:
     n = a.get("nota_aplicabilidade") or 0
     if not (nmin <= n <= nmax): return False
@@ -193,8 +206,10 @@ def _passa(a: dict) -> bool:
     if status == "Ainda não enviados" and ja: return False
     if status == "Já enviados" and not ja: return False
     if usar_data:
-        bruto = a.get("created_at") if (campo_data or "").startswith("Análise") else a.get("data_publicacao")
-        d = _parse_data(bruto)
+        if (campo_data or "").startswith("Análise"):
+            d = _parse_data(a.get("created_at"))
+        else:
+            d, _ = data_efetiva(a)          # publicação real, com fallback p/ análise quando é só-ano
         if d is None or d < data_de or d > data_ate: return False
     return True
 
@@ -227,7 +242,8 @@ with dirt:
     else:
         st.subheader((art.get("titulo") or "")[:120])
         rev = (art.get("revista") or "").replace("_", " ")
-        st.write(f"**{rev}** · pub. {art.get('data_publicacao') or '—'} · tema: {art.get('doenca_principal') or '—'}")
+        _def, _fonte = data_efetiva(art)
+        st.write(f"**{rev}** · {_fonte} {_def or '—'} · tema: {art.get('doenca_principal') or '—'}")
         st.write(f"Nota **{art.get('nota_aplicabilidade')}** · rigor {art.get('nota_trabalho_estatistico')} · "
                  + ("✅ já no grupo" if art['doc_id'] in enviados else "🔎 ainda não enviado"))
         if art.get("mcid_avaliacao"): st.caption("**MCID:** " + art["mcid_avaliacao"][:400])
