@@ -11,6 +11,7 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
   "ano": "<ano>",
   "pergunta": "<um de: intervencao | etiologia | prognostico | diagnostico>  (intervencao = testa um TRATAMENTO; etiologia = fatores de risco/causa; prognostico = curso/desfecho; diagnostico = acurácia de teste)",
   "desenho": "<um de: rct | meta | coorte | registro | observacional_ajustado | transversal | caso_controle>",
+  "retrospectivo": <true se o estudo é RETROSPECTIVO: analisa dados/desfechos JÁ COLETADOS antes de a análise ser desenhada — inclui análise SECUNDÁRIA/post-hoc de coortes ou bancos existentes, e acurácia diagnóstica sobre exames já realizados. false se PROSPECTIVO (coletado a partir de protocolo desenhado ANTES). RCT normalmente é prospectivo. ATENÇÃO à armadilha 'análise retrospectiva de coortes prospectivas': o que vale é COMO A ANÁLISE foi feita — se os desfechos já existiam quando a pergunta foi feita, é retrospectivo=true>,
   "open_label": <true se a COMPARAÇÃO RANDOMIZADA não é cega. ATENÇÃO: um período de RUN-IN open-label (fase inicial em que todos tomam a droga antes de randomizar) NÃO torna o trial open-label — se a randomização é duplo-cega, use false>,
   "poder_ok": <true se o poder estatístico planejado foi adequado e atingido; false se limítrofe/não atingido>,
   "desfecho_duro": <true se o desfecho primário é duro (morte, IAM, AVC, hospitalização, TEV); false se surrogate>,

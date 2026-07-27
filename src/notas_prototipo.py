@@ -28,6 +28,12 @@ def teto_desenho(a):
     # etiologia / prognostico / diagnostico: aquisição de dados impecável = PISO 8.
     # (Sem viés de desfecho: não damos 10 porque a história deu razão. Somos críticos com o método atual;
     #  a excelência da COLETA — codebook, lab calibrado, follow-up — é o que sustenta o 8.)
+    # LEI 0 — RETROSPECTIVO NÃO PEGA O PISO 8. O piso 8 é do Framingham: coorte PROSPECTIVA, coleta
+    # desenhada antes. Um estudo RETROSPECTIVO (análise secundária/post-hoc, acurácia sobre exames já
+    # feitos) é observacional que a régua do CLAUDE.md capa em 7 (Nível C: controle + ajuste) — nunca 8.
+    # "Observacional recebendo NAC 8 → ERRADO (teto é 6 ou 7)". Por isso o teto retrospectivo é 7.
+    if a.get("retrospectivo"):
+        return 7
     if a.get("desenho_apropriado") and a.get("qualidade_entrada") and a.get("follow_up_completo"):
         return 8
     return 7

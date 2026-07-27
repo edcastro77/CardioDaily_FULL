@@ -35,6 +35,7 @@ SCHEMA_FATOS = {
         "pergunta": {"type": "string", "enum": ["intervencao", "etiologia", "prognostico", "diagnostico"]},
         "desenho": {"type": "string", "enum": ["rct", "meta", "coorte", "registro",
                                                "observacional_ajustado", "transversal", "caso_controle"]},
+        "retrospectivo": _B,
         "open_label": _B, "poder_ok": _B, "desfecho_duro": _B, "extrapolavel": _B,
         "eventos_min_grupo": _INT, "eventos_nao_alcancados": _B, "parado_cedo_por_beneficio": _B,
         "efeito_grande": _B, "taxa_obs": _NUM, "taxa_esp": _NUM, "margem_ni": _NUM, "taxa_basal": _NUM,
@@ -62,7 +63,7 @@ SCHEMA_FATOS = {
         },
     },
     # obrigatórios: o que o motor de rigor e o canônico NÃO podem receber vazio
-    "required": ["titulo", "revista", "ano", "pergunta", "desenho", "open_label", "poder_ok",
+    "required": ["titulo", "revista", "ano", "pergunta", "desenho", "retrospectivo", "open_label", "poder_ok",
                  "desfecho_duro", "extrapolavel", "conclusao_nao_bate_desenho", "itt_falso",
                  "qualidade_entrada", "achados_principais", "keywords", "relevancia_clinica",
                  "aplicabilidade"],
