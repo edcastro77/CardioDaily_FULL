@@ -100,6 +100,7 @@ def extrair_fatos(pdf_path):
     Rede: se o tool use falhar (provedor sem suporte), cai no caminho de texto + parsing tolerante."""
     texto = "".join(p.get_text() for p in fitz.open(pdf_path))[:48000]
     import llm_client, modelos as M
+    llm_client.contexto_uso(etapa="extracao")                  # p/ o log de uso
     prompt = PROMPT.replace("{article_text}", texto)
     try:
         return llm_client.gerar_json(M.EXTRACAO, prompt, SCHEMA_FATOS,

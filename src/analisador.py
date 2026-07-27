@@ -44,12 +44,13 @@ def _gerar(prompt_file, contexto, max_tokens):
     do artigo (prompt caching): o bloco 'contexto' entra 1x e os próximos leem a ~10%. A instrução vai à parte."""
     _carregar_env()
     import llm_client, modelos as M
+    llm_client.contexto_uso(etapa=prompt_file.replace("_prompt.md", "").replace(".md", ""))   # p/ o log de uso
     p = open(os.path.join(_HERE, prompt_file)).read()
     instrucao = (p.replace("{fatos}", "(use os FATOS do contexto acima)")
                   .replace("{veredito}", "(use o VEREDITO do contexto acima)")
                   .replace("{article_text}", "(use o TEXTO do contexto acima)"))
-    # PISO DE TAMANHO: saída vazia/truncada não pode passar como boa. Com o thinking DESLIGADO (llm_client)
-    # isso praticamente não ocorre mais; mesmo assim RETENTAMOS 1x antes de desistir (rede de segurança).
+    # PISO DE TAMANHO: saída vazia/truncada não pode passar como boa. RETENTAMOS 1x antes de desistir — é a
+    # rede de segurança contra o retorno vazio pontual (foi o que derrubava o ACRI; NÃO era thinking, medido 27/07).
     minimo = {"redator_prompt.md": 3000, "acri_prompt.md": 400, "script_audio_prompt.md": 900}.get(prompt_file, 1)
     txt, n = "", 0
     for tentativa in (1, 2):
@@ -61,13 +62,35 @@ def _gerar(prompt_file, contexto, max_tokens):
                      f"modelo {llm_client._ULTIMO_MODELO[0]}, max_tokens={max_tokens} (após 2 tentativas).")
 
 
+def _peca(dst, nome, minimo, gerar):
+    """RETOMADA POR ENTREGÁVEL: só (re)gera o que ainda NÃO existe e passa o tamanho mínimo. Um artigo que
+    morreu no gancho (a última peça) reaproveita extração/ACRI/perícia já pagas — não refaz do zero.
+    Mesma régua de tamanho do _conferir_entregaveis."""
+    caminho = os.path.join(dst, nome)
+    if os.path.exists(caminho) and os.path.getsize(caminho) >= minimo:
+        print(f"       ↻ {nome.split('_')[-1]} já pronto — reaproveitado (não regera)")
+        return open(caminho, encoding="utf-8").read()
+    txt = gerar()
+    open(caminho, "w", encoding="utf-8").write(txt)
+    return txt
+
+
 def processar(pdf, staging):
-    """Corrente por artigo. Só gera o que a porta liberou (economiza geração cara). Grava no STAGING."""
-    import shutil
+    """Corrente por artigo. Só gera o que a porta liberou (economiza geração cara). Grava no STAGING.
+    RETOMÁVEL por entregável: reaproveita peças já geradas (fatos, canônico, ACRI, perícia, PDF, visual, áudio)."""
+    import shutil, glob, llm_client
     import analise as A, notas_prototipo as N, pipeline as P
     base = os.path.splitext(os.path.basename(pdf))[0]
+    llm_client.contexto_uso(artigo=base)                       # p/ o log de uso (uso.jsonl) saber o artigo
     dst = os.path.join(staging, base); os.makedirs(dst, exist_ok=True)
-    fatos = A.extrair_fatos(pdf)
+    # FATOS cacheados no staging → retoma a extração (a etapa de maior input). Só extrai se não houver cache.
+    fatos_cache = os.path.join(dst, base + "_fatos.json")
+    if os.path.exists(fatos_cache) and os.path.getsize(fatos_cache) > 50:
+        fatos = json.load(open(fatos_cache, encoding="utf-8"))
+        print("       ↻ fatos reaproveitados (staging) — não re-extrai")
+    else:
+        fatos = A.extrair_fatos(pdf)
+        json.dump(fatos, open(fatos_cache, "w", encoding="utf-8"), ensure_ascii=False)
     r = N.score(fatos)
     ents, sobe = decidir_entregaveis(r["aplic"])
     ver = (f"Nota {r['aplic']}/10 | Rigor {r['trabalho']}/10 | Muda conduta {r['muda_conduta']} | "
@@ -81,32 +104,43 @@ def processar(pdf, staging):
                 f"VEREDITO DO MOTOR (use estes números, não invente outros):\n{ver}\n\n"
                 f"TEXTO DO ARTIGO:\n{texto[:40000]}")
 
-    P.registro_canonico(pdf, fatos)                            # canônico SEMPRE (retido ou publicado) — MESMOS fatos/nota da porta
-    shutil.move(os.path.join(_HERE, base + "_CANONICO.md"), os.path.join(dst, base + "_CANONICO.md"))
+    can = os.path.join(dst, base + "_CANONICO.md")             # canônico SEMPRE (retido ou publicado); reaproveita se já existe
+    if not (os.path.exists(can) and os.path.getsize(can) >= 200):
+        P.registro_canonico(pdf, fatos)                        # MESMOS fatos/nota da porta
+        shutil.move(os.path.join(_HERE, base + "_CANONICO.md"), can)
 
     if sobe:                                                   # ≥6
-        open(os.path.join(dst, base + "_ACRI.txt"), "w").write(_gerar("acri_prompt.md", contexto, 8000))
-        open(os.path.join(dst, base + "_analise.md"), "w").write(_gerar("redator_prompt.md", contexto, 16000))
-        try:                                                   # PDF da análise crítica (peça central do site)
-            from pdf_analise import gerar_pdf_de_pasta
-            gerar_pdf_de_pasta(dst)
-        except Exception as e:
-            print(f"       ⚠️  PDF da análise não gerado ({type(e).__name__}: {e}) — rende na Mac")
+        _peca(dst, base + "_ACRI.txt",    400,  lambda: _gerar("acri_prompt.md", contexto, 8000))
+        _peca(dst, base + "_analise.md", 3000,  lambda: _gerar("redator_prompt.md", contexto, 16000))
+        if not (os.path.exists(os.path.join(dst, base + "_analise.pdf"))
+                and os.path.getsize(os.path.join(dst, base + "_analise.pdf")) >= 10000):
+            try:                                               # PDF da análise crítica (peça central do site)
+                from pdf_analise import gerar_pdf_de_pasta
+                gerar_pdf_de_pasta(dst)
+            except Exception as e:
+                print(f"       ⚠️  PDF da análise não gerado ({type(e).__name__}: {e}) — rende na Mac")
     if r["aplic"] >= 7:                                        # Visual Abstract (8 seções) — AUTOMÁTICO
-        try:
-            _gerar_visual_abstract(fatos, r, dst, base)
-        except Exception as e:
-            print(f"       ⚠️  Visual Abstract não gerado ({type(e).__name__}: {e}) — rende na Mac")
+        if os.path.exists(os.path.join(dst, base + "_visual.png")) and \
+           os.path.getsize(os.path.join(dst, base + "_visual.png")) >= 50000:
+            print("       ↻ Visual Abstract já pronto — reaproveitado")
+        else:
+            try:
+                _gerar_visual_abstract(fatos, r, dst, base)
+            except Exception as e:
+                print(f"       ⚠️  Visual Abstract não gerado ({type(e).__name__}: {e}) — rende na Mac")
     if r["aplic"] >= 8:                                        # áudio
         from voz_utils import cacar_ingles, falar
-        roteiro = _gerar("script_audio_prompt.md", contexto, 8000)
-        open(os.path.join(dst, base + "_roteiro_audio.txt"), "w").write(roteiro)
-        if cacar_ingles(roteiro):
-            open(os.path.join(dst, "_REVISAR_termos_ingles.txt"), "w").write(", ".join(cacar_ingles(roteiro)))
-        falar(roteiro, os.path.join(dst, base + "_audio.mp3"))   # config do .env; ElevenLabs = só Radar
-        try:                                                    # gancho de abertura (distribuição diária) — no PORTÃO, não por fora
-            gancho = _gerar("gancho_abertura_prompt.md", contexto, 300).strip()[:200]
-            open(os.path.join(dst, base + "_gancho_abertura.txt"), "w").write(gancho)
+        mp3 = os.path.join(dst, base + "_audio.mp3")
+        if os.path.exists(mp3) and os.path.getsize(mp3) >= 100000:
+            print("       ↻ áudio já pronto — reaproveitado")
+        else:
+            roteiro = _peca(dst, base + "_roteiro_audio.txt", 900, lambda: _gerar("script_audio_prompt.md", contexto, 8000))
+            if cacar_ingles(roteiro):
+                open(os.path.join(dst, "_REVISAR_termos_ingles.txt"), "w").write(", ".join(cacar_ingles(roteiro)))
+            falar(roteiro, mp3)                                # config do .env; ElevenLabs = só Radar
+        try:                                                   # gancho de abertura (distribuição diária) — no PORTÃO, não por fora
+            _peca(dst, base + "_gancho_abertura.txt", 20,
+                  lambda: _gerar("gancho_abertura_prompt.md", contexto, 2000).strip()[:200])
         except Exception as e:
             print(f"       ⚠️  gancho de abertura não gerado ({type(e).__name__}: {e})")
     _conferir_entregaveis(dst, base, r["aplic"])              # BURACO ZERO: faltou algo → erro, volta pra fila

@@ -16,6 +16,42 @@ import os
 import modelos as M
 
 _ULTIMO_MODELO = [None]   # observabilidade: quem respondeu por último
+_USO_CTX = {"etapa": "?", "artigo": "?"}   # quem chamou seta isto antes de gerar (p/ o log saber a etapa/artigo)
+
+
+def contexto_uso(etapa=None, artigo=None):
+    """Marca a etapa/artigo da próxima chamada — só p/ o log de uso saber de onde veio."""
+    if etapa is not None:
+        _USO_CTX["etapa"] = etapa
+    if artigo is not None:
+        _USO_CTX["artigo"] = artigo
+
+
+def _registrar_uso(r, modelo):
+    """Uma linha JSONL por chamada LLM em outputs/uso.jsonl. É isto que transforma 'acho que' em NÚMERO:
+    custo, cache hit, tokens de thinking e — crucial — stop_reason (o detector de truncamento).
+    Best-effort ABSOLUTO: se qualquer coisa falhar aqui, NÃO derruba a análise."""
+    try:
+        import json, datetime
+        u = getattr(r, "usage", None)
+        if u is None:
+            return
+        d = getattr(u, "output_tokens_details", None)
+        linha = {
+            "ts": datetime.datetime.now().isoformat(timespec="seconds"),
+            "artigo": _USO_CTX.get("artigo"), "etapa": _USO_CTX.get("etapa"), "modelo": modelo,
+            "input": getattr(u, "input_tokens", None),
+            "output": getattr(u, "output_tokens", None),
+            "cache_write": getattr(u, "cache_creation_input_tokens", 0),
+            "cache_read": getattr(u, "cache_read_input_tokens", 0),
+            "thinking": getattr(d, "thinking_tokens", None) if d else None,
+            "stop_reason": getattr(r, "stop_reason", None),   # "max_tokens" = truncou (falha determinística)
+        }
+        caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "outputs", "uso.jsonl")
+        with open(caminho, "a", encoding="utf-8") as f:
+            f.write(json.dumps(linha, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 
 def _erro_de_sampling(e):
@@ -77,6 +113,7 @@ def gerar_json(chain, instrucao, schema, contexto=None, max_tokens=8000, nome="e
                             "input_schema": schema}],
                     tool_choice={"type": "tool", "name": nome},   # OBRIGA o uso da ferramenta
                     messages=[{"role": "user", "content": content}])
+                _registrar_uso(r, mod)
                 for b in r.content:
                     if getattr(b, "type", "") == "tool_use":
                         _ULTIMO_MODELO[0] = mod
@@ -106,6 +143,7 @@ def _anthropic(mod, instrucao, contexto, max_tokens, temperatura):
         try:
             r = cli.messages.create(model=mod, max_tokens=max_tokens,
                                     messages=[{"role": "user", "content": content}], **kw)
+            _registrar_uso(r, mod)
             return "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
         except Exception as e:
             if kw and _erro_de_sampling(e):
