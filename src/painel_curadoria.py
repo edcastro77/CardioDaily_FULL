@@ -183,16 +183,18 @@ def _parse_data(s):
 
 
 def data_efetiva(a) -> tuple:
-    """Regra do Dr. Eduardo: usar a data de PUBLICAÇÃO real. Mas quando o banco só tem o ANO
-    (vira placeholder AAAA-01-01, típico de ahead-of-print/pré-publicação) ou não tem data, cai na
-    data de ANÁLISE (created_at) — porque o trabalho é recente (jun/jul), não de janeiro.
+    """Regra do Dr. Eduardo: usar a data de PUBLICAÇÃO real. Só cai na data de ANÁLISE quando o trabalho
+    é AHEAD-OF-PRINT RECENTE cujo mês se perdeu — sinal: data = AAAA-01-01 (só-ano) E do MESMO ANO da
+    análise. NUNCA inventa data pra artigo antigo: RALES 1999-01-01 continua 1999 (ano ≠ ano da análise).
     Devolve (date, fonte) com fonte em {'publicação', 'análise'}."""
     d = _parse_data(a.get("data_publicacao"))
-    placeholder = d is not None and d.month == 1 and d.day == 1   # só-ano defaulta pra 01/01
-    if d is None or placeholder:
-        da = _parse_data(a.get("created_at"))
-        if da: return da, "análise"
-    return d, "publicação"
+    da = _parse_data(a.get("created_at"))
+    if d is None:                                    # sem data nenhuma → usa análise
+        return (da, "análise") if da else (None, "publicação")
+    so_ano = d.month == 1 and d.day == 1             # só-ano defaulta pra 01/01
+    if so_ano and da and d.year == da.year:          # placeholder do ANO CORRENTE = ahead-of-print recente
+        return da, "análise"
+    return d, "publicação"                           # ano real (inclui 1999) → mantém a publicação
 
 
 def _passa(a: dict) -> bool:
