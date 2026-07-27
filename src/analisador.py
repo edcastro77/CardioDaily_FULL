@@ -111,7 +111,7 @@ def processar(pdf, staging):
 
     if sobe:                                                   # ≥6
         _peca(dst, base + "_ACRI.txt",    400,  lambda: _gerar("acri_prompt.md", contexto, 8000))
-        _peca(dst, base + "_analise.md", 3000,  lambda: _gerar("redator_prompt.md", contexto, 16000))
+        _peca(dst, base + "_analise.md", 3000,  lambda: _gerar("redator_prompt.md", contexto, 28000))  # teto folgado: thinking(~10k)+perícia(~8k) não trunca (medido 27/07: 6 perícias cortavam em 16k)
         if not (os.path.exists(os.path.join(dst, base + "_analise.pdf"))
                 and os.path.getsize(os.path.join(dst, base + "_analise.pdf")) >= 10000):
             try:                                               # PDF da análise crítica (peça central do site)

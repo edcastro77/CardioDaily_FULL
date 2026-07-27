@@ -33,19 +33,29 @@ def _registrar_uso(r, modelo):
     Best-effort ABSOLUTO: se qualquer coisa falhar aqui, NÃO derruba a análise."""
     try:
         import json, datetime
-        u = getattr(r, "usage", None)
-        if u is None:
-            return
+        u = getattr(r, "usage", None) or getattr(r, "usage_metadata", None)   # Anthropic/OpenAI vs Gemini
+        def g(*nomes):                                        # pega o 1º nome que existir (nomes diferem por provedor)
+            for n in nomes:
+                v = getattr(u, n, None) if u is not None else None
+                if v is not None:
+                    return v
+            return None
+        stop = getattr(r, "stop_reason", None)                # Anthropic
+        if stop is None:
+            try: stop = r.choices[0].finish_reason            # OpenAI
+            except Exception:
+                try: stop = str(getattr(r.candidates[0], "finish_reason", None))  # Gemini
+                except Exception: stop = None
         d = getattr(u, "output_tokens_details", None)
         linha = {
             "ts": datetime.datetime.now().isoformat(timespec="seconds"),
             "artigo": _USO_CTX.get("artigo"), "etapa": _USO_CTX.get("etapa"), "modelo": modelo,
-            "input": getattr(u, "input_tokens", None),
-            "output": getattr(u, "output_tokens", None),
-            "cache_write": getattr(u, "cache_creation_input_tokens", 0),
-            "cache_read": getattr(u, "cache_read_input_tokens", 0),
+            "input": g("input_tokens", "prompt_tokens", "prompt_token_count"),
+            "output": g("output_tokens", "completion_tokens", "candidates_token_count"),
+            "cache_write": g("cache_creation_input_tokens") or 0,
+            "cache_read": g("cache_read_input_tokens", "cached_content_token_count") or 0,
             "thinking": getattr(d, "thinking_tokens", None) if d else None,
-            "stop_reason": getattr(r, "stop_reason", None),   # "max_tokens" = truncou (falha determinística)
+            "stop_reason": stop,                              # "max_tokens" (Anthropic) / "length" (OpenAI) = truncou
         }
         caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "outputs", "uso.jsonl")
         with open(caminho, "a", encoding="utf-8") as f:
@@ -159,6 +169,7 @@ def _openai(mod, instrucao, contexto, max_tokens, temperatura):
         try:
             r = cli.chat.completions.create(model=mod, max_completion_tokens=max_tokens,
                                             messages=[{"role": "user", "content": texto}], **kw)
+            _registrar_uso(r, mod)                        # fallback OpenAI também é visível ao instrumento
             return r.choices[0].message.content or ""
         except Exception as e:
             if kw and _erro_de_sampling(e):
@@ -174,4 +185,5 @@ def _gemini(mod, instrucao, contexto, max_tokens, temperatura):
     cfg = types.GenerateContentConfig(max_output_tokens=max_tokens,
                                       **M.temp_kwargs(mod, temperatura))   # Gemini aceita temperature
     r = cli.models.generate_content(model=mod, contents=texto, config=cfg)
+    _registrar_uso(r, mod)                                # fallback Gemini também é visível ao instrumento
     return r.text
