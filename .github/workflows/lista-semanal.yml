@@ -1,9 +1,9 @@
-name: Lista Semanal por Revista (segunda 07:30 BRT)
+name: Lista Semanal por Revista (MANUAL — curadoria pelo painel)
 
+# DESLIGADO o envio automático em 27/Jul/2026 (decisão do Dr. Eduardo): a lista semanal passa a ser
+# escolhida/enviada pelo Painel de Curadoria, não disparada sozinha. Fica só como disparo manual.
 on:
-  schedule:
-    - cron: '30 10 * * 1'   # 10:30 UTC = 07:30 BRT, toda segunda-feira
-  workflow_dispatch:         # permite rodar manualmente
+  workflow_dispatch:         # SÓ manual — o cron automático foi removido de propósito
 
 jobs:
   lista-semanal:

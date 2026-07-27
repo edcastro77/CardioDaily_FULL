@@ -1,9 +1,10 @@
-name: Artigos Diários (07:00 BRT)
+name: Artigos Diários (MANUAL — curadoria pelo painel)
 
+# DESLIGADO o envio automático em 27/Jul/2026 (decisão do Dr. Eduardo): o sistema NÃO publica/envia
+# artigo sozinho. A curadoria passa a ser MANUAL pelo Painel de Curadoria (src/painel_curadoria.py).
+# Só o Radar continua automático (radar.yml). Este workflow fica só como disparo manual de emergência.
 on:
-  schedule:
-    - cron: '0 10 * * *'   # 10:00 UTC = 07:00 BRT
-  workflow_dispatch:        # permite rodar manualmente
+  workflow_dispatch:        # SÓ manual — o cron automático foi removido de propósito
 
 jobs:
   distribuir:

@@ -1,5 +1,5 @@
 # CADERNO DE EXECUÇÃO — CARDIODAILY
-## Versão 28.0 | 08/Jun/2026
+## Versão 30.0 | 25/Jul/2026
 ### Este documento substitui todas as versões anteriores. É o único documento canônico do projeto.
 
 ---
@@ -653,12 +653,150 @@ O prompt original usava `"mcid_avaliacao": "[placeholder em colchetes]"` → Gem
 
 ---
 
-## PARTE 14 — HISTÓRICO DE VERSÕES
+## PARTE 14 — BURACO ZERO: A CORRENTE MODULAR E A BATERIA DE PROVA (25/Jul/2026)
+
+### O que aconteceu
+
+Em 25/Jul/2026 a corrente nova (Classificador → Analisador → Publicador → Administrador → Arquivador)
+rodou pela primeira vez ponta a ponta contra o Supabase real. O primeiro run expôs **74% de falha**
+(66 pastas criadas, 17 completas). A causa não era um bug: era **método**. O sistema pedia JSON ao
+modelo em texto livre e torcia para vir bem formado; cada malformação nova (vírgula sobrando,
+caractere de controle, comentário) derrubava o artigo inteiro, e cada correção tapava um caso.
+
+**Decisão do Dr. Eduardo (inegociável):** *"qualquer erro, por menor que seja, é inadmissível"* —
+esta é a tradução operacional do BURACO ZERO. 40% de falha não é progresso: é sistema quebrado.
+
+### A virada: corrigir a CLASSE, nunca o caso
+
+| Antes (remendo) | Depois (estrutural) |
+|---|---|
+| Pedir JSON em texto e reparar o que vier quebrado | **Saída estruturada (tool use)**: a API OBRIGA o modelo a devolver o schema. JSON inválido deixa de ser POSSÍVEL |
+| Teto de tokens dimensionado ignorando o *thinking* | Tetos com folga (perícia 16k, ACRI/roteiro 8k) + **piso de tamanho**: saída truncada é rejeitada, não publicada |
+| Falha de rede matava o artigo | **Retry com backoff** em toda chamada LLM e no TTS |
+| `_OK` escrito mesmo faltando entregável | `_conferir_entregaveis()`: só é "pronto" se TUDO da porta existir e tiver tamanho |
+| Extração de DOI duplicada (uma endurecida, uma crua) | **Fonte única** `classificador_pubmed.extrair_doi` + trava de parêntese desbalanceado |
+
+### A régua: `src/bateria.py`
+
+Roda N artigos e responde **APROVADO** (zero falha) ou **REPROVADO** — nunca "progresso".
+Roda o **portão real** (`publicador.processar_pasta` em dry-run = contrato + preflight de schema),
+sem subir nada. Assim "APROVADO" significa **publicável**, não apenas "arquivo existe no staging".
+Retomável com `--continuar`.
+
+```
+python src/bateria.py ARTIGOS/CLASSIFICADOS 50
+```
+
+### Resultado — BURACO ZERO ATINGIDO (25/Jul/2026)
+
+| Prova | Resultado |
+|---|---|
+| 50 artigos originais | ✅ APROVADO 50/50 |
+| Meta-análises | ✅ APROVADO 5/5 |
+| Guidelines | ✅ APROVADO 5/5 |
+| Revisões | ✅ APROVADO 5/5 |
+| Editoriais | ✅ APROVADO 5/5 |
+| LEI 0 (motor de rigor) | ✅ 7/7 fixtures — intacto, não tocado |
+
+**70 artigos, zero falha.**
+
+### Correções de raiz encontradas pela bateria
+
+1. **`bateria.py`** — passou a rodar o Publicador em dry-run; antes dava APROVADO em artigo que o
+   Publicador recusaria (o buraco que jogava artigo em `_RECUSADOS`).
+2. **`ficha_site._frases`** — descartava frase densa >240 chars, zerando os bullets de artigo bem
+   escrito → contrato recusava. Agora segmenta em cláusulas, nunca descarta.
+3. **`voz_utils`** — TTS sem retry: queda de conexão no streaming derrubava qualquer artigo ≥8.
+   Agora com retry/backoff. (Também: roteiro >4000 chars era truncado; agora é fatiado por frase.)
+4. **`pipeline.py` + `analisador.py`** — eliminada a extração dupla no canônico: **uma extração,
+   uma nota**. O canônico nunca diverge da porta.
+
+### Riscos ABERTOS (registrados, fora do escopo da bateria)
+
+- ⚠️ **Dois analisadores vivos**: `article_analyzer.py` (antigo) ainda roda todo dia às 07:00 via
+  `distribuidor.py` no GitHub Actions, enquanto a corrente nova roda pela Chave 2. Ambos publicam no
+  MESMO Supabase → risco de análise duplicada/divergente. **Decisão pendente do Dr. Eduardo:**
+  aposentar o caminho antigo (distribuidor só distribui) ou mantê-los convivendo.
+- ⚠️ **As duas notas vêm sempre idênticas** — nas 10 linhas reais do Supabase,
+  `nota_aplicabilidade == nota_trabalho_estatistico` em 10/10 (7/7, 9/9, 5/5). Pela LEI 0 elas se
+  relacionam, mas nunca divergirem sugere colapso das duas numa só. É o coração do produto: investigar.
+- ⚠️ **Dados a limpar no banco**: 2 `doc_id` gravados com `)` (causa já corrigida) e 1 artigo nota 5
+  publicado violando a porta (contrato agora barra <6).
+- ⚠️ **`reprocessar_fila.py` órfão** — drena a FILA_ESPERA (ahead-of-print aguardando indexação no
+  PubMed). Foi feito para rodar todo dia, mas não está ligado a botão nem ao Actions.
+
+### Mapa dos arquivos
+
+`MAPA_DO_SRC.md` (raiz do projeto) — quais dos 29 arquivos de `src/` formam a corrente (19),
+quais rodam sozinhos pelo Actions, e quais são legado do caminho antigo.
+
+---
+
+## PARTE 15 — HISTÓRICO DE VERSÕES
 
 | Versão | Data | Mudanças |
 |---|---|---|
+| 31.0 | 27/Jul/2026 | **Virada para CURADORIA MANUAL (ver PARTE 16).** O sistema não publica/envia artigo sozinho — só o Radar. Novo **Painel de Curadoria** (`src/painel_curadoria.py`, Chave 5): filtra por nota/revista/data/MCID/tema e escolhe o que sai no site, no grupo (WhatsApp/Telegram) e no Instagram. Actions `artigos-diarios` e `lista-semanal` desligadas do cron (só manual). **LEI 0:** motor determinístico agora vive em `notas_prototipo.py` (o `article_analyzer.py` foi aposentado — Lei 4); novo teto: retrospectivo observacional = 7. **Trava de inversão de fração de ejeção** no portão (`contrato.py`): HFpEF rotulado "ICFER" é recusado. Modelos convergidos para o cliente unificado (`llm_client.py`, Claude 5). |
+| 30.0 | 25/Jul/2026 | **BURACO ZERO atingido (70 artigos, zero falha).** Corrente modular migrada do LAB para o FULL. Saída estruturada (tool use) na extração — JSON inválido virou impossível. Retry/backoff em todo LLM e no TTS. Piso de tamanho e conferência de entregáveis por porta. Preflight de schema no Publicador (mata o 400 mudo do Supabase). Fonte única de extração de DOI. Convergência de TODOS os modelos para `modelos.py` (grep limpo: zero modelo morto). `bateria.py` como régua binária. 4 botões (chaves) movidos do LAB para `CardioDaily_FULL/chaves/`; LAB arquivado em `archive/lab_snapshot_2026-07-25/`. |
 | 29.0 | 04/Jun/2026 | Causa raiz dos 43 linhas: timeout Anthropic SDK (~2min padrão) — revisões grandes levam 5-6min. Corrigido para 1800s. Validação por chars (-2DP por tipo). Guidelines migrados para Gemini 3.1 Pro Preview (janela 1M, aguenta 882k chars em 66s). Reanálise 21 revisões corrompidas. |
 | 28.0 | 03/Jun/2026 | Correção sistêmica de análises corrompidas; validação de qualidade no pipeline; detecção de corrupção no auditor; reanálise de 14 artigos nota≥7 com Gemini 3.5 Flash; podcast script migrado para Gemini 3.5 Flash (quota OpenAI zerada); 4 colunas criadas no Supabase (`muda_conduta text`, `por_que_importa`, `principais_recomendacoes`, `nota_metodologica numeric`) |
 | 27.0 | 02/Jun/2026 | Troca `gemini-2.5-pro` → `gemini-3.5-flash` em originais/meta; troca `gpt-4o` → `gpt-4.1` no podcast; Claude Code padrão: Sonnet 4.6 + alto esforço |
 | 26.0 | 31/Mai/2026 | MCID framework completo; campos novos; estado Supabase 31/Mai |
 | 25.0 | 29/Mai/2026 | Padronização completa dos prompts — MCID obrigatório, placeholders proibidos |
+
+---
+
+## PARTE 16 — CURADORIA MANUAL: O DR. EDUARDO ESCOLHE O QUE SAI (27/Jul/2026)
+
+### A virada
+
+Até aqui o sistema **publicava e enviava sozinho** (distribuidor às 07:00, nota≥8, pacote completo).
+Decisão do Dr. Eduardo em 27/Jul/2026: **isso acaba.** O médico não tem tempo de checar um a um, mas
+também não aceita que o sistema mande qualquer coisa sem ele ver. A solução não é automação cega nem
+revisão exaustiva — é um **painel de curadoria** onde ele filtra rápido e escolhe.
+
+**Regra nova:** o sistema **NÃO publica no site, NÃO envia no grupo, NÃO posta em rede social por conta
+própria.** A única coisa que continua automática e diária é o **Radar** (`radar.yml`).
+
+### O Painel de Curadoria — `src/painel_curadoria.py` (Chave 5)
+
+Streamlit local (`streamlit run src/painel_curadoria.py`, ou o botão `chaves/5_Painel_Curadoria.command`).
+Lê a tabela `artigos` do Supabase e deixa:
+
+- **Filtrar** por nota de aplicabilidade, revista, data de publicação, MCID (preenchido) e tema.
+- **Publicar no site**: seta `publicar_no_site = true` (o site só mostra o que está `true`; o padrão de
+  quem entra pela análise é `false` — fica na biblioteca esperando a curadoria).
+- **Tirar do site**: volta `publicar_no_site = false`.
+- **Enviar no grupo agora**: WhatsApp (Z-API) e/ou Telegram — só o artigo que ele mandar, na hora.
+- **Instagram**: gera a legenda pronta + aponta o visual abstract (não há API do Instagram — ele posta).
+- **Agenda da semana**: planeja o que sai em cada dia (`outputs/agenda_curadoria.json`) — planejamento,
+  não gatilho: nada dispara sozinho a partir da agenda.
+
+### O que foi desligado
+
+| Antes (automático) | Agora |
+|---|---|
+| `.github/workflows/artigos-diarios.yml` (cron 07:00, envia nota≥8) | **só `workflow_dispatch`** (manual) |
+| `.github/workflows/lista-semanal.yml` (cron segunda 07:30) | **só `workflow_dispatch`** (manual) |
+| `radar.yml` | **mantido automático e diário** |
+| `auditoria-semanal.yml` | mantido (auditoria interna, não publica nada) |
+
+O `publicar_no_site = false` que o Publicador grava deixou de ser "rascunho a aprovar às cegas" e virou
+o **estado natural da biblioteca**: o artigo existe, completo, esperando o Dr. Eduardo escolher no painel.
+
+### Correções de integridade do mesmo dia (LEI 0 e terminologia)
+
+Um visual abstract enviado ao grupo expôs dois erros do pipeline VELHO que motivaram consertos estruturais:
+
+1. **LEI 0 — retrospectivo não pega o piso 8.** O motor determinístico (`notas_prototipo.py`) ganhou o
+   fato `retrospectivo`: estudo observacional retrospectivo é capado em **7** (Nível C), nunca 8. O piso 8
+   é só de coorte PROSPECTIVA (tipo Framingham). Gabarito segue 7/7.
+2. **Trava de inversão de fração de ejeção no portão** (`contrato.py`). Novo fato `fracao_ejecao`
+   (preservada/levemente_reduzida/reduzida/nao_se_aplica). Se o fenótipo é preservada e o texto usa a
+   sigla ICFER/HFrEF (que significam REDUZIDA), o portão **RECUSA** — e vice-versa. A sigla tem sentido
+   fixo (ICFE**R**=Reduzida, ICFE**P**=Preservada); glossário reforçado no redator/visual/áudio. Lock
+   determinístico, não súplica ao modelo — mesmo princípio do Mermaid > HTML.
+
+**Onde a LEI 0 vive hoje:** `src/notas_prototipo.py` (determinístico, 7 fixtures de gabarito). O
+`article_analyzer.py` citado na PARTE 2 foi **aposentado** (Lei 4 — corrente modular). Os modelos também
+convergiram: um cliente unificado (`src/llm_client.py`, cadeia cross-provider, Claude 5 na frente).
