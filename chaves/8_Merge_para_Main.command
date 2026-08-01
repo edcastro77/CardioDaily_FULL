@@ -9,11 +9,21 @@
 #   3) só então a main recebe a lab — e aí já é avanço direto, sem conflito
 #   4) o push fica por sua conta, depois de você olhar
 #
-# OS 3 CONFLITOS ESPERADOS E POR QUE A LAB VENCE OS TRÊS (conferido em 01/Ago):
+# OS 4 CONFLITOS ESPERADOS E POR QUE A LAB VENCE OS QUATRO (conferido em 01/Ago):
 #   CLAUDE.md                 → lab é a v3.0 auditada, e JÁ CONTÉM a LEI 4 que a main trouxe
 #   src/article_analyzer.py   → na lab o analisador antigo está APOSENTADO (25/Jul > 24/Jul da main)
 #   src/radar/radar_pubmed.py → main ainda diz modelo='gemini-2.5-pro' (MODELO MORTO);
 #                               lab diz 'claude-sonnet-5'
+#   src/llm_client.py         → conflito ADD/ADD (as duas branches criaram o arquivo do zero).
+#                               A 1ª versão desta chave NÃO previa este e ABORTOU — o portão
+#                               funcionou. Conferido função a função em 01/Ago:
+#                                 main = 86 linhas, 5 funções
+#                                 lab  = 189 linhas, 9 funções — SUPERCONJUNTO ESTRITO
+#                                 (a lab tem tudo da main + gerar_json/tool use, log de uso,
+#                                  retry em erro transitório)
+#                               `gerar()` — a função que o RADAR chama — tem assinatura IDÊNTICA
+#                               nas duas; a da lab só acrescenta retry. Nada que a main tenha
+#                               falta na lab. Por isso é seguro ficar com a lab.
 # ═══════════════════════════════════════════════════════════════════════════
 set -u
 cd "$(dirname "$0")" && source ./config.sh
@@ -38,7 +48,7 @@ if git merge main --no-edit -q 2>/dev/null; then
   echo "  ✅ sem conflito"
 else
   echo "  ⚠️  conflitos — resolvendo com a versão da LAB nos 3 arquivos previstos:"
-  ESPERADOS="CLAUDE.md src/article_analyzer.py src/radar/radar_pubmed.py"
+  ESPERADOS="CLAUDE.md src/article_analyzer.py src/radar/radar_pubmed.py src/llm_client.py"
   INESPERADO=""
   for f in $(git diff --name-only --diff-filter=U); do
     case " $ESPERADOS " in
