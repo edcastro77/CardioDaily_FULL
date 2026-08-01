@@ -1,0 +1,56 @@
+Motor de rigor: prova exaustiva + pre-clinico fora da escala + falhas fatais + MCID + NHLBI contavel
+
+O motor da LEI 0 nunca tinha sido testado. Medido em 01/Ago, apareceram 4 buracos:
+
+1. FORA DE 'intervencao' O DESENHO ERA IGNORADO: etiologia, prognostico e diagnostico
+   devolviam 8/8 para os 11 desenhos - coorte, transversal, serie de casos e pre-clinico,
+   todos 8. Era a causa REAL do "padrao de nota 8" apontado em 27/Jul. Nao era o LLM.
+2. O CAMUNDONGO FOI REPRODUZIDO: pre_clinico + etiologia + coleta boa -> NAC 8.
+3. AS DUAS NOTAS COINCIDEM EM 80% e e POR CONSTRUCAO: aplic = min(tetos, estatistica).
+   Nao e bug, e o desenho da regua. (Fecha o item #18 como EXPLICADO, nao consertado.)
+4. O MOTOR IGNORAVA 5 CAMPOS QUE A EXTRACAO JA PAGA PARA PRODUZIR: qualidade_nhlbi
+   (48 criterios), falhas_fatais, fracao_ejecao, relevancia_clinica (o MCID inteiro)
+   e o proprio pre_clinico.
+
+O QUE MUDOU (decisoes do Dr. Eduardo, listadas antes de codar - LEI 6):
+
+- PRE-CLINICO SAI DA ESCALA CLINICA (rota=FORA_DA_ESCALA_CLINICA, aplic=0, sem rigor).
+  Nenhum dos 6 instrumentos do NHLBI cobre animal/in vitro: dar aplicabilidade clinica a
+  camundongo e erro de categoria. 'nao_classificavel' -> REVISAO_HUMANA: o motor nao chuta.
+- MATRIZ DE TETO POR DESENHO em TODAS as perguntas (_TETO_INTERVENCAO / _TETO_NAO_INTERVENCAO).
+- TETO DO RIGOR PELO DESENHO: a nota_estatistica partia de 9 fixo - serie de casos recebia
+  "Rigor 9/10", e esse numero ia DENTRO do contexto do redator ("use estes numeros").
+  Agora: RCT 10 - meta 9 - coorte 8 - obs.ajustado/caso-controle 7 - registro/transversal 6 -
+  antes-depois/serie de casos 5. Aplicado ANTES dos delatores.
+  (coorte=8 e nao 7 de proposito: pus 7 e o teste REPROVOU, acusando o Framingham.)
+- FALHAS FATAIS F1-F8 -> TETO 4, lidas de DUAS fontes: a lista do extrator E os limiares
+  numericos do NHLBI (dropout diferencial >=15pp, perda >20%, participacao <50%).
+  Limiar medido nao depende do humor do modelo. null = "nao reporta" NAO acusa falha.
+- MCID: relevancia_clinica vira teto (abaixo_do_mcid 6, nao_relevante 6, incerto 7).
+  Era extraida em todo artigo e jogada fora.
+- NHLBI CONTAVEL: o rigor vira auditavel ("cumpriu 6 de 12 criterios; falhou em alocacao
+  sigilosa, cegamento do avaliador, ITT"). Faixas: >=80% 10 - 60-79% 8 - 40-59% 6 - <40% 5.
+  SO PODE BAIXAR, nunca subir. Abaixo de 5 criterios respondidos nao capa (senao o artigo
+  seria punido pelo silencio do modelo, nao pela qualidade).
+
+COMO SE PROVOU - src/teste_motor.py, 11 baterias, funcao pura, sem LLM/rede/banco, <1s:
+  pre-clinico fora da escala - nao classificavel p/ humano - o desenho importa em TODAS as
+  perguntas - exemplos da LEI 0 um a um - teto estatistico em 3.000 combinacoes aleatorias -
+  rigor conhece o desenho - falhas fatais com os limiares numericos - MCID - NHLBI contavel -
+  gabarito dos 6 artigos - contrato de saida (a corrente nao quebra).
+
+VALIDADO POR MUTACAO: o motor foi sabotado de 16 maneiras diferentes (voltar o bug do
+camundongo, voltar o 8 universal, desligar as falhas fatais, afrouxar o limiar de dropout,
+tirar o teto estatistico da regua, voltar o rigor 9 fixo, derrubar o Framingham, aplicar o
+teto depois dos delatores, desligar o MCID, deixar o NHLBI SUBIR nota, capar sem dado
+suficiente, afrouxar as faixas, entre outras). O TESTE PEGOU AS 16.
+Teste que nao falha quando o codigo quebra nao e teste.
+
+EFEITO NA CORRENTE: nenhum. 'aplic' continua int (0 na rota fora da escala), entao as portas
+>=6/7/8 do analisador seguem funcionando. O analisador passou a escrever
+"SEM NOTA - <rota> | <motivo>" no canonico em vez de "Rigor None/10".
+
+TAMBEM: o PADRAO-OURO passa a ser versionado (excecao no .gitignore para outputs/PROVA/).
+Custou horas de conferencia manual + US$ 6,20 de API; perder = voltar a cegueira.
+
+EM ABERTO, por decisao do dono: se as duas notas devem ser mesmo independentes (item #18).

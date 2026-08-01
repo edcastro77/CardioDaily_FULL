@@ -17,3 +17,10 @@ chaves/config.sh
 chaves/LEIA-ME.md
 chaves/.DS_Store
 *_fatos.json
+
+# EXCEÇÃO (01/Ago/2026): o PADRÃO-OURO do classificador e o resultado da prova SÃO versionados.
+# Custaram horas de conferência manual do Dr. Eduardo + US$ 6,20 de API. Perder isso = voltar à cegueira.
+!outputs/PROVA/
+!outputs/PROVA/gabarito.csv
+!outputs/PROVA/gabarito.xlsx
+!outputs/PROVA/prova_bruta.csv

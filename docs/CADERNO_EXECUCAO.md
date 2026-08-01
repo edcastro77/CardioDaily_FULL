@@ -141,6 +141,221 @@ O Supabase é a janela pública do corpus. O corpus local é a fonte da verdade.
 
 ---
 
+## PARTE 5-A — CODEBOOK: QUAL MÓDULO USA QUAL PROGRAMA, PARA FAZER O QUÊ
+*Criado 30/Jul/2026 · auditado arquivo por arquivo contra o disco.*
+*Regra: toda alteração num módulo é registrada AQUI, na seção do módulo, com data e hora (LEI 2, item 5).*
+
+> **Como ler:** cada MÓDULO é um botão em `/chaves/`. Cada módulo usa N programas de `src/`.
+> "Modelo" = a cadeia de `src/modelos.py` (nunca hardcoded). "Lê / Escreve" = entrada e saída reais.
+
+---
+
+### MÓDULO 1 · CLASSIFICADOR  (botão `1_Classificador.command`)
+**Objetivo:** decidir o TIPO de cada PDF sem chutar, renomear e mover para a pasta certa.
+
+| Programa | Faz o quê | Modelo | Lê | Escreve |
+|---|---|---|---|---|
+| `classificador_ouro.py` | **entrada do módulo.** Camada A: mapa de revista por prefixo de DOI (determinístico, sem LLM). Camada B/C: quando o mapa não decide, chama o LLM lendo só a 1ª página | `EXTRACAO` (Sonnet 5) | `ARTIGOS/*.pdf` | `ARTIGOS/CLASSIFICADOS/<TIPO>/` |
+| `classificador_pubmed.py` | **a autoridade.** Extrai o DOI (tolera quebra de linha e parêntese de citação) e consulta PubMed/EuropePMC para pegar o `publicationType` OFICIAL. É quem evita o chute | `RAPIDO` (Haiku) | PDF + API PubMed/EuropePMC | devolve tipo ao `classificador_ouro` |
+| `pdf_extractor.py` | extrai o texto do PDF | — | PDF | texto |
+| `reprocessar_fila.py` | **drena a FILA_ESPERA.** Artigo *ahead-of-print* ainda não indexado no PubMed espera aqui em vez de ser chutado; este programa re-consulta todo dia e classifica quando o PubMed cataloga | `RAPIDO` | `FILA_ESPERA/` | move p/ `CLASSIFICADOS/` ou `DESCARTADOS/` |
+
+**Pastas de saída:** `ARTIGOS_ORIGINAIS` · `META_ANALISES` · `REVISOES` · `GUIDELINES` · `EDITORIAIS` ·
+`MINIRREVISOES` · `DESCARTADOS` (relato de caso, carta) · `FILA_ESPERA` (aguarda PubMed) · `REVISAO_HUMANA`.
+
+**🔴 BUG ABERTO (28/Jul/2026):** `Editorial`/`Comment` são mapeados para `ponto_de_vista` → pasta
+`EDITORIAIS` → **entram na fila de análise**. Resultado no run de 27/Jul: 136 editoriais viraram perícia
+completa (~7.400 tokens cada), saíram fora de contexto e foram recusados no portão. **Queima dinheiro.**
+Decisão pendente do Dr. Eduardo: descartar na porta ou dar trilha própria.
+
+---
+
+### MÓDULO 2 · ANALISADOR  (botão `2_Analisador.command`) — o coração
+**Objetivo:** transformar o PDF em FATOS → NOTA determinística → entregáveis, e publicar pelo portão.
+
+| Programa | Faz o quê | Modelo | Lê | Escreve |
+|---|---|---|---|---|
+| `rodar_em_blocos.py` | **entrada do módulo.** Roda em BLOCOS DE 20: analisa o bloco → publica o bloco → só então o próximo. Se a net cair, só o bloco em andamento refaz | — | `CLASSIFICADOS/` | orquestra |
+| `analisador.py` | orquestra UM artigo: fatos → nota → entregáveis por porta → **confere** → `_OK` | `ESCRITA` (Sonnet 5) | 1 PDF | pasta no `outputs/STAGING/` |
+| `analise.py` | **extrai os FATOS** por SAÍDA ESTRUTURADA (tool use): a API obriga o modelo a devolver o `SCHEMA_FATOS`. JSON inválido é impossível | `EXTRACAO` | PDF + `analise_prompt.md` | `{nome}_fatos.json` |
+| `notas_prototipo.py` | **MOTOR DE RIGOR — a LEI 0.** Determinístico, sem LLM: `min(teto_desenho, teto_externa, nota_estatistica, teto_falha_fatal)`. *Sagrado: não se mexe sem ordem do dono* | **nenhum** | os FATOS | as 2 notas + rota + falhas fatais + delatores |
+| `teste_motor.py` | **a PROVA do motor.** Função pura → testável de graça, em 1 segundo, sem LLM/rede/banco. 11 baterias: pré-clínico fora da escala · o desenho importa em TODAS as perguntas · exemplos da LEI 0 um a um · teto estatístico em 3.000 combinações aleatórias · F1–F8 com os limiares numéricos · gabarito dos 6 artigos · contrato de saída | **nenhum** | `notas_prototipo` | APROVADO / REPROVADO |
+| `pipeline.py` | monta o REGISTRO CANÔNICO (YAML + análise) — a "linha do banco", forjada uma vez | — | fatos + notas | `{nome}_CANONICO.md` |
+| `pdf_analise.py` | perícia markdown + metadados → HTML → **PDF WeasyPrint** (a peça central do site) | — | `{nome}_analise.md` | `{nome}_analise.pdf` |
+| `voz_utils.py` | roteiro → **MP3** (TTS OpenAI `gpt-4o-mini-tts`, voz **cedar**). Fatia por frase se passar de 4.000 chars; retry em queda de conexão. Tem também o lint anti-inglês (o TTS trocava de idioma) | TTS | roteiro | `{nome}_audio.mp3` |
+| `infographics/visual_abstract_generator.py` | **VISUAL ABSTRACT de 8 seções** — o único artefato visual permitido. Extrai dados da perícia → Jinja2 → Playwright → PNG | Sonnet 5 | `analysis.md` | `assets/visual_abstract.png` → copiado p/ `{nome}_visual.png` |
+| `minirevisao.py` | **trilha separada:** minirevisão / opinião de especialista → condutas + **fluxograma Mermaid**. NÃO sobe no Supabase | `ESCRITA` + `RAPIDO` | `CLASSIFICADOS/MINIRREVISOES/` | condutas + fluxograma |
+
+**Prompts (todos na raiz de `src/`):** `analise_prompt.md` (fatos) · `redator_prompt.md` (perícia) ·
+`acri_prompt.md` (card) · `script_audio_prompt.md` (áudio) · `gancho_abertura_prompt.md`.
+
+### MUDANÇAS NESTE MÓDULO — 01/Ago/2026, 14h (motor de rigor)
+
+**O que se mediu antes de mexer** (o motor nunca tinha sido testado; é função pura, custo zero):
+
+1. **Fora de `intervencao`, o desenho era IGNORADO.** Etiologia, prognóstico e diagnóstico devolviam
+   **8/8 para os 11 desenhos** — coorte, transversal, série de casos e pré-clínico, todos 8. Esta era
+   a causa REAL do "padrão de nota 8" que o Dr. Eduardo apontou nas análises de 27/Jul. Não era o LLM.
+2. **O camundongo foi reproduzido:** `pre_clinico` + `etiologia` + coleta boa → **NAC 8**.
+3. **As duas notas coincidem em 80 %** de 4.000 combinações — e é **por construção**:
+   `aplic = min(tetos, estatística)`. Quando nenhum teto morde, a segunda nota *é* a primeira.
+   Não são duas medidas independentes. **Isto não é bug — é o desenho da régua.** (Item #18 do kanban
+   pode ser fechado como "explicado", não como "consertado".)
+4. **O motor ignorava 5 campos que a extração JÁ paga para produzir:** `qualidade_nhlbi` (48 critérios),
+   `falhas_fatais`, `fracao_ejecao`, `relevancia_clinica` (o MCID inteiro) e `pre_clinico`.
+
+**O que mudou (decisões do Dr. Eduardo em 01/Ago, LEI 6 — listadas antes de codar):**
+
+- **Pré-clínico SAI da escala clínica** (`rota = FORA_DA_ESCALA_CLINICA`, `aplic = 0`, sem nota de
+  rigor). Nenhum dos 6 instrumentos do NHLBI cobre animal/in vitro: dar aplicabilidade clínica a
+  camundongo é erro de categoria. `nao_classificavel` → `REVISAO_HUMANA`: **o motor não chuta.**
+- **Matriz de teto por desenho para etiologia/prognóstico/diagnóstico** (`_TETO_NAO_INTERVENCAO`):
+  coorte prospectiva impecável 8 · retrospectiva 7 · caso-controle 7 · registro 7 · transversal 6 ·
+  antes-depois 5 · série de casos 5.
+- **Matriz explícita também para intervenção** (`_TETO_INTERVENCAO`), fechando o `else: 6` que dava
+  6 para série de casos e transversal.
+- **Falhas fatais F1–F8 → teto 4**, lidas de DUAS fontes: a lista que o extrator devolve **e** os
+  limiares numéricos do bloco NHLBI (dropout diferencial ≥15 pp, perda >20 %, participação <50 %).
+  Limiar medido não depende do humor do modelo. `null` = "não reporta" **não** acusa falha.
+- **TETO DO RIGOR PELO DESENHO** (`_TETO_RIGOR_DESENHO`, aprovado 01/Ago, 15h). A `nota_estatistica`
+  partia de **9 fixo** para tudo que não fosse RCT duplo-cego — uma SÉRIE DE CASOS recebia
+  "Rigor 9/10". Não vazava para o assinante (o teto de aplicabilidade segura em 5), **mas o
+  `analisador.py` injeta essa linha no contexto do redator com a instrução literal "use estes
+  números, não invente outros"** — numa coorte (NAC 6) o "Rigor 9" ia parar DENTRO da perícia.
+  Agora o rigor parte do desenho: RCT 10 · meta 9 · **coorte 8** · observacional ajustado / caso-controle 7 ·
+  registro / transversal 6 · antes-depois / série de casos 5. O teto é aplicado **ANTES** dos
+  delatores, para que eles continuem descendo a partir de um ponto de partida honesto.
+  Efeito medido (fatos bons): série de casos **9 → 5** · transversal **9 → 6** · registro **9 → 6** ·
+  antes-depois **9 → 5** · observacional ajustado **9 → 7**.
+  ⚠️ **`coorte` é 8 e não 7 de propósito:** pus 7 na 1ª tentativa e o `teste_motor.py` REPROVOU,
+  acusando o **Framingham** (gabarito do dono = 8). O piso 8 é da coorte PROSPECTIVA impecável;
+  quem derruba a coorte fraca é o garbage-in (→5) e o teto retrospectivo (→7).
+- **MCID — RELEVÂNCIA CLÍNICA VIRA TETO** (`teto_mcid`, aprovado 01/Ago, 15h30). O bloco
+  `relevancia_clinica` era extraído — **pago em TODO artigo** — e jogado fora pelo motor.
+  Agora capa: `significativo_mas_abaixo_do_mcid` → **6** · `nao_relevante` → **6** ·
+  `incerto` → **7** · `robusto`/`provavel`/`nao_avaliavel` → não capa.
+  *Significância estatística não é relevância clínica: p<0,001 num efeito abaixo da diferença mínima
+  clinicamente importante não muda a conduta de ninguém.*
+  ⚠️ **ESCOLHAS MINHAS, para o dono desfazer:** só o teto 6 do `abaixo_do_mcid` foi aprovado
+  explicitamente. Pus `nao_relevante` no mesmo 6 (deixar sem teto seria incoerente — é pelo menos
+  tão ruim) e `incerto` em 7 (efeito de relevância duvidosa não deveria "mudar a prática amanhã").
+- **NHLBI CONTÁVEL — o rigor vira auditável** (`contagem_nhlbi`, aprovado 01/Ago, 15h30).
+  Passa a ser possível MOSTRAR: *"cumpriu 6 dos 12 critérios do NHLBI para ensaio controlado;
+  falhou em alocação sigilosa, cegamento do avaliador, ITT"*. É o que dá autoridade e o que o
+  concorrente não tem. Faixas (proporção de critérios cumpridos entre os RESPONDIDOS →
+  teto de rigor): ≥80 % → 10 · 60–79 % → 8 · 40–59 % → 6 · <40 % → 5.
+  ⚠️ **DUAS ESCOLHAS MINHAS, explícitas:**
+  (a) **a contagem só BAIXA, nunca SOBE.** Falhar critério prova fragilidade; cumprir critério de
+      relato não prova que o estudo é bom. Assim a contagem não infla nota nenhuma nem quebra o gabarito.
+  (b) **abaixo de 5 critérios respondidos a contagem NÃO capa** (`MIN_CRITERIOS_RESPONDIDOS`), senão
+      todo artigo cujo extrator falou pouco seria punido por silêncio do modelo, não por má qualidade.
+
+**Validação por MUTAÇÃO — 16 sabotagens, 16 detecções.** Leva 3 (MCID/NHLBI): desligar o teto do
+MCID · fazer `abaixo_do_mcid` parar de capar · desligar a contagem NHLBI · deixar o NHLBI SUBIR nota ·
+capar mesmo sem dado suficiente · afrouxar as faixas. **O teste pegou as 6.**
+
+**Validação por MUTAÇÃO (o que faz este teste valer):** sabotei o motor de **10 maneiras** —
+6 na 1ª leva (voltar o bug do camundongo, voltar o 8 universal, desligar as falhas fatais, afrouxar
+o limiar de dropout, igualar série de casos a coorte, tirar o teto estatístico da régua) e 4 na 2ª
+(voltar o rigor 9 fixo, série de casos com rigor de coorte, derrubar o Framingham, aplicar o teto
+DEPOIS dos delatores em vez de antes). **O teste pegou as 10.**
+
+**Como se provou:** `python src/teste_motor.py` → APROVADO. E o teste foi validado por **mutação**:
+sabotei o código de 6 maneiras (voltar o bug do camundongo, voltar o 8 universal, desligar as falhas
+fatais, afrouxar o limiar de dropout, igualar série de casos a coorte, tirar o teto estatístico da
+régua) e **o teste pegou as 6**. Teste que não falha quando o código quebra não é teste.
+
+**Efeito na corrente:** nenhum. `aplic` continua `int` (0 na rota fora da escala), então as portas
+`>= 6/7/8` do analisador seguem funcionando sem tratamento especial. O `analisador.py` passou a
+escrever `SEM NOTA — <rota> | <motivo>` no canônico em vez de `Rigor None/10`.
+
+**AS PORTAS (o que cada nota libera):**
+
+| Nota | Entregáveis |
+|---|---|
+| ≤5 | **FICA retido** — só o canônico. Não publica. |
+| ≥6 | canônico + ACRI + perícia (`.md`) + PDF |
+| ≥7 | + **Visual Abstract** (mín. 50 KB) |
+| ≥8 | + **áudio-anzol** (~3 min) + roteiro |
+
+`_OK` só é escrito se **TODOS** os entregáveis da porta existirem e tiverem tamanho mínimo
+(`_conferir_entregaveis`). Faltou um → erro → o artigo volta pra fila. É o buraco zero no nível do artigo.
+
+---
+
+### MÓDULO 3 · PUBLICADOR  (roda dentro do botão 2) — **o portão único do Supabase**
+**Objetivo:** ser a ÚNICA porta de escrita na tabela `artigos` (LEI 5), e não deixar buraco passar.
+
+| Programa | Faz o quê | Lê | Escreve |
+|---|---|---|---|
+| `publicador.py` | monta a ficha → **contrato** → **preflight de schema** → sobe mídia p/ Storage → upsert idempotente por `doc_id`. Default é **dry-run** (LEI DO CLONE): só sobe com `--publicar` | `outputs/STAGING/` | Supabase `artigos` + buckets |
+| `contrato.py` | **o portão anti-buraco.** Recusa: campo narrativo vazio/raso, PDF ausente, nota ≥7 sem visual, nota ≥8 sem áudio, **nota <6 (fica retido)** | a ficha | `_REVISAR_publicacao.txt` se recusar |
+| `ficha_site.py` | monta a ficha a partir do `_CANONICO.md` (frontmatter) + `_ACRI.txt` + arquivos da pasta. Determinístico, sem LLM | pasta do staging | dict com as colunas |
+
+**Buckets do Storage:** `visual_abstracts` (PNG) · `podcasts` (MP3) · `resumos_pdf` (PDF).
+Sobe sempre como **rascunho** (`publicar_no_site=false`) — quem libera é o Dr. Eduardo na Chave 3.
+
+**🔴 PENDENTE (28/Jul/2026):** a ficha preenche 25 das 39 colunas. As outras 14 ficaram vazias porque o
+Claude escolheu sozinho quais preencher (violação que originou a LEI 6). Aguarda decisão do dono.
+
+---
+
+### MÓDULO 4 · ADMINISTRADOR  (botão `3_Administrador.command`)
+**Objetivo:** o Dr. Eduardo cura o que sai. Painel Streamlit.
+
+| Programa | Faz o quê | Lê | Escreve |
+|---|---|---|---|
+| `administrador.py` | tabela enxuta (revista · data · nome · NAC · rigor · MCID) + links do PDF/áudio/visual para **ver · ouvir · aprovar com data de envio** | Supabase `artigos` | agenda de envio |
+
+---
+
+### MÓDULO 5 · ARQUIVADOR  (botão `4_Arquivador.command`)
+**Objetivo:** arquivar, e ponto.
+
+| Programa | Faz o quê | Lê | Escreve |
+|---|---|---|---|
+| `arquivador.py` | move as pastas do staging para `ARQUIVO/AAAA-MM`. **Nunca deleta.** Default dry-run; só move com `--arquivar` | `outputs/STAGING/` | `ARQUIVO/AAAA-MM/` |
+
+---
+
+### INFRAESTRUTURA (usada por todos os módulos)
+
+| Programa | Faz o quê |
+|---|---|
+| `modelos.py` | **CONFIG CENTRAL DE MODELOS.** Trocar de modelo = mudar UMA linha aqui. Cadeias: `PROFUNDO` · `ESCRITA` · `EXTRACAO` · `RAPIDO` · `GUIDELINE_LONGO`. **É PROIBIDO hardcodar modelo em qualquer programa.** |
+| `llm_client.py` | **CLIENTE UNIFICADO.** Executa a cadeia cross-provider (LEI DA EQUIVALÊNCIA), faz `gerar_json` com tool use, prompt caching, retry com backoff, e remove `temperature` onde o modelo de raciocínio rejeita |
+
+### PROVA
+
+| Programa | Faz o quê |
+|---|---|
+| `bateria.py` | **régua binária.** Roda N artigos pelo caminho REAL (inclusive o portão em dry-run) e responde só **APROVADO** (zero falha) ou **REPROVADO** com as causas agrupadas. Nunca reporta "progresso". `--continuar` reaproveita staging pronto |
+
+---
+
+### REGISTRO DE ALTERAÇÕES POR MÓDULO (LEI 2, item 5)
+*Toda mudança em módulo entra aqui, com data e hora, na seção do módulo.*
+
+**30/Jul/2026 14:50 · MÓDULO 1 (Classificador)** — `classificador_pubmed.extrair_doi`: adicionada trava de
+parêntese DESBALANCEADO. Causa: `(doi:10.1056/NEJMoa0904327)` gravava o `)` dentro do `doc_id`, que é a
+CHAVE do upsert — dois artigos entraram duplicados no Supabase. Preserva parêntese legítimo
+(`10.1016/S0140-6736(01)05627-6`) por contagem de balanceamento. Testado aqui: 8/8 casos.
+
+**30/Jul/2026 14:50 · MÓDULO 2 (Analisador)** — `pipeline.py`: ELIMINADA a extração de DOI duplicada
+(regex crua que nunca recebeu as travas). Agora importa a função única do `classificador_pubmed`.
+Uma fonte de DOI no sistema inteiro.
+
+**30/Jul/2026 15:10 · MÓDULO 2 (Analisador)** — `redator_prompt.md`: (a) criada a **LEI DO NÚMERO** — todo
+número tem que estar no texto do artigo; citar estudo-marco pelo NOME é permitido, citar NÚMERO de memória
+é proibido (era a origem dos números inventados: o prompt mandava contextualizar "pelo seu conhecimento");
+(b) trocada a ordem "escreva em PROSA densa" por **números em TABELA, crítica em prosa, limitações em lista**.
+Status: **escrito, não rodado** — falta gerar um artigo e conferir.
+
+**30/Jul/2026 15:10 · MÓDULO 3 (Publicador)** — `contrato.py`: passa a RECUSAR nota <6 (a porta existia na
+regra mas não no código; um artigo nota 5 foi publicado em 25/Jul).
+
+---
+
 ## PARTE 5 — OS SCRIPTS: CADA UM, SUA FUNÇÃO, SUA RAZÃO DE EXISTIR
 
 ### NÚCLEO — Rodam no dia a dia

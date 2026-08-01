@@ -25,6 +25,47 @@ _B = {"type": "boolean"}
 _S = {"type": "string"}
 _NUM = {"type": ["number", "null"]}
 _INT = {"type": ["integer", "null"]}
+_B3 = {"type": ["boolean", "null"]}   # true=fez · false=NÃO fez · null=NÃO REPORTA (NHLBI distingue os três)
+
+# CHECKLIST NHLBI/NIH — critérios formais por desenho (docs/METODO_AVALIACAO_ESTUDOS.md).
+# O LLM extrai os critérios como FATOS; a CONTAGEM e os TETOS ficam no motor (notas_prototipo), no código.
+SCHEMA_NHLBI = {
+    "type": "object",
+    "properties": {
+        "instrumento": {"type": "string",
+                        "enum": ["controlled_intervention", "systematic_review", "observational_cohort",
+                                 "case_control", "before_after", "case_series", "nenhum"]},
+        # RCT — NHLBI Controlled Intervention (14)
+        "randomizacao_adequada": _B3, "alocacao_sigilosa": _B3, "participantes_cegados": _B3,
+        "avaliadores_desfecho_cegados": _B3, "grupos_similares_basal": _B3,
+        "dropout_total_pct": _NUM, "dropout_diferencial_pp": _NUM,
+        "adesao_alta": _B3, "cointervencoes_similares": _B3, "poder_80_declarado": _B3,
+        "desfechos_prespecificados": _B3, "itt_verdadeiro": _B3,
+        # META — NHLBI Systematic Review (8)
+        "pergunta_focada": _B3, "elegibilidade_predefinida": _B3, "busca_sistematica_abrangente": _B3,
+        "revisao_em_duplicata": _B3, "qualidade_estudos_avaliada": _B3,
+        "estudos_listados_com_caracteristicas": _B3,
+        "vies_publicacao_avaliado": _B3, "heterogeneidade_avaliada": _B3, "i2_valor": _NUM,
+        # OBSERVACIONAL — NHLBI Cohort/Cross-Sectional (14)
+        "participacao_elegiveis_pct": _NUM, "populacao_mesma_origem": _B3,
+        "exposicao_antes_desfecho": _B3, "janela_temporal_suficiente": _B3,
+        "exposicao_medida_repetida": _B3, "exposicao_valida_consistente": _B3,
+        "desfecho_valido_consistente": _B3, "avaliadores_cegados_exposicao": _B3,
+        "perda_seguimento_pct": _NUM, "confundidores_ajustados": _B3,
+        # CASO-CONTROLE — NHLBI (12)
+        "controles_mesma_populacao": _B3, "casos_definidos_diferenciados": _B3,
+        "selecao_aleatoria_elegiveis": _B3, "controles_concorrentes": _B3,
+        "exposicao_precedeu_condicao": _B3, "avaliadores_exposicao_cegados": _B3,
+        # ANTES-DEPOIS SEM CONTROLE — NHLBI (11)
+        "participantes_representativos": _B3, "todos_elegiveis_incluidos": _B3,
+        "estatistica_examina_mudanca": _B3, "serie_temporal_interrompida": _B3,
+        # SÉRIE DE CASOS — NHLBI (9)
+        "casos_consecutivos": _B3, "sujeitos_comparaveis": _B3, "seguimento_adequado": _B3,
+        # comuns
+        "pergunta_objetivo_claro": _B3, "populacao_definida": _B3, "tamanho_amostral_justificado": _B3,
+    },
+    "required": ["instrumento"],
+}
 
 # SCHEMA DOS FATOS — contrato de saída estruturada (tool use). A API OBRIGA o modelo a devolver
 # exatamente estes campos com estes tipos. JSON malformado ou campo faltando deixa de ser possível.
@@ -33,8 +74,14 @@ SCHEMA_FATOS = {
     "properties": {
         "titulo": _S, "revista": _S, "ano": _S,
         "pergunta": {"type": "string", "enum": ["intervencao", "etiologia", "prognostico", "diagnostico"]},
+        # TAXONOMIA (30/Jul/2026): + pre_clinico, antes_depois_sem_controle, serie_de_casos e a ESCOTILHA
+        # 'nao_classificavel'. O enum fechado ANTIGO (7 opções) OBRIGAVA o modelo a chutar: um estudo em
+        # camundongo virou "observacional_ajustado" e recebeu NAC 8 (Circulation, 27/Jul). Dizer "não sei"
+        # passou a ser possível — e é preferível a forçar categoria errada.
         "desenho": {"type": "string", "enum": ["rct", "meta", "coorte", "registro",
-                                               "observacional_ajustado", "transversal", "caso_controle"]},
+                                               "observacional_ajustado", "transversal", "caso_controle",
+                                               "antes_depois_sem_controle", "serie_de_casos",
+                                               "pre_clinico", "nao_classificavel"]},
         "retrospectivo": _B,
         "fracao_ejecao": {"type": "string",
                           "enum": ["preservada", "levemente_reduzida", "reduzida", "nao_se_aplica"]},
@@ -63,12 +110,18 @@ SCHEMA_FATOS = {
             },
             "required": ["desfecho_primario", "efeito_observado", "classificacao", "frase_chave"],
         },
+        # CHECKLIST FORMAL por desenho (NHLBI) — os critérios como FATOS, não como nota
+        "qualidade_nhlbi": SCHEMA_NHLBI,
+        # FALHAS FATAIS (F1–F8): reprovam, não descontam. Ancoradas em instrumento internacional.
+        "falhas_fatais": {"type": "array",
+                          "items": {"type": "string",
+                                    "enum": ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"]}},
     },
     # obrigatórios: o que o motor de rigor e o canônico NÃO podem receber vazio
     "required": ["titulo", "revista", "ano", "pergunta", "desenho", "retrospectivo", "fracao_ejecao", "open_label", "poder_ok",
                  "desfecho_duro", "extrapolavel", "conclusao_nao_bate_desenho", "itt_falso",
                  "qualidade_entrada", "achados_principais", "keywords", "relevancia_clinica",
-                 "aplicabilidade"],
+                 "aplicabilidade", "qualidade_nhlbi", "falhas_fatais"],
 }
 
 

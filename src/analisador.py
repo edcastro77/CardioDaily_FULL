@@ -115,8 +115,13 @@ def processar(pdf, staging):
         print("       ↻ derivados velhos apagados (re-extração) — regerando limpos")
     r = N.score(fatos)
     ents, sobe = decidir_entregaveis(r["aplic"])
-    ver = (f"Nota {r['aplic']}/10 | Rigor {r['trabalho']}/10 | Muda conduta {r['muda_conduta']} | "
-           f"delatores: {', '.join(r['flags']) or 'nenhum'}")
+    # ROTA FORA DA ESCALA CLÍNICA (01/Ago/2026): pré-clínico e 'não classificável' não recebem nota —
+    # 'Rigor None/10' seria mentira com cara de número. Diz-se o que é: por que não há nota.
+    if r.get("rota", N.ROTA_CLINICA) != N.ROTA_CLINICA:
+        ver = (f"SEM NOTA — {r['rota']} | {'; '.join(r['flags'])}")
+    else:
+        ver = (f"Nota {r['aplic']}/10 | Rigor {r['trabalho']}/10 | Muda conduta {r['muda_conduta']} | "
+               f"delatores: {', '.join(r['flags']) or 'nenhum'}")
     texto = "".join(p.get_text() for p in fitz.open(pdf))
 
     # CONTEXTO COMPARTILHADO — reaproveitamento p/ gastar menos tokens (exigência do Dr. Eduardo).
