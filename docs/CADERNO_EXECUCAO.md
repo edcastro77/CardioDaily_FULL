@@ -250,6 +250,234 @@ Decisão pendente do Dr. Eduardo: descartar na porta ou dar trilha própria.
   (b) **abaixo de 5 critérios respondidos a contagem NÃO capa** (`MIN_CRITERIOS_RESPONDIDOS`), senão
       todo artigo cujo extrator falou pouco seria punido por silêncio do modelo, não por má qualidade.
 
+### O VEREDITO ABERTO — 02/Ago/2026: a nota não é rótulo, é VOLANTE (medido)
+
+**O experimento do Dr. Eduardo.** Ele rodou a MESMA revisão narrativa (Nature Rev Endocrinol,
+"Causes and consequences of discontinuation of GLP1RAs or tirzepatide") duas vezes no comparativo,
+com o MESMO modelo (claude-sonnet-5), mudando **só o número do veredito** colado no painel: 6/10 e 9/10.
+
+**O que foi medido nas duas perícias:**
+
+| | 6/10 | 9/10 |
+|---|---|---|
+| tamanho | 25.578 chars | **29.245** (+14%) |
+| parágrafos | 38 | 48 |
+| parágrafos **idênticos** entre as duas | **6** de 48 (86% mudou) | |
+| números citados | 72 | 86 — **os 72 aparecem nos 86, zero contradição** |
+
+O MESMO fato sustentou as duas notas opostas:
+> **6/10:** *"os autores declaram um método de busca (PubMed…) — isso é positivo… mas não configura
+> busca sistemática. A nota 6/10 reflete exatamente isso."*
+> **9/10:** *"Dito isso, este texto faz melhor do que a média do gênero: os autores declaram método
+> de busca (PubMed…)"*
+
+**Três conclusões:**
+1. A nota **não é um rótulo colado no fim** — é o volante. 86% da perícia gira em torno dela.
+2. A **LEI DO NÚMERO aguentou**: nenhum número foi inventado nem contradito. O ancoramento mudou
+   tom, estrutura e profundidade — não os fatos.
+3. **A nota baixa fez o modelo trabalhar MENOS.** 14 números a mais na versão 9/10. O assinante de
+   um artigo 6/10 receberia uma perícia mais pobre, não apenas um veredito mais duro.
+
+Isto é a MEDIÇÃO da LEI 8: *"tudo fica internamente coerente e errado"*. **86%.**
+
+**O CONSERTO (aprovado por ele em 02/Ago):** o redator deixa de receber o **número nu** e passa a
+receber os **domínios medidos** que produziram o número:
+
+```
+Nota 7/10 | Rigor 7/10 | Muda conduta NÃO        ← contrato de MÁQUINA (não mexer no formato)
+
+COMO O MOTOR CHEGOU NESTAS NOTAS (motor REVISAO) — a sua explicação das notas tem de
+sair DESTES domínios medidos, não do número:
+  RIGOR — dá para confiar? — média ponderada = 7/10
+      viés de seleção                     5/10   × peso 0.30
+      abrangência / escopo               10/10   × peso 0.20
+      ...
+```
+
+- **Onde vive:** `notas_prototipo.veredito_completo(r)` — UM lugar só. O `analisador.py` (que monta o
+  contexto do redator) e a Chave 9 leem daqui. Se cada um montasse a sua linha, seria mais uma fonte
+  de verdade — o erro que a LEI 8 proíbe.
+- ⚠️ **A PRIMEIRA LINHA É CONTRATO DE MÁQUINA:** `Nota N/10 | Rigor N/10 | Muda conduta X`, exatamente
+  assim. É o que `conferir_veredito` lê por regex antes de gastar token. Rótulo bonito
+  ("Rigor de desenvolvimento (AGREE)") vai nas linhas de baixo — nunca na primeira. Testado.
+- **Prova:** `teste_veredito_aberto` — confere, nos 4 motores, que a regex do analisador pega a NOTA
+  e não um domínio, que cada motor mostra os SEUS domínios com peso, e que pré-clínico continua
+  saindo como "SEM NOTA" sem um `Nota N/10` que enganaria a trava.
+
+### MOTOR DA DIRETRIZ (AGREE) — 02/Ago/2026, construído COM o Dr. Eduardo
+
+**O buraco:** até hoje uma diretriz caía no motor do ARTIGO ORIGINAL, que lhe cobra randomização,
+cegamento, I² e dropout. Nenhuma dessas coisas existe num consenso. Não havia o que recuperar: o
+`src/prompts/prompt_guideline_v2.md` que sobreviveu do CardioDaily antigo está **intitulado** "Análise
+de Revisões e Meta-Análises", não menciona AGREE e não tem bloco de notas. A diretriz nunca teve motor.
+
+**As duas notas, numa diretriz:**
+- **RIGOR** = como o documento foi **construído** (AGREE II). Não mede estatística; não há.
+- **APLICABILIDADE** = quanto dá para **obedecer** — dominada pela base de evidência e pelo Brasil.
+
+**RIGOR — 6 domínios ponderados** (pesos aprovados pelo Dr. Eduardo em 02/Ago). A forma espelha a
+lógica que ele mesmo escreveu para a meta-análise: lá o maior peso era CONCLUSÕES (0,25) — *"foram
+além do que a evidência permite?"*. Numa diretriz a pergunta idêntica é o vínculo recomendação↔evidência.
+
+| domínio | peso | AGREE II |
+|---|---|---|
+| Vínculo recomendação ↔ evidência | **0,25** | 9, 12 |
+| Busca e seleção da evidência | 0,20 | 7, 8 |
+| Independência editorial | 0,20 | 22, 23 |
+| Método de formular a recomendação (votação, quórum, risco×benefício) | 0,15 | 10, 11 |
+| Revisão externa | 0,10 | 13 |
+| Plano de atualização | 0,10 | 14 |
+
+Os domínios AGREE 4 (clareza) e 5 (implementação) ficam **fora do rigor** de propósito: clareza de
+escrita não é rigor de método; implementação entra na aplicabilidade (teto Brasil).
+
+**APLICABILIDADE — os tetos** (`aplic = min` de todos):
+
+| teto | régua |
+|---|---|
+| **tipo do documento** | diretriz com metodologia declarada 10 · sem metodologia 7 · statement/position paper 7 · sem classe nem nível 6 — **derivado dos fatos**, não perguntado ao modelo |
+| **% nível C** | <30% → 10 · 30–49% → 8 · 50–69% → 7 · ≥70% → 6 |
+| **Classe I em nível C** | ≥50% das Classe I apoiadas em nível C → **7** |
+| **Brasil** | recomendações centrais sem ANVISA/CONITEC/exame disponível → 7 |
+
+O teto do **% nível C** é a pergunta-assinatura do CardioDaily: *quanto disto é evidência e quanto é
+opinião de especialista com cara de evidência?* O teto da **Classe I em nível C** é falha DIFERENTE, e
+por isso ganhou teto próprio: o % geral diz "o campo não tem evidência"; este diz "a sociedade mandou
+fazer assim mesmo". É onde mora o risco ao paciente.
+
+**FALHA FATAL — só UMA.** O Dr. Eduardo aprovou G1 e **recusou explicitamente** G2, G3 e G4:
+
+| | |
+|---|---|
+| **G1** (aprovada) | documento NORMATIVO sem classe nem nível — não é auditável → teto 4 |
+| G2 · G3 · G4 (recusadas) | conflito não declarado · indústria sem política · sem busca e sem revisão externa |
+
+As recusadas **não somem**: continuam derrubando o RIGOR pelos domínios `independencia` e
+`revisao_externa`. Deixaram de reprovar; não deixaram de pesar. (Testado: `teste_diretriz_recusadas_ainda_pesam`.)
+
+**ESCOLHAS MINHAS, registradas para o dono desfazer:**
+1. **Classe I em nível C não desconta no rigor**, só capa a aplicabilidade. Se descontasse nos dois, o
+   rigor cairia a 5 e — como `aplic = min(..., rigor)` — o teto 7 que ele aprovou viraria letra morta.
+   Punir duas vezes o mesmo defeito revoga a decisão dele por via oblíqua.
+2. **AGREE com menos de 3 itens extraídos → rigor 5 e o documento RETÉM** (a porta publica a partir de 6).
+   LEI 8: na dúvida, revisão humana. Diretriz cujo método não deu para ler não vai ao assinante.
+3. **Idade é FATO, nunca teto.** Ele não aprovou teto por idade — e o motor só pode usar o que está
+   DENTRO do PDF ("já foi substituída pela versão nova" é fato de fora).
+4. **`muda_conduta` = SIM se aplic ≥ 8.** Numa diretriz o documento inteiro é conduta; o gatilho é a nota.
+
+**Onde vive:** `src/notas_prototipo.py` (`score_diretriz`, `dominios_diretriz`, `nota_diretriz`,
+`teto_tipo_documento`, `teto_nivel_c`, `teto_classe_i_em_c`, `teto_brasil`, `FALHAS_FATAIS_DIRETRIZ`).
+**Extrator próprio:** `src/analise_diretriz_prompt.md` + `SCHEMA_FATOS_DIRETRIZ` em `src/analise.py`
+(21 itens AGREE + 12 campos de contagem de classe/nível). Perguntar randomização a um consenso é o
+mesmo superficializar, uma camada antes da perícia.
+**Prova:** `src/teste_motor.py` — 9 baterias novas; 20 no total, todas verdes, sem LLM e sem custo.
+
+⚠️ **Estado (LEI 7):** "testei aqui" — o motor é função pura e roda de verdade. O **extrator** ainda não
+rodou contra uma diretriz real, porque eu não alcanço a API. "RESOLVIDO" depende do Dr. Eduardo rodar
+a Chave 9 numa diretriz da pasta GUIDELINES.
+
+### MOTOR DA REVISÃO NARRATIVA — 02/Ago/2026, construído COM o Dr. Eduardo
+
+**A semente veio dele:** `src/prompts/prompt_revisao_geral_v2.md`, Seção 4 — escopo · atualidade ·
+viés de seleção · conflitos · lacunas reconhecidas. Cinco critérios, escritos por ele.
+
+**⚠️ A CORREÇÃO QUE MUDOU O DESENHO INTEIRO.** Eu ia dar **teto 6** a toda revisão narrativa, com o
+argumento "não é fonte de evidência primária". Ele recusou, e a frase dele virou a especificação:
+
+> *"PODE CHEGAR A 10 — a revisão não tem graduação estatística. Ela se baseia em quanto ela me ajuda
+> na prática, quanta informação aplicável ela entrega. Se fala por cima, ela tem nota baixa. Se ela
+> explica que os silenciadores genéticos são extremamente eficientes — mas custam 750 mil reais no
+> Brasil, e que isso dificulta sua implementação apesar das facilidades de uso e ter baixíssimos
+> efeitos adversos — então ela tem uma nota muito alta."*
+
+Num documento que **não é estudo**, "aplicabilidade clínica" quer dizer aplicabilidade MESMO —
+utilidade prática entregue — e **não** posição na hierarquia de evidência. **Não existe teto por
+categoria.** As 5 dimensões da utilidade saíram desse exemplo.
+
+**AS DUAS NOTAS, com escalas diferentes e 5 domínios cada:**
+
+| RIGOR — dá para confiar? | peso | UTILIDADE — entrega o quê? | peso |
+|---|---|---|---|
+| Viés de seleção | **0,30** | Conduta acionável (CONTAGEM) | **0,30** |
+| Abrangência / escopo | 0,20 | Magnitude quantificada | 0,20 |
+| Atualidade | 0,20 | **Custo e acesso no Brasil** | 0,20 |
+| Conflitos de interesse | 0,15 | Segurança / efeitos adversos | 0,15 |
+| Lacunas reconhecidas | 0,15 | Em quem NÃO usar | 0,15 |
+
+Viés de seleção no topo pelas palavras dele no rascunho do redator: *"numa revisão narrativa, o
+principal viés é a SELEÇÃO INVISÍVEL"*.
+
+**`aplic = min(utilidade, rigor, teto_atualidade)`** — o rigor continua capando, o que preserva a
+decisão dele de 01/Ago de não afrouxar a régua. Uma revisão riquíssima porém promocional e paga pela
+indústria **não** chega a 10.
+
+**A REGRA DURA DO INVISÍVEL:** o motor só pontua o que está **dentro do texto**. É PROIBIDO ao extrator
+listar "ensaios que faltaram" — isso exige conhecimento de fora, e ele inventaria. Palavras dele no
+rascunho: *"Não invente ausências."* O viés de seleção é medido por três coisas verificáveis:
+afirmações centrais têm citação? · a revisão apresenta a evidência que a contraria? · ela distingue
+RCT de observacional?
+
+**TETO DA ATUALIDADE** (aprovado como teto próprio): referência mais recente com ≥5 anos → 6; ≥8 anos → 5.
+*"Uma revisão de IC escrita antes dos ensaios de SGLT2 não é só fraca — ela ensina errado."*
+⚠️ **REGISTRADO:** a atualidade pesa DUAS vezes (domínio 0,20 do rigor **e** teto próprio). Foi assim
+que ele aprovou — as duas perguntas foram feitas em separado e ele disse sim às duas. Se ficar duro
+demais, tirar o teto é apagar `_FAIXA_TETO_ATUALIDADE`.
+
+**FALHAS FATAIS: NENHUMA.** Ele recusou R1 (promocional sem declarar conflito) e R2 (afirmações sem
+citação). As duas continuam vivas dentro do rigor: `tom_promocional` derruba viés de seleção **e**
+conflitos; `afirmacoes_sem_citacao="frequentes"` leva o viés de seleção a 3.
+
+**Comportamento medido (motor puro, sem LLM):**
+
+| cenário | nota | rigor | útil |
+|---|---|---|---|
+| silenciadores genéticos (o exemplo dele) | **10** | 10 | 10 |
+| a mesma revisão, sem o custo no Brasil | 8 | 10 | 8 |
+| a mesma revisão, "falando por cima" | 3 | 10 | 3 |
+| riquíssima, mas promocional e paga pela indústria | 8 | 8 | 10 |
+| riquíssima, mas de 2018 (antes dos SGLT2) | 5 | 8 | 10 |
+| sem conflito declarado e afirmações sem fonte | 7 | 7 | 10 |
+
+Repare na linha 3: **rigor 10 e utilidade 3.** São eixos independentes de propósito — uma revisão pode
+ser impecavelmente honesta e ainda assim não entregar nada aplicável.
+
+**Onde vive:** `src/notas_prototipo.py` (`score_revisao`, `dominios_revisao_rigor`,
+`dominios_revisao_util`, `teto_atualidade`). **Extrator próprio:** `src/analise_revisao_prompt.md` +
+`SCHEMA_FATOS_REVISAO` (19 fatos). **Prova:** 7 baterias novas no `teste_motor.py` — 27 no total.
+
+⚠️ **Estado (LEI 7):** "testei aqui". O extrator nunca viu uma revisão real — depende do Dr. Eduardo
+rodar a Chave 9 numa revisão da pasta REVISOES.
+
+### AS DUAS NOTAS — 02/Ago/2026: EXPLICADO, NÃO CONSERTADO (decisão do dono)
+
+**A pergunta:** por que aplicabilidade e rigor saem tão parecidos?
+
+**A resposta é a própria régua.** O rigor está DENTRO do mínimo:
+`aplic = min(rigor, teto_desenho, teto_externa, teto_falha_fatal, teto_MCID)`.
+Logo (a) a aplicabilidade **nunca** excede o rigor, e (b) **coincide** com ele sempre que o rigor
+for o gargalo. Não são duas medidas paralelas — o rigor é um dos candidatos a elo mais fraco.
+
+**Medido em 6.000 artigos com mistura realista do acervo:**
+
+| | |
+|---|---|
+| notas iguais | **55 %** (era **80 %** antes dos tetos de MCID e falha fatal) |
+| notas diferentes | 44 %, distância média 1,8 ponto |
+
+Quem decide a aplicabilidade: **rigor 55 % · desenho 27 % · falha fatal 7 % · MCID 7 % · externa 2 %**.
+⚠️ Os tetos aprovados em 01/Ago **reduziram** a redundância de 80 % para 55 %. A trajetória é a certa.
+
+**DECISÃO DO DR. EDUARDO (02/Ago):** MANTER como está.
+Ele cogitou tornar o rigor independente, achando que isso deixaria a aplicabilidade **mais** exigente.
+É o contrário: tirar o rigor do mínimo **revoga o PASSO 2 da LEI 0** (`CLAUDE.md`: "se
+nota_trabalho_estatistico < 8 → aplicabilidade NÃO PODE ultrapassar 7") e **AFROUXA** a nota.
+Medido: um RCT duplo-cego com **ITT falso + poucos eventos** passaria de **NAC 6 → NAC 10**.
+Palavras dele: *"Não quero que afrouxe."* Item #18 fecha como **explicado**, não como consertado.
+
+**Fica em aberto, se um dia ele quiser a aplicabilidade MAIS dura:** separar os delatores em duas
+famílias (execução → rigor; desenho/relevância/extrapolação → aplicabilidade). Isso torna as notas
+independentes na FONTE sem revogar o teto — mas não foi pedido e não foi feito.
+
 **Validação por MUTAÇÃO — 16 sabotagens, 16 detecções.** Leva 3 (MCID/NHLBI): desligar o teto do
 MCID · fazer `abaixo_do_mcid` parar de capar · desligar a contagem NHLBI · deixar o NHLBI SUBIR nota ·
 capar mesmo sem dado suficiente · afrouxar as faixas. **O teste pegou as 6.**

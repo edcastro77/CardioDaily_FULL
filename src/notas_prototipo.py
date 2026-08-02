@@ -216,6 +216,595 @@ def contagem_nhlbi(a):
     return len(cumpre), len(falha), len(silencio), teto, falha
 
 
+# ═══════════════════ MOTOR DA META-ANÁLISE — 02/Ago/2026 ═══════════════════
+# ORIGEM: este motor NÃO é invenção nova. Ele estava em `src/prompts/prompt_meta_analise_v2.md`,
+# escrito pelo Dr. Eduardo, e foi PERDIDO quando a corrente nova unificou tudo num prompt só.
+# Recuperado em 02/Ago. Os pesos são dele — e dizem o que ele pensa:
+#
+#     NOTA = PICO×0,15 + Busca×0,20 + Viés×0,15 + Heterogeneidade×0,15
+#            + Viés de publicação×0,10 + CONCLUSÕES×0,25
+#
+# CONCLUSÕES tem o MAIOR peso (0,25): "os autores foram além do que a evidência permite?"
+# BUSCA vem em segundo (0,20): busca ruim contamina tudo o que vem depois.
+# Viés de publicação tem o MENOR (0,10): é o mais difícil de fazer e o menos decisivo.
+#
+# ESCOLHA DE ARQUITETURA (minha, explícita p/ o dono desfazer): no prompt v2 quem dava a nota de
+# cada domínio era o LLM. Aqui os subescores são DERIVADOS DOS FATOS, no código — porque a LEI 0
+# manda a nota ser determinística, e nota que depende do humor do modelo foi o que quebrou em julho.
+# O LLM extrai o FATO (registrou PROSPERO? quantas bases? qual o I²? fez Egger?); o código pontua.
+PESOS_META = {"pico": 0.15, "busca": 0.20, "vies_estudos": 0.15,
+              "heterogeneidade": 0.15, "vies_publicacao": 0.10, "conclusoes": 0.25}
+
+FAIXA_META = [(8.0, "Alta confiança — meta-análise bem conduzida, conclusões confiáveis"),
+              (6.0, "Confiança moderada — boa no geral, limitações exigem juízo clínico"),
+              (4.0, "Baixa confiança — falhas relevantes, interpretar com cautela"),
+              (0.0, "Confiança criticamente baixa — NÃO serve de base para conduta")]
+
+
+def _n(v, padrao=None):
+    return v if isinstance(v, (int, float)) else padrao
+
+
+def dominios_meta(a):
+    """Os 6 domínios do Dr. Eduardo, pontuados 0–10 A PARTIR DOS FATOS (não do palpite do LLM)."""
+    q = a.get("qualidade_nhlbi") or {}
+    m = a.get("qualidade_meta") or {}
+    d = {}
+
+    # a) PICO — pergunta focada e elegibilidade pré-definida
+    d["pico"] = 10 if (q.get("pergunta_focada") and q.get("elegibilidade_predefinida")) else \
+                7 if q.get("pergunta_focada") else 4
+
+    # b) BUSCA — bases, protocolo registrado, duplicata, literatura cinzenta
+    bases = _n(m.get("n_bases"), 0) or 0
+    b = 4
+    if q.get("busca_sistematica_abrangente"):
+        b = 7
+    if bases >= 3:
+        b += 1
+    if m.get("protocolo_registrado"):
+        b += 1                                   # PROSPERO
+    if q.get("revisao_em_duplicata"):
+        b += 1
+    d["busca"] = min(b, 10)
+
+    # c) VIÉS DOS INCLUÍDOS — e a pergunta que separa: MUDOU a interpretação ou foi check-box?
+    if not q.get("qualidade_estudos_avaliada"):
+        d["vies_estudos"] = 3
+    elif m.get("vies_mudou_interpretacao"):
+        d["vies_estudos"] = 10
+    else:
+        d["vies_estudos"] = 6                    # avaliou, mas não usou → check-box
+
+    # d) HETEROGENEIDADE — reportar não é investigar
+    i2 = _n(q.get("i2_valor"))
+    if i2 is None:
+        d["heterogeneidade"] = 4                 # nem reportou
+    elif i2 < 25:
+        d["heterogeneidade"] = 9
+    elif i2 <= 50:
+        d["heterogeneidade"] = 8 if m.get("heterogeneidade_investigada") else 6
+    else:
+        d["heterogeneidade"] = 6 if m.get("heterogeneidade_investigada") else 3
+    # "I² baixo com poucos estudos não é homogeneidade — pode ser falta de poder" (v2, palavras dele)
+    k = _n(m.get("k_estudos"), 99)
+    if i2 is not None and i2 < 25 and k is not None and k < 5:
+        d["heterogeneidade"] = min(d["heterogeneidade"], 6)
+
+    # e) VIÉS DE PUBLICAÇÃO — funnel/Egger/Begg feito?
+    d["vies_publicacao"] = 9 if q.get("vies_publicacao_avaliado") else 3
+
+    # f) CONCLUSÕES — o maior peso: foram além do que os dados permitem?
+    if a.get("conclusao_nao_bate_desenho") or m.get("conclusao_alem_da_evidencia"):
+        d["conclusoes"] = 3
+    elif m.get("limitacoes_reconhecidas"):
+        d["conclusoes"] = 9
+    else:
+        d["conclusoes"] = 6
+    return d
+
+
+# quantos FATOS de meta o extrator precisa ter respondido para a ponderação valer.
+# Abaixo disso, pontuar seria punir o SILÊNCIO do extrator, não a qualidade do estudo —
+# o mesmo erro que já foi evitado na contagem NHLBI e que eu repeti aqui (pego pelo teste, 02/Ago).
+MIN_FATOS_META = 3
+
+
+def nota_meta(a):
+    """Devolve (nota 0–10, domínios, frase da faixa).
+    A ponderação é do Dr. Eduardo; os TETOS clássicos da meta continuam por cima dela."""
+    q = a.get("qualidade_nhlbi") or {}
+    m = a.get("qualidade_meta") or {}
+    respondidos = sum(1 for k in ("pergunta_focada", "elegibilidade_predefinida",
+                                  "busca_sistematica_abrangente", "revisao_em_duplicata",
+                                  "qualidade_estudos_avaliada", "vies_publicacao_avaliado",
+                                  "heterogeneidade_avaliada", "i2_valor")
+                      if q.get(k) is not None) + len([v for v in m.values() if v is not None])
+
+    if respondidos < MIN_FATOS_META:
+        # sem dado suficiente → cai na escada antiga, e DIZ que caiu (não inventa ponderação)
+        s, fl = nota_estatistica(a)
+        return s, None, (f"ponderação não aplicada: só {respondidos} fato(s) de meta extraído(s) "
+                         f"(mínimo {MIN_FATOS_META}) — usada a régua geral")
+
+    d = dominios_meta(a)
+    bruta = sum(d[k] * p for k, p in PESOS_META.items())
+    s = int(round(bruta))
+
+    # TETOS CLÁSSICOS DA META — vinham do motor antigo e NÃO podem se perder na ponderação.
+    # Um estudo pode ter os 6 domínios altos e ainda ter engolido ensaio contaminado.
+    if a.get("contaminacao_incluidos"):
+        s = min(s, 5)
+    if a.get("ni_mal_interpretada"):
+        s = min(s, 6)
+    if a.get("i2_alto_sem_investigar"):
+        s = min(s, 6)
+
+    frase = next(f for lim, f in FAIXA_META if s >= lim)
+    return s, d, frase
+
+
+# ═══════════════════ MOTOR DA DIRETRIZ — 02/Ago/2026 ═══════════════════
+# CONSTRUÍDO COM O DR. EDUARDO. Nunca existiu antes: o `prompt_guideline_v2.md` que sobreviveu do
+# CardioDaily antigo está INTITULADO "Análise de Revisões e Meta-Análises", não menciona AGREE e não
+# tem bloco de notas. Até hoje uma diretriz caía no motor do artigo original — que lhe cobra
+# randomização, cegamento e I². É o mesmo "superficializar" do prompt único, uma camada mais fundo.
+#
+# AS DUAS NOTAS, NUMA DIRETRIZ:
+#   RIGOR         = como o documento foi CONSTRUÍDO (AGREE II). Não mede estatística; não há.
+#   APLICABILIDADE = quanto dá para OBEDECER — dominada pela base de evidência (% nível C) e pelo Brasil.
+#
+# PESOS (aprovados pelo Dr. Eduardo em 02/Ago). A forma espelha a lógica que ele mesmo escreveu para a
+# meta-análise: lá o maior peso era CONCLUSÕES (0,25) — "foram além do que a evidência permite?".
+# Numa diretriz a pergunta idêntica é o VÍNCULO entre a recomendação e a evidência (AGREE item 12).
+PESOS_DIRETRIZ = {"vinculo_evidencia": 0.25, "busca": 0.20, "independencia": 0.20,
+                  "metodo_recomendacao": 0.15, "revisao_externa": 0.10, "atualizacao": 0.10}
+
+FAIXA_DIRETRIZ = [(8.0, "Desenvolvimento rigoroso — método explícito e independência preservada"),
+                  (6.0, "Desenvolvimento adequado — lacunas de método exigem leitura crítica"),
+                  (4.0, "Desenvolvimento frágil — o documento não permite auditar como chegou às ordens"),
+                  (0.0, "Desenvolvimento criticamente frágil — recomendações sem método rastreável")]
+
+# Os domínios AGREE 4 (clareza) e 5 (implementação) ficam FORA do rigor de propósito:
+# clareza de escrita não é rigor de método. A implementação entra na APLICABILIDADE (teto Brasil).
+
+
+def dominios_diretriz(a):
+    """Os 6 domínios do rigor, pontuados 0–10 A PARTIR DOS FATOS (não do palpite do LLM)."""
+    g = a.get("recomendacoes") or {}
+    ag = a.get("agree") or {}
+    d = {}
+
+    # a) VÍNCULO RECOMENDAÇÃO ↔ EVIDÊNCIA (AGREE 9 e 12) — o maior peso.
+    # ESCOLHA REGISTRADA (minha, para o dono desfazer): "Classe I sobre nível C" NÃO entra aqui.
+    # Ela é TETO DE APLICABILIDADE (7), como o Dr. Eduardo aprovou em 02/Ago. Se descontasse também
+    # no rigor, o rigor cairia a 5 e — como aplic = min(..., rigor) — o teto 7 que ele aprovou viraria
+    # letra morta. Punir duas vezes o mesmo defeito revoga a decisão dele por via oblíqua.
+    if ag.get("vinculo_recomendacao_evidencia") is False:
+        d["vinculo_evidencia"] = 4
+    else:
+        v = 4
+        if (g.get("sistema_graduacao") or "nenhum") != "nenhum":
+            v = 7                                     # cada recomendação carrega classe e nível
+        if ag.get("vinculo_recomendacao_evidencia"):
+            v += 2                                    # AGREE 12: o vínculo é explícito e citado
+        if ag.get("forcas_limitacoes_descritas"):
+            v += 1                                    # AGREE 9
+        d["vinculo_evidencia"] = min(v, 10)
+
+    # b) BUSCA E SELEÇÃO DA EVIDÊNCIA (AGREE 7, 8) — busca ruim contamina tudo o que vem depois
+    b = 4
+    if ag.get("busca_sistematica_declarada"):
+        b = 7
+    if ag.get("criterios_selecao_evidencia"):
+        b += 2
+    if (_n(ag.get("n_bases"), 0) or 0) >= 3:
+        b += 1
+    d["busca"] = min(b, 10)
+
+    # c) INDEPENDÊNCIA EDITORIAL (AGREE 22, 23)
+    # G2/G3 foram RECUSADAS como falha fatal pelo Dr. Eduardo (02/Ago) — não reprovam.
+    # Mas não somem: é AQUI que conflito não declarado e ausência de política pesam.
+    if ag.get("conflitos_declarados") is False:
+        d["independencia"] = 2                        # nenhuma linha sobre conflito, em 2026
+    else:
+        c = 5
+        if ag.get("conflitos_declarados"):
+            c = 7
+        if ag.get("politica_gestao_conflitos"):
+            c += 2
+        if ag.get("financiamento_declarado"):
+            c += 1
+        c = min(c, 10)
+        pct_cf = _n(ag.get("pct_membros_com_conflito"))
+        if pct_cf is not None and pct_cf >= 50 and not ag.get("politica_gestao_conflitos"):
+            c = min(c, 5)                             # metade do painel com vínculo e sem política
+        d["independencia"] = c
+
+    # d) MÉTODO DE FORMULAR A RECOMENDAÇÃO (AGREE 10, 11) — votação, quórum, risco × benefício
+    m = 4
+    if ag.get("metodo_formular_recomendacao"):
+        m = 7
+    if ag.get("riscos_beneficios_considerados"):
+        m += 2
+    if ag.get("opcoes_apresentadas"):
+        m += 1
+    d["metodo_recomendacao"] = min(m, 10)
+
+    # e) REVISÃO EXTERNA (AGREE 13) — G4 também foi recusada como fatal; pesa aqui
+    d["revisao_externa"] = 9 if ag.get("revisao_externa") else \
+                           3 if ag.get("revisao_externa") is False else 5
+
+    # f) PLANO DE ATUALIZAÇÃO (AGREE 14)
+    d["atualizacao"] = 9 if ag.get("plano_atualizacao") else \
+                       4 if ag.get("plano_atualizacao") is False else 5
+    return d
+
+
+# Quantos FATOS de AGREE o extrator precisa ter respondido para a ponderação valer.
+# Mesma trava da meta: abaixo disso pontuar seria punir o SILÊNCIO do extrator, não o documento.
+MIN_FATOS_DIRETRIZ = 3
+RIGOR_DIRETRIZ_SEM_FATOS = 5     # e 5 RETÉM (a porta do analisador publica a partir de 6) — de propósito:
+                                 # LEI 8, "na dúvida, revisão humana". Diretriz cujo método não deu para
+                                 # ler não vai ao assinante com nota inventada.
+
+
+def nota_diretriz(a):
+    """Devolve (rigor 0–10, domínios, frase da faixa) pelo AGREE ponderado."""
+    ag = a.get("agree") or {}
+    respondidos = sum(1 for v in ag.values() if v is not None)
+    if respondidos < MIN_FATOS_DIRETRIZ:
+        return (RIGOR_DIRETRIZ_SEM_FATOS, None,
+                f"AGREE não avaliável: só {respondidos} item(ns) extraído(s) "
+                f"(mínimo {MIN_FATOS_DIRETRIZ}) — rigor {RIGOR_DIRETRIZ_SEM_FATOS} por prudência, "
+                f"o documento fica retido")
+    d = dominios_diretriz(a)
+    s = int(round(sum(d[k] * p for k, p in PESOS_DIRETRIZ.items())))
+    return s, d, next(f for lim, f in FAIXA_DIRETRIZ if s >= lim)
+
+
+# ── TETO 1: TIPO DO DOCUMENTO (o análogo do teto_desenho) ──
+# DERIVADO dos fatos, não perguntado ao modelo: "tem metodologia declarada?" é a conjunção de
+# busca sistemática declarada + sistema de graduação. Assim o teto não depende de um juízo do LLM.
+def teto_tipo_documento(a):
+    t = (a.get("tipo_documento_norm") or "diretriz").strip().lower()
+    g = a.get("recomendacoes") or {}
+    ag = a.get("agree") or {}
+    if t in ("scientific_statement", "position_paper"):
+        return 7                                   # descreve, não ordena
+    if (g.get("sistema_graduacao") or "nenhum") == "nenhum":
+        return 6                                   # consenso sem classe nem nível
+    if not ag.get("busca_sistematica_declarada"):
+        return 7                                   # diretriz sem metodologia declarada
+    return 10
+
+
+# ── TETO 2: A BASE DE EVIDÊNCIA (% nível C) — a pergunta-assinatura do Dr. Eduardo ──
+# "quanto desta diretriz é EVIDÊNCIA e quanto é OPINIÃO DE ESPECIALISTA com cara de evidência?"
+# Régua aprovada por ele em 02/Ago. Uma diretriz majoritariamente C ainda vale 7: é o melhor que
+# existe naquele tema — o problema não é dela, é do campo.
+_FAIXA_NIVEL_C = [(70, 6), (50, 7), (30, 8), (0, 10)]
+
+
+def pct_nivel_c(a):
+    g = a.get("recomendacoes") or {}
+    na, nb, nc = _n(g.get("n_nivel_A")), _n(g.get("n_nivel_B")), _n(g.get("n_nivel_C"))
+    if nc is None:
+        return None
+    tot = sum(x for x in (na, nb, nc) if x is not None)
+    return None if not tot else 100.0 * nc / tot
+
+
+def teto_nivel_c(a):
+    p = pct_nivel_c(a)
+    if p is None:
+        return 10, None                            # não contou → não capa (e o flag registra)
+    return next(t for lim, t in _FAIXA_NIVEL_C if p >= lim), p
+
+
+# ── TETO 3: CLASSE I APOIADA EM NÍVEL C — ordem forte sobre evidência fraca ──
+# Aprovado como TETO PRÓPRIO pelo Dr. Eduardo: é falha diferente do % geral. O % geral diz "o campo
+# não tem evidência"; este diz "a sociedade mandou fazer assim mesmo". É onde mora o risco ao paciente.
+LIMIAR_CLASSE_I_EM_C = 50      # % das Classe I que são nível C
+TETO_CLASSE_I_EM_C = 7
+
+
+def pct_classe_i_em_c(a):
+    g = a.get("recomendacoes") or {}
+    n1, n1c = _n(g.get("n_classe_I")), _n(g.get("n_classe_I_nivel_C"))
+    if n1 is None or n1c is None or not n1:
+        return None
+    return 100.0 * n1c / n1
+
+
+def teto_classe_i_em_c(a):
+    p = pct_classe_i_em_c(a)
+    if p is None:
+        return 10, None
+    return (TETO_CLASSE_I_EM_C if p >= LIMIAR_CLASSE_I_EM_C else 10), p
+
+
+# ── TETO 4: BRASIL (o análogo do teto_externa) ──
+def teto_brasil(a):
+    """Recomendações centrais dependem de droga sem ANVISA/CONITEC ou exame indisponível → teto 7."""
+    return 7 if a.get("aplicavel_brasil") is False else 10
+
+
+# ── FALHA FATAL DA DIRETRIZ (teto 4) ──
+# O Dr. Eduardo aprovou UMA, em 02/Ago, e recusou explicitamente as outras três que propus:
+#   G2 (nenhuma declaração de conflito) · G3 (indústria sem política) · G4 (sem busca e sem revisão)
+# Elas NÃO reprovam — mas continuam derrubando o rigor pelos domínios `independencia` e
+# `revisao_externa`. Deixaram de ser desqualificantes; não deixaram de pesar.
+FALHAS_FATAIS_DIRETRIZ = {
+    "G1": "documento NORMATIVO (dá ordens) sem classe nem nível de evidência — não é auditável",
+}
+
+
+def falhas_fatais_diretriz(a):
+    t = (a.get("tipo_documento_norm") or "diretriz").strip().lower()
+    g = a.get("recomendacoes") or {}
+    achadas = [f for f in (a.get("falhas_fatais") or []) if f in FALHAS_FATAIS_DIRETRIZ]
+    if t in ("diretriz", "consenso") and (g.get("sistema_graduacao") or "nenhum") == "nenhum":
+        achadas.append("G1")
+    return sorted(set(achadas))
+
+
+def score_diretriz(a):
+    """Motor da DIRETRIZ. Mesmo contrato de saída do motor original — a corrente não pode quebrar."""
+    s, dom, frase = nota_diretriz(a)
+    fl = ([f"AGREE [{k} {v}]" for k, v in dom.items()] if dom else [frase])
+
+    td = teto_tipo_documento(a)
+    tc, p_c = teto_nivel_c(a)
+    tci, p_ic = teto_classe_i_em_c(a)
+    tb = teto_brasil(a)
+
+    if p_c is None:
+        fl.append("nível de evidência não contabilizado no documento → teto do % nível C não aplicado")
+    else:
+        fl.append(f"{p_c:.0f}% das recomendações em nível C (opinião de especialista) → teto {tc}")
+    if p_ic is not None and tci < 10:
+        fl.append(f"{p_ic:.0f}% das Classe I se apoiam em nível C → teto {tci}")
+    if tb < 10:
+        fl.append("recomendações centrais não executáveis no Brasil → teto 7")
+
+    ff = falhas_fatais_diretriz(a)
+    tf = TETO_FALHA_FATAL if ff else 10
+    for f in ff:
+        fl.append(f"FALHA FATAL {f}: {FALHAS_FATAIS_DIRETRIZ[f]}")
+
+    # IDADE: registrada como FATO, nunca como teto. O Dr. Eduardo não aprovou teto por idade, e o
+    # motor só pode usar o que está DENTRO do PDF — "já foi substituída pela versão nova" é fato de fora.
+    idade = _n(a.get("idade_anos"))
+    if idade is not None and idade >= 5:
+        fl.append(f"documento com {idade:.0f} anos — verificar se há versão mais recente (não capa a nota)")
+
+    aplic = min(td, tc, tci, tb, tf, s)
+    return {"trabalho": s, "aplic": aplic, "teto_desenho": td, "teto_externa": tb,
+            "teto_falha_fatal": tf, "teto_mcid": 10,
+            # ESCOLHA MINHA: numa diretriz o documento INTEIRO é conduta; o gatilho é a nota.
+            "muda_conduta": "SIM" if aplic >= 8 else "NÃO",
+            "rota": ROTA_CLINICA, "falhas_fatais": ff, "motor": "DIRETRIZ",
+            "nhlbi": {"cumpre": 0, "falha": 0, "nao_reporta": 0, "teto": 10, "criterios_falhos": []},
+            "teto_nivel_c": tc, "pct_nivel_c": p_c,
+            "teto_classe_i_em_c": tci, "pct_classe_i_em_c": p_ic,
+            "dominios_agree": dom, "faixa_agree": frase, "flags": fl}
+
+
+# ═══════════════ MOTOR DA REVISÃO NARRATIVA — 02/Ago/2026 ═══════════════
+# CONSTRUÍDO COM O DR. EDUARDO. A semente veio do `src/prompts/prompt_revisao_geral_v2.md`, Seção 4,
+# escrita por ele: escopo · atualidade · viés de seleção · conflitos · lacunas reconhecidas.
+#
+# ⚠️ A CORREÇÃO QUE ELE FEZ EM 02/Ago, E QUE MUDOU O DESENHO INTEIRO:
+# Eu ia dar TETO 6 a toda revisão narrativa, com o argumento "não é fonte de evidência primária".
+# Ele recusou, e a frase dele é a especificação:
+#
+#   "PODE CHEGAR A 10 — A REVISÃO NÃO TEM GRADUAÇÃO ESTATÍSTICA. ELA SE BASEIA EM QUANTO ELA ME AJUDA
+#    NA PRÁTICA, QUANTA INFORMAÇÃO APLICÁVEL ELA ENTREGA. SE FALA POR CIMA, ELA TEM NOTA BAIXA.
+#    SE ELA EXPLICA QUE OS SILENCIADORES GENÉTICOS SÃO EXTREMAMENTE EFICIENTES — MAS CUSTAM 750 MIL
+#    REAIS NO BRASIL, E QUE ISSO DIFICULTA SUA IMPLEMENTAÇÃO APESAR DAS FACILIDADES DE USO E TER
+#    BAIXÍSSIMOS EFEITOS ADVERSOS — ENTÃO ELA TEM UMA NOTA MUITO ALTA."
+#
+# Ou seja: num documento que NÃO é estudo, "aplicabilidade clínica" quer dizer aplicabilidade MESMO —
+# utilidade prática entregue — e não posição na hierarquia de evidência. NÃO existe teto por categoria.
+# As 5 dimensões abaixo saíram desse exemplo: eficácia quantificada · custo/acesso no Brasil ·
+# praticidade de uso · segurança · julgamento de implementação (em quem dá e em quem não dá).
+PESOS_REVISAO_RIGOR = {"vies_selecao": 0.30, "abrangencia": 0.20, "atualidade": 0.20,
+                       "conflitos": 0.15, "lacunas": 0.15}
+# viés de seleção no topo: palavras dele no rascunho do redator, 02/Ago —
+# "numa revisão narrativa, o principal viés é a SELEÇÃO INVISÍVEL".
+PESOS_REVISAO_UTIL = {"conduta_acionavel": 0.30, "magnitude": 0.20, "custo_acesso": 0.20,
+                      "seguranca": 0.15, "em_quem_nao_usar": 0.15}
+
+FAIXA_REVISAO = [(9.0, "Revisão de referência — entrega conduta pronta para usar, com o preço e os limites"),
+                 (7.0, "Revisão útil — ensina e orienta, com lacunas de aplicação"),
+                 (5.0, "Revisão panorâmica — situa o tema, entrega pouca conduta"),
+                 (0.0, "Fala por cima — não entrega informação aplicável")]
+
+# ⚠️ O motor SÓ pontua o que está DENTRO do texto. Palavras dele no rascunho do redator: "não invente
+# ausências". "Faltou o DAPA-HF" é fato de fora — o modelo inventaria, e viés invisível não se mede.
+ANO_CORRENTE = 2026
+
+
+def _faixa(valor, faixas, padrao):
+    """faixas = [(limite, nota), ...] em ordem decrescente de limite."""
+    if valor is None:
+        return padrao
+    return next((n for lim, n in faixas if valor >= lim), faixas[-1][1])
+
+
+def dominios_revisao_rigor(a):
+    """Os 5 critérios da Seção 4 do prompt dele, pontuados 0–10 A PARTIR DOS FATOS."""
+    q = a.get("qualidade_revisao") or {}
+    d = {}
+
+    # a) VIÉS DE SELEÇÃO (0,30) — "os autores privilegiaram estudos que confirmam uma narrativa?"
+    # O que é verificável DENTRO do texto: as afirmações têm citação? a revisão diz o que é RCT e o
+    # que é observacional? ela apresenta a evidência que a CONTRARIA?
+    v = {"raras": 9, "algumas": 6, "frequentes": 3}.get(q.get("afirmacoes_sem_citacao"), 5)
+    if q.get("atribui_nivel_evidencia"):
+        v += 1
+    if q.get("apresenta_contra_evidencia"):
+        v += 1
+    if q.get("tom_promocional"):
+        v -= 3                                    # entusiasmo desproporcional com droga nova
+    d["vies_selecao"] = max(1, min(v, 10))
+
+    # b) ABRANGÊNCIA / ESCOPO (0,20) — "abrangente ou seletiva nos estudos incluídos?"
+    b = 5
+    if q.get("metodo_busca_declarado"):
+        b = 8                                     # ele escreveu: "algumas revisões narrativas boas
+    if q.get("escopo_declarado"):                 #  declaram método — isso conta a favor"
+        b += 1
+    nref = _n(q.get("n_referencias"))
+    if nref is not None:
+        if nref < 25:
+            b -= 2
+        elif nref >= 75:
+            b += 1
+    d["abrangencia"] = max(1, min(b, 10))
+
+    # c) ATUALIDADE (0,20) — "as referências-chave são recentes ou há lacunas temporais?"
+    # DOIS relógios diferentes, de propósito:
+    #   defasagem  = quão velha é a referência mais nova HOJE  → a revisão ainda vale?
+    #   pct_5_anos = quão atual ela era QUANDO FOI ESCRITA     → o autor fez a lição de casa?
+    dfg = _n(q.get("defasagem_anos"))
+    if dfg is None and _n(q.get("ano_referencia_mais_recente")):
+        dfg = ANO_CORRENTE - _n(q.get("ano_referencia_mais_recente"))
+    at = 5 if dfg is None else (9 if dfg <= 2 else 7 if dfg <= 4 else 5 if dfg <= 7 else 3)
+    pct5 = _n(q.get("pct_referencias_ultimos_5_anos"))
+    if pct5 is not None and pct5 >= 50:
+        at += 1
+    d["atualidade"] = max(1, min(at, 10))
+
+    # d) CONFLITOS (0,15) — "há financiamento da indústria? isso enviesa as conclusões?"
+    if q.get("conflitos_declarados") is False:
+        c = 2
+    else:
+        c = 8 if q.get("conflitos_declarados") else 6
+        if q.get("financiamento_industria"):
+            c -= 3
+        if q.get("tom_promocional"):
+            c -= 2
+    d["conflitos"] = max(1, min(c, 10))
+
+    # e) LACUNAS RECONHECIDAS (0,15) — "o que os próprios autores admitem que falta?"
+    d["lacunas"] = 9 if q.get("limitacoes_reconhecidas") else \
+                   3 if q.get("limitacoes_reconhecidas") is False else 5
+    return d
+
+
+def dominios_revisao_util(a):
+    """A UTILIDADE PRÁTICA — as 5 dimensões do exemplo do Dr. Eduardo (silenciadores genéticos)."""
+    q = a.get("qualidade_revisao") or {}
+    d = {}
+
+    # a) CONDUTA ACIONÁVEL (0,30) — "se fala por cima, ela tem nota baixa".
+    # A superficialidade é medida pela CONTAGEM: quantas condutas concretas, com critério, valor de
+    # corte, dose ou alvo. Uma revisão panorâmica entrega 0–2; uma que ajuda de verdade entrega 10+.
+    d["conduta_acionavel"] = _faixa(_n(q.get("n_condutas_acionaveis")),
+                                    [(10, 10), (6, 8), (3, 6), (1, 4), (0, 2)], 5)
+    if q.get("traz_valores_corte_ou_doses"):
+        d["conduta_acionavel"] = min(d["conduta_acionavel"] + 1, 10)
+
+    # b) MAGNITUDE (0,20) — "extremamente eficientes" com NÚMERO, não só com adjetivo
+    d["magnitude"] = 9 if q.get("traz_magnitude_efeito") else \
+                     3 if q.get("traz_magnitude_efeito") is False else 5
+    # c) CUSTO E ACESSO NO BRASIL (0,20) — "custam 750 mil reais no Brasil". É o que ele nomeou como
+    #    o dado que faz a revisão valer muito. Por isso ganha 10 quando está lá.
+    d["custo_acesso"] = 10 if q.get("traz_custo_acesso") else \
+                        3 if q.get("traz_custo_acesso") is False else 5
+    # d) SEGURANÇA (0,15) — "baixíssimos efeitos adversos": o preço biológico da conduta
+    d["seguranca"] = 9 if q.get("traz_seguranca") else \
+                     3 if q.get("traz_seguranca") is False else 5
+    # e) EM QUEM NÃO USAR (0,15) — "isso dificulta sua implementação": o julgamento dos limites
+    d["em_quem_nao_usar"] = 9 if q.get("traz_em_quem_nao_usar") else \
+                            3 if q.get("traz_em_quem_nao_usar") is False else 5
+    return d
+
+
+MIN_FATOS_REVISAO = 3
+RIGOR_REVISAO_SEM_FATOS = 5      # mesma prudência da diretriz: 5 RETÉM (a porta publica a partir de 6)
+
+# TETO DA ATUALIDADE — aprovado pelo Dr. Eduardo em 02/Ago como teto PRÓPRIO.
+# "Uma revisão de IC escrita antes dos ensaios de SGLT2 não é só fraca — ela ensina errado."
+# ⚠️ REGISTRADO: a atualidade pesa DUAS vezes (domínio 0,20 do rigor E teto). Foi assim que ele
+# aprovou — as duas perguntas foram feitas separadamente e ele disse sim às duas. Se ficar duro
+# demais na prática, tirar o teto é apagar uma linha (`_FAIXA_TETO_ATUALIDADE`).
+_FAIXA_TETO_ATUALIDADE = [(8, 5), (5, 6)]        # defasagem em anos → teto
+
+
+def teto_atualidade(a):
+    q = a.get("qualidade_revisao") or {}
+    dfg = _n(q.get("defasagem_anos"))
+    if dfg is None and _n(q.get("ano_referencia_mais_recente")):
+        dfg = ANO_CORRENTE - _n(q.get("ano_referencia_mais_recente"))
+    if dfg is None:
+        return 10, None
+    return next((t for lim, t in _FAIXA_TETO_ATUALIDADE if dfg >= lim), 10), dfg
+
+
+# FALHAS FATAIS: NENHUMA. Decisão do Dr. Eduardo, 02/Ago — ele recusou R1 (promocional sem declarar
+# conflito) e R2 (afirmações centrais sem citação) como desqualificantes. As duas continuam vivas
+# DENTRO do rigor: `tom_promocional` derruba viés de seleção E conflitos; `afirmacoes_sem_citacao`
+# frequentes leva o viés de seleção a 3. Deixaram de reprovar; não deixaram de pesar.
+FALHAS_FATAIS_REVISAO = {}
+
+
+def score_revisao(a):
+    """Motor da REVISÃO NARRATIVA. Mesmo contrato de saída dos outros motores."""
+    q = a.get("qualidade_revisao") or {}
+    respondidos = sum(1 for v in q.values() if v is not None)
+    if respondidos < MIN_FATOS_REVISAO:
+        s = u = RIGOR_REVISAO_SEM_FATOS
+        dom_r = dom_u = None
+        fl = [f"revisão não avaliável: só {respondidos} fato(s) extraído(s) (mínimo "
+              f"{MIN_FATOS_REVISAO}) — nota {RIGOR_REVISAO_SEM_FATOS} por prudência, documento retido"]
+        frase = fl[0]
+    else:
+        dom_r, dom_u = dominios_revisao_rigor(a), dominios_revisao_util(a)
+        s = int(round(sum(dom_r[k] * p for k, p in PESOS_REVISAO_RIGOR.items())))
+        u = int(round(sum(dom_u[k] * p for k, p in PESOS_REVISAO_UTIL.items())))
+        frase = next(f for lim, f in FAIXA_REVISAO if u >= lim)
+        fl = ([f"rigor [{k} {v}]" for k, v in dom_r.items()]
+              + [f"utilidade [{k} {v}]" for k, v in dom_u.items()])
+
+    ta, dfg = teto_atualidade(a)
+    if dfg is not None:
+        fl.append(f"referência mais recente tem {dfg:.0f} ano(s)"
+                  + (f" → teto {ta}" if ta < 10 else " — atual"))
+
+    # ⚠️ SEM TETO POR CATEGORIA. Decisão do Dr. Eduardo, 02/Ago: "PODE CHEGAR A 10".
+    # O rigor continua capando (uma revisão riquíssima e enviesada não vira 10) — isso preserva a
+    # decisão dele de 01/Ago de NÃO afrouxar a régua ("não quero que afrouxe").
+    aplic = min(u, s, ta)
+    return {"trabalho": s, "aplic": aplic, "teto_desenho": 10, "teto_externa": 10,
+            "teto_falha_fatal": 10, "teto_mcid": 10, "teto_atualidade": ta, "defasagem_anos": dfg,
+            "utilidade": u,
+            # numa revisão o que "muda conduta" é ela entregar conduta pronta E ser confiável
+            "muda_conduta": "SIM" if aplic >= 8 else "NÃO",
+            "rota": ROTA_CLINICA, "falhas_fatais": [], "motor": "REVISAO",
+            "nhlbi": {"cumpre": 0, "falha": 0, "nao_reporta": 0, "teto": 10, "criterios_falhos": []},
+            "dominios_revisao_rigor": dom_r, "dominios_revisao_util": dom_u,
+            "faixa_revisao": frase, "flags": fl}
+
+
+# ═══════════════════ QUAL MOTOR — FONTE ÚNICA DE VERDADE (LEI 8) ═══════════════════
+# LEI 8 (02/Ago): o tipo é decidido UMA vez, no classificador, e todo o resto OBEDECE.
+# Esta função é o lugar onde essa decisão é lida — UM lugar, não dois. Enquanto o classificador
+# não gravar `tipo_documento` nos fatos (tarefa #34), ela cai no `desenho` como ponte.
+def tipo_do_documento(a):
+    t = (a.get("tipo_documento") or "").strip().lower()
+    if t in ("original", "meta", "diretriz", "revisao_narrativa"):
+        return t                                   # ← o campo que o CLASSIFICADOR vai gravar
+    d = a.get("desenho")
+    if d == "meta":
+        return "meta"
+    if d in ("diretriz", "revisao_narrativa"):
+        return d
+    return "original"
+
+
 def teto_externa(a):
     """REGRA 1 — validade externa não-extrapolável = TETO 7 (não desconto).
     Só se aplica a INTERVENÇÃO ('funciona no MEU paciente?'). Etiologia/prognóstico não capam:
@@ -331,6 +920,15 @@ def muda_conduta(a, aplic):
 
 
 def score(a):
+    # PASSO −1 — QUAL MOTOR (LEI 8, 02/Ago). Vem ANTES da rota de propósito: se o classificador diz
+    # que é DIRETRIZ, é diretriz — mesmo que o extrator tenha devolvido desenho='nao_classificavel'.
+    # Era exatamente esse o buraco do laudo da Nature Reviews: o tipo decidido em dois lugares.
+    t = tipo_do_documento(a)
+    if t == "diretriz":
+        return score_diretriz(a)
+    if t == "revisao_narrativa":
+        return score_revisao(a)
+
     # PASSO 0 — o artigo pertence à escala clínica? (pré-clínico / não classificável saem ANTES.)
     # aplic=0 de propósito: 0 < 6, então a porta do analisador já RETÉM sozinha, sem quebrar nenhuma
     # comparação numérica lá na frente (r["aplic"] >= 7 etc.). Quem lê a decisão lê o campo 'rota'.
@@ -340,10 +938,21 @@ def score(a):
                   "clínica para pontuar — nenhum instrumento do NHLBI cobre este desenho"
                   if r0 == ROTA_FRONTEIRA else
                   "o extrator não conseguiu classificar o desenho: o motor NÃO chuta")
+        # 'motor' SEMPRE presente: a saída de rota era a única que não trazia a chave, e quem lê
+        # r["motor"] (veredito, painel) quebrava. Pego pelo teste_motor em 02/Ago.
         return {"trabalho": None, "aplic": 0, "teto_desenho": None, "teto_externa": None,
-                "muda_conduta": "N/A", "rota": r0, "falhas_fatais": [], "flags": [motivo]}
+                "muda_conduta": "N/A", "rota": r0, "falhas_fatais": [], "motor": "ORIGINAL",
+                "flags": [motivo]}
 
-    s, fl = nota_estatistica(a)
+    # META tem motor próprio, recuperado do prompt_meta_analise_v2.md dele. ORIGINAL segue na LEI 0.
+    # ⏳ FALTA: revisão narrativa.
+    dom_meta = frase_meta = None
+    if a.get("desenho") == "meta":
+        s, dom_meta, frase_meta = nota_meta(a)
+        fl = ([f"meta [{k} {v}]" for k, v in dom_meta.items()] if dom_meta
+              else [frase_meta])          # sem fatos: registra que a ponderação NÃO foi aplicada
+    else:
+        s, fl = nota_estatistica(a)
     td, te = teto_desenho(a), teto_externa(a)
 
     # PASSO 1 — CONTAGEM NHLBI: o rigor vira auditável e SÓ PODE BAIXAR (nunca inflar).
@@ -366,12 +975,126 @@ def score(a):
         fl.append(f"relevância clínica '{rc}' → teto {tm}")
 
     aplic = min(td, te, s, tf, tm)       # ← a régua-chave
-    return {"trabalho": s, "aplic": aplic, "teto_desenho": td, "teto_externa": te,
-            "teto_falha_fatal": tf, "teto_mcid": tm, "muda_conduta": muda_conduta(a, aplic),
-            "rota": ROTA_CLINICA, "falhas_fatais": ff,
-            "nhlbi": {"cumpre": cum, "falha": falh, "nao_reporta": sil, "teto": tn,
-                      "criterios_falhos": criterios_falhos},
-            "flags": fl}
+    r = {"trabalho": s, "aplic": aplic, "teto_desenho": td, "teto_externa": te,
+         "teto_falha_fatal": tf, "teto_mcid": tm, "muda_conduta": muda_conduta(a, aplic),
+         "rota": ROTA_CLINICA, "falhas_fatais": ff,
+         "motor": "META" if dom_meta else "ORIGINAL",
+         "nhlbi": {"cumpre": cum, "falha": falh, "nao_reporta": sil, "teto": tn,
+                   "criterios_falhos": criterios_falhos},
+         "flags": fl}
+    if dom_meta:
+        r["dominios_meta"] = dom_meta
+        r["faixa_meta"] = frase_meta
+    return r
+
+
+# ═══════════ O VEREDITO ABERTO — 02/Ago/2026 ═══════════
+# POR QUE EXISTE (MEDIDO, não suposto). Em 02/Ago o Dr. Eduardo rodou a MESMA revisão narrativa duas
+# vezes no comparativo, mudando só o número do veredito colado no painel: 6/10 e 9/10.
+# Resultado medido nas duas perícias do claude-sonnet-5:
+#     • 86% dos parágrafos MUDARAM (só 6 de 48 idênticos)
+#     • a versão 9/10 ficou 14% MAIOR e trouxe 14 números A MAIS sobre o mesmo artigo
+#     • o MESMO fato — "os autores declaram um método de busca" — foi usado para justificar
+#       o 6 numa versão ("mas não configura busca sistemática") e o 9 na outra ("faz melhor
+#       do que a média do gênero")
+#     • ZERO contradição numérica: os 72 números da versão 6/10 aparecem todos na 9/10
+#
+# Ou seja: a nota NÃO é um rótulo colado no fim — é o VOLANTE. O redator recebia o NÚMERO NU e
+# inventava a justificativa que coubesse. E a nota baixa fazia o modelo entregar MENOS informação
+# sobre o mesmo artigo — o assinante de um artigo 6/10 lia uma perícia mais pobre, não só mais dura.
+#
+# O CONSERTO (aprovado pelo Dr. Eduardo, 02/Ago): o redator deixa de receber o número sozinho e passa
+# a receber os DOMÍNIOS MEDIDOS que produziram o número. A explicação passa a se ancorar no fato
+# medido, não no dígito.
+#
+# ⚠️ A PRIMEIRA LINHA É CONTRATO DE MÁQUINA: `Nota N/10 | Rigor N/10 | Muda conduta X`, exatamente
+# assim. É o que `analisador.conferir_veredito` lê com regex antes de gastar token. Rótulo bonito
+# ("Rigor de desenvolvimento (AGREE)") vai nas linhas de BAIXO — nunca na primeira.
+_ROTULOS = {
+    # meta
+    "pico": "PICO / elegibilidade", "busca": "busca da literatura",
+    "vies_estudos": "viés dos estudos incluídos", "heterogeneidade": "heterogeneidade",
+    "vies_publicacao": "viés de publicação", "conclusoes": "conclusões vs evidência",
+    # diretriz (AGREE)
+    "vinculo_evidencia": "vínculo recomendação↔evidência", "independencia": "independência editorial",
+    "metodo_recomendacao": "método de formular a recomendação", "revisao_externa": "revisão externa",
+    "atualizacao": "plano de atualização",
+    # revisão narrativa
+    "vies_selecao": "viés de seleção", "abrangencia": "abrangência / escopo",
+    "atualidade": "atualidade", "conflitos": "conflitos de interesse",
+    "lacunas": "lacunas reconhecidas",
+    "conduta_acionavel": "conduta acionável", "magnitude": "magnitude quantificada",
+    "custo_acesso": "custo e acesso no Brasil", "seguranca": "segurança / efeitos adversos",
+    "em_quem_nao_usar": "em quem NÃO usar",
+}
+
+
+def _bloco(titulo, dominios, pesos, nota):
+    if not dominios:
+        return []
+    L = [f"  {titulo} — média ponderada = {nota}/10"]
+    for k, v in dominios.items():
+        L.append(f"      {_ROTULOS.get(k, k):34} {v:>2}/10   × peso {pesos[k]:.2f}")
+    return L
+
+
+def veredito_completo(r):
+    """A linha do veredito + os DOMÍNIOS MEDIDOS que a produziram. Um lugar só: o analisador (que
+    monta o contexto do redator) e a Chave 9 leem daqui — senão vira mais uma fonte de verdade."""
+    if r.get("rota", ROTA_CLINICA) != ROTA_CLINICA:
+        return f"SEM NOTA — {r['rota']} | {'; '.join(r['flags'])}"
+
+    # ── linha 1: CONTRATO DE MÁQUINA. Não mexer no formato. ──
+    L = [f"Nota {r['aplic']}/10 | Rigor {r['trabalho']}/10 | Muda conduta {r['muda_conduta']}", ""]
+    motor = r.get("motor", "ORIGINAL")
+    L.append(f"COMO O MOTOR CHEGOU NESTAS NOTAS (motor {motor}) — a sua explicação das notas tem de "
+             "sair DESTES domínios medidos, não do número:")
+
+    if motor == "META":
+        L += _bloco("RIGOR (6 domínios da meta-análise)", r.get("dominios_meta"),
+                    PESOS_META, r["trabalho"])
+        if r.get("faixa_meta"):
+            L.append(f"      → {r['faixa_meta']}")
+    elif motor == "DIRETRIZ":
+        L += _bloco("RIGOR DE DESENVOLVIMENTO (AGREE II)", r.get("dominios_agree"),
+                    PESOS_DIRETRIZ, r["trabalho"])
+        if r.get("faixa_agree"):
+            L.append(f"      → {r['faixa_agree']}")
+        L.append("  APLICABILIDADE — a nota é o MENOR destes tetos e do rigor:")
+        p = r.get("pct_nivel_c")
+        L.append(f"      tipo do documento                  teto {r['teto_desenho']}")
+        L.append(f"      % em nível C (opinião)             " +
+                 (f"{p:.0f}% → teto {r['teto_nivel_c']}" if p is not None
+                  else "não contabilizado → não capa"))
+        pi = r.get("pct_classe_i_em_c")
+        if pi is not None:
+            L.append(f"      Classe I apoiada em nível C        {pi:.0f}% → teto {r['teto_classe_i_em_c']}")
+        L.append(f"      executável no Brasil               teto {r['teto_externa']}")
+    elif motor == "REVISAO":
+        L += _bloco("RIGOR — dá para confiar?", r.get("dominios_revisao_rigor"),
+                    PESOS_REVISAO_RIGOR, r["trabalho"])
+        L += _bloco("UTILIDADE PRÁTICA — entrega o quê?", r.get("dominios_revisao_util"),
+                    PESOS_REVISAO_UTIL, r.get("utilidade"))
+        if r.get("faixa_revisao"):
+            L.append(f"      → {r['faixa_revisao']}")
+        if r.get("teto_atualidade", 10) < 10:
+            L.append(f"  TETO: referência mais recente tem {r.get('defasagem_anos'):.0f} ano(s) "
+                     f"→ teto {r['teto_atualidade']}")
+    else:   # ORIGINAL
+        L.append(f"  APLICABILIDADE = o MENOR entre: teto do desenho {r['teto_desenho']} · "
+                 f"validade externa {r['teto_externa']} · falha fatal {r.get('teto_falha_fatal', 10)} · "
+                 f"MCID {r.get('teto_mcid', 10)} · rigor {r['trabalho']}")
+        n = r.get("nhlbi") or {}
+        if n.get("cumpre") or n.get("falha"):
+            L.append(f"  NHLBI: cumpriu {n['cumpre']} de {n['cumpre'] + n['falha']} critérios respondidos"
+                     + (f" — falhou em: {', '.join(n['criterios_falhos'][:5])}"
+                        if n.get("criterios_falhos") else ""))
+        if r.get("falhas_fatais"):
+            L.append(f"  FALHAS FATAIS: {', '.join(r['falhas_fatais'])}")
+        L.append("  DELATORES MEDIDOS:")
+        for f in (r.get("flags") or ["nenhum"]):
+            L.append(f"      • {f}")
+    return "\n".join(L)
 
 
 # ─────────────────────────── FIXTURES (fatos dos 6 artigos) + GABARITO ───────────────────────────

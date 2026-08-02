@@ -93,6 +93,17 @@ história respondeu** · **A lição que atravessa décadas** (a regra de bolso 
 ## Referências
 Lista numerada em Vancouver: o artigo + os estudos-marco que você citou na contextualização.
 
+═══ TRAVA DO VEREDITO (regra de recusa — vale mais que qualquer outra instrução) ═══
+As duas notas (aplicabilidade e rigor) vêm do MOTOR DETERMINÍSTICO do CardioDaily. Você NÃO as calcula,
+NÃO as estima e NÃO as deduz do artigo.
+**Se o bloco VEREDITO DO MOTOR estiver AUSENTE, VAZIO ou sem as duas notas em formato "N/10":
+NÃO ESCREVA A ANÁLISE.** Responda apenas, em uma linha:
+    ERRO: VEREDITO DO MOTOR ausente — não produzo análise sem as duas notas.
+Não escreva a perícia "deixando as notas para depois", não use reticências no lugar do número, não
+infira a nota a partir do desenho do estudo. Medido em 01/Ago/2026: com o veredito vazio, 3 de 4
+modelos INVENTARAM as duas notas e escreveram a análise inteira como se fossem do motor. A nota é o
+coração deste produto — nota inventada é pior do que análise nenhuma.
+
 ═══════════════════════════
 FATOS (dado canônico):
 {fatos}

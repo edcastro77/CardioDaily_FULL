@@ -7,7 +7,7 @@ PORTAS (Dr. Eduardo):  ≤5 fica · ≥6 sobe (canônico+ACRI+texto) · ≥7 +in
 Uso:  python analisador.py <pasta_CLASSIFICADOS>        (roda a corrente)
       python analisador.py --gabarito                   (só mostra a lógica das portas)
 """
-import os, sys, json, fitz
+import os, sys, json, re, fitz
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -39,6 +39,136 @@ def decidir_entregaveis(nota):
     return ents, True
 
 
+# ─────────── PERÍCIA POR TIPO — 01/Ago/2026 (fim do prompt único "superficializado") ───────────
+# Até hoje UM prompt servia todos os tipos, e a estrutura dele era de ARTIGO ORIGINAL: pedia
+# randomização, braços, titulação de dose e desfecho primário. Meta-análise não tem braço; diretriz
+# não tem desfecho primário; revisão narrativa não tem análise estatística. O Dr. Eduardo apontou
+# isso em 26/Jul ("um prompt para 5 direções só é possível superficializando") e estava certo.
+#
+# A escolha é pelo campo `desenho` dos FATOS — o DADO CANÔNICO, não a pasta. A pasta pode estar
+# errada (o classificador acerta 91,9%); os fatos vêm da leitura do artigo.
+_PROMPT_POR_DESENHO = {
+    "rct": "redator_original_prompt.md",
+    "coorte": "redator_original_prompt.md",
+    "registro": "redator_original_prompt.md",
+    "observacional_ajustado": "redator_original_prompt.md",
+    "transversal": "redator_original_prompt.md",
+    "caso_controle": "redator_original_prompt.md",
+    "antes_depois_sem_controle": "redator_original_prompt.md",
+    "serie_de_casos": "redator_original_prompt.md",
+    "meta": "redator_meta_prompt.md",
+}
+# guideline e revisão não são "desenho" no schema dos fatos — vêm da pasta do classificador.
+_PROMPT_POR_PASTA = {
+    "GUIDELINES": "redator_guideline_prompt.md",
+    "REVISOES": "redator_revisao_prompt.md",
+    "META_ANALISES": "redator_meta_prompt.md",
+    "ARTIGOS_ORIGINAIS": "redator_original_prompt.md",
+}
+
+# ═══ FONTE ÚNICA DO TIPO — LEI 8 (02/Ago/2026) ═══
+# "o classificador não pode errar — se ele colocar um trabalho na caixa errada, vamos usar o motor
+#  errado, o prompt errado, análise e notas erradas" (Dr. Eduardo).
+# A PASTA é o registro da decisão do classificador. Esta função é o ÚNICO lugar onde essa decisão é
+# lida. Quem precisa saber o tipo — o EXTRATOR, o MOTOR e o PROMPT — chama daqui, não deduz por conta.
+_TIPO_POR_PASTA = {
+    "ARTIGOS_ORIGINAIS": "original",
+    "META_ANALISES": "meta",
+    "GUIDELINES": "diretriz",
+    "REVISOES": "revisao_narrativa",
+    "EDITORIAIS": "revisao_narrativa",
+    "MINIRREVISOES": "revisao_narrativa",
+}
+
+
+_PROMPT_POR_TIPO_DOC = {
+    "original": "redator_original_prompt.md",
+    "meta": "redator_meta_prompt.md",
+    "diretriz": "redator_guideline_prompt.md",
+    "revisao_narrativa": "redator_revisao_prompt.md",
+}
+
+
+def tipo_do_documento(pdf_path=""):
+    """O tipo decidido pelo classificador. 'original' é a rede quando não há pasta (teste avulso)."""
+    return _TIPO_POR_PASTA.get(os.path.basename(os.path.dirname(pdf_path or "")), "original")
+
+
+# ⚠️ INCOERÊNCIA AINDA ABERTA (tarefa #34, 02/Ago): para ORIGINAL e META o prompt continua sendo
+# escolhido pelo campo `desenho` dos FATOS, e não por esta função. São duas fontes de verdade para a
+# mesma pergunta — o que a LEI 8 proíbe. NÃO foi unificado hoje de propósito: fechar tudo na pasta
+# transfere 100% da decisão para o classificador, e o classificador corrigido AINDA NÃO ESTÁ EM
+# PRODUÇÃO (tarefa #33, produção roda a 91,9%). Unificar antes disso PIORA hoje para melhorar depois.
+# A ordem correta é: #33 (classificador em produção) → #34 (unificar aqui). Decisão do Dr. Eduardo.
+
+
+def escolher_prompt(fatos, pdf_path=""):
+    """Qual perícia este documento merece. FATOS mandam; a pasta é o desempate."""
+    pasta = os.path.basename(os.path.dirname(pdf_path or ""))
+    if pasta in ("GUIDELINES", "REVISOES"):        # tipos que o schema de fatos não distingue
+        return _PROMPT_POR_PASTA[pasta]
+    d = (fatos or {}).get("desenho")
+    if d in _PROMPT_POR_DESENHO:
+        return _PROMPT_POR_DESENHO[d]
+    if pasta in _PROMPT_POR_PASTA:
+        return _PROMPT_POR_PASTA[pasta]
+    return "redator_original_prompt.md"            # o mais completo, como rede
+
+
+# ─────────── FIM DO CORTE SILENCIOSO — 01/Ago/2026 ───────────
+# O analisador cortava o artigo em 40.000 caracteres e seguia sem avisar. Medido no acervo real:
+#   KDIGO 2026 Diabetes (183 pág, 452.404 chars) → lidos 8,8%
+#   AHA/ACC/ADA/ASN 2026 (109 pág, 641.116 chars) → lidos 6,2%
+# A perícia saía inteira e convincente sobre 6% do documento. Provado em 01/Ago que o corte NÃO era
+# limite de tecnologia: a diretriz da SBC de 130 páginas (246.542 tokens) foi lida INTEIRA pelos 4
+# modelos, e saiu perícia com 108 tabelas em 70 s por US$ 0,42. O corte era entulho.
+# Fica um teto de SEGURANÇA (não de qualidade) — e, se ele morder, o fato é REGISTRADO, nunca calado.
+TETO_SEGURANCA_CHARS = 1_200_000
+
+
+def texto_para_pericia(texto):
+    """Devolve (texto, aviso). O aviso vai para o veredito e para o canônico — corte nunca é silencioso."""
+    if len(texto) <= TETO_SEGURANCA_CHARS:
+        return texto, ""
+    aviso = (f"⚠️ DOCUMENTO TRUNCADO: {len(texto):,} caracteres, teto de segurança "
+             f"{TETO_SEGURANCA_CHARS:,} — a perícia cobre {100*TETO_SEGURANCA_CHARS//len(texto)}% do texto.")
+    return texto[:TETO_SEGURANCA_CHARS], aviso
+
+
+_RE_NOTA_APLIC = re.compile(r"Nota\s+(\d{1,2})/10")
+_RE_NOTA_RIGOR = re.compile(r"Rigor\s+(\d{1,2})/10")
+
+
+def conferir_veredito(ver, contexto=None):
+    """TRAVA DO VEREDITO VAZIO — 01/Ago/2026.
+
+    POR QUE EXISTE (medido, não suposto): num teste com `{fatos}` e `{veredito}` VAZIOS,
+    3 de 4 modelos (sonnet-5, terra, opus-4-8) **inventaram as duas notas** e escreveram a perícia
+    inteira como se elas fossem do motor. Só o gpt-5.6-sol percebeu e recusou:
+        "Não é possível produzir a versão final sem inventar as duas notas obrigatórias."
+    Em produção o motor preenche — MAS basta o veredito falhar uma vez para a nota publicada ser
+    ficção. A nota é o coração do produto: ela não pode depender da honestidade do modelo do dia.
+
+    Aqui o veredito é conferido ANTES de gastar token: sem as duas notas legíveis, ninguém é chamado.
+    Levanta ValueError → o artigo volta pra fila (não vira perícia com nota inventada)."""
+    v = (ver or "").strip()
+    if not v:
+        raise ValueError("VEREDITO VAZIO: o motor não devolveu veredito — perícia NÃO será gerada "
+                         "(3 de 4 modelos inventam as notas quando ele falta; medido 01/Ago/2026).")
+    if "SEM NOTA" in v:                       # rota fora da escala clínica: legítimo, mas não peria
+        raise ValueError(f"SEM NOTA ({v[:80]}): artigo fora da escala clínica não gera perícia.")
+    ma, mr = _RE_NOTA_APLIC.search(v), _RE_NOTA_RIGOR.search(v)
+    if not (ma and mr):
+        raise ValueError(f"VEREDITO ILEGÍVEL (faltam as duas notas): {v[:160]!r}")
+    a, g = int(ma.group(1)), int(mr.group(1))
+    if not (0 <= a <= 10 and 0 <= g <= 10):
+        raise ValueError(f"VEREDITO COM NOTA FORA DA ESCALA: aplicabilidade={a}, rigor={g}")
+    if contexto is not None and v not in contexto:
+        raise ValueError("VEREDITO NÃO CHEGOU AO CONTEXTO: o modelo receberia a ordem de usar as "
+                         "notas do contexto, e o contexto não as tem.")
+    return a, g
+
+
 def _gerar(prompt_file, contexto, max_tokens):
     """Gera um entregável via CLIENTE UNIFICADO (cadeia ESCRITA cross-provider) REAPROVEITANDO o CONTEXTO
     do artigo (prompt caching): o bloco 'contexto' entra 1x e os próximos leem a ~10%. A instrução vai à parte."""
@@ -51,10 +181,14 @@ def _gerar(prompt_file, contexto, max_tokens):
                   .replace("{article_text}", "(use o TEXTO do contexto acima)"))
     # PISO DE TAMANHO: saída vazia/truncada não pode passar como boa. RETENTAMOS 1x antes de desistir — é a
     # rede de segurança contra o retorno vazio pontual (foi o que derrubava o ACRI; NÃO era thinking, medido 27/07).
-    minimo = {"redator_prompt.md": 3000, "acri_prompt.md": 400, "script_audio_prompt.md": 900}.get(prompt_file, 1)
+    minimo = 3000 if prompt_file.startswith("redator_") else \
+        {"acri_prompt.md": 400, "script_audio_prompt.md": 900}.get(prompt_file, 1)
+    # A PERÍCIA tem cadeia própria (gpt-5.6-terra), decidida por medição em 01/Ago. O resto
+    # (ACRI, roteiro de áudio, gancho) segue na ESCRITA — não foram testados, não se mexe às cegas.
+    cadeia = M.PERICIA if prompt_file.startswith("redator_") else M.ESCRITA
     txt, n = "", 0
     for tentativa in (1, 2):
-        txt = llm_client.gerar(M.ESCRITA, instrucao, contexto=contexto, max_tokens=max_tokens, temperatura=0.4)
+        txt = llm_client.gerar(cadeia, instrucao, contexto=contexto, max_tokens=max_tokens, temperatura=0.4)
         n = len((txt or "").strip())
         if n >= minimo:
             return txt
@@ -117,19 +251,29 @@ def processar(pdf, staging):
     ents, sobe = decidir_entregaveis(r["aplic"])
     # ROTA FORA DA ESCALA CLÍNICA (01/Ago/2026): pré-clínico e 'não classificável' não recebem nota —
     # 'Rigor None/10' seria mentira com cara de número. Diz-se o que é: por que não há nota.
-    if r.get("rota", N.ROTA_CLINICA) != N.ROTA_CLINICA:
-        ver = (f"SEM NOTA — {r['rota']} | {'; '.join(r['flags'])}")
-    else:
-        ver = (f"Nota {r['aplic']}/10 | Rigor {r['trabalho']}/10 | Muda conduta {r['muda_conduta']} | "
-               f"delatores: {', '.join(r['flags']) or 'nenhum'}")
+    # VEREDITO ABERTO (02/Ago/2026): o redator deixa de receber o NÚMERO NU e passa a receber os
+    # DOMÍNIOS MEDIDOS que o produziram. Medido em 02/Ago com a mesma revisão narrativa e dois
+    # vereditos inventados (6/10 e 9/10): 86% dos parágrafos mudaram, e o MESMO fato foi usado para
+    # justificar as duas notas opostas. O número nu era o volante da perícia inteira.
+    ver = N.veredito_completo(r)
     texto = "".join(p.get_text() for p in fitz.open(pdf))
+    texto, aviso_corte = texto_para_pericia(texto)
+    if aviso_corte:
+        print(f"       {aviso_corte}")
+        ver += f" | {aviso_corte}"
 
     # CONTEXTO COMPARTILHADO — reaproveitamento p/ gastar menos tokens (exigência do Dr. Eduardo).
     # O artigo entra UMA vez, fica em cache, e ACRI/redator/áudio reusam a ~10% do custo.
     contexto = ("CONTEXTO DO ARTIGO — use SOMENTE o que está aqui.\n\n"
                 f"FATOS (dado canônico):\n{json.dumps(fatos, ensure_ascii=False, indent=1)}\n\n"
-                f"VEREDITO DO MOTOR (use estes números, não invente outros):\n{ver}\n\n"
-                f"TEXTO DO ARTIGO:\n{texto[:40000]}")
+                f"VEREDITO DO MOTOR (use estes números, não invente outros — e EXPLIQUE as notas a "
+                f"partir dos domínios medidos abaixo, nunca a partir do dígito):\n{ver}\n\n"
+                f"TEXTO DO ARTIGO:\n{texto}")   # INTEIRO (o corte de 40k caiu em 01/Ago — ver texto_para_pericia)
+
+    # TRAVA DO VEREDITO (01/Ago/2026): confere ANTES de qualquer chamada de LLM. Só as peças que
+    # CITAM as notas dependem disto (perícia, ACRI, áudio) — e são justamente as que vão ao assinante.
+    if sobe:
+        conferir_veredito(ver, contexto)
 
     can = os.path.join(dst, base + "_CANONICO.md")             # canônico SEMPRE (retido ou publicado); reaproveita se já existe
     if not (os.path.exists(can) and os.path.getsize(can) >= 200):
@@ -138,7 +282,12 @@ def processar(pdf, staging):
 
     if sobe:                                                   # ≥6
         _peca(dst, base + "_ACRI.txt",    400,  lambda: _gerar("acri_prompt.md", contexto, 8000))
-        _peca(dst, base + "_analise.md", 3000,  lambda: _gerar("redator_prompt.md", contexto, 28000))  # teto folgado: thinking(~10k)+perícia(~8k) não trunca (medido 27/07: 6 perícias cortavam em 16k)
+        # PERÍCIA POR TIPO (01/Ago): o prompt sai dos FATOS, não é mais um só para todos.
+        # 32k de saída: medido em 01/Ago, o maior gasto real foi 22.455 tokens (Sonnet na diretriz
+        # de 130 páginas, e ~15k disso era raciocínio). 32k dá folga sem truncar.
+        prompt_pericia = escolher_prompt(fatos, pdf)
+        print(f"       perícia: {prompt_pericia}  (desenho={fatos.get('desenho')})")
+        _peca(dst, base + "_analise.md", 3000,  lambda: _gerar(prompt_pericia, contexto, 32000))
         if not (os.path.exists(os.path.join(dst, base + "_analise.pdf"))
                 and os.path.getsize(os.path.join(dst, base + "_analise.pdf")) >= 10000):
             try:                                               # PDF da análise crítica (peça central do site)

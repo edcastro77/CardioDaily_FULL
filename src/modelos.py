@@ -40,6 +40,18 @@ ESCRITA = [_env("CD_M_ESCRITA", "claude-sonnet-5"), "gpt-5.6-terra", "gemini-3.1
 # Extração com rigor (homem das cavernas — decide tipo, delatores): escrita, não filtragem
 EXTRACAO = [_env("CD_M_EXTRACAO", "claude-sonnet-5"), "gpt-5.6-terra", "gemini-3.1-pro-preview"]
 
+# PERÍCIA (a análise crítica que vai ao site) — cadeia PRÓPRIA, decidida por MEDIÇÃO em 01/Ago/2026.
+# Comparativo real em 5 documentos (original, diretriz, revisão, meta, diretriz SBC de 130 páginas),
+# 3–4 modelos cada, com os prompts por tipo. O gpt-5.6-terra ganhou nos três eixos que importam:
+#   • TABELAS: 108 na diretriz de 130 pág (Sonnet: 43) · 176 na meta (Sonnet: 51)
+#   • LACUNAS ADMITIDAS ("não reportado" em vez de inventar): 25 (Sonnet: 6)
+#   • TEMPO e CUSTO: 70 s / US$ 0,42 contra 253 s / US$ 0,72 do Sonnet no mesmo documento
+# O Sonnet 5 gastou 3× em TODOS os testes ~15.000 tokens de raciocínio para entregar ~7.500 de texto
+# (cobrados como saída). Fica como 1º fallback: ele é o melhor a ANCORAR afirmação em número.
+# Por que cadeia separada e não trocar a ESCRITA: ACRI e roteiro de áudio NÃO foram testados assim —
+# mexer neles sem medir seria repetir o erro que passamos o dia consertando.
+PERICIA = [_env("CD_M_PERICIA", "gpt-5.6-terra"), "claude-sonnet-5", "gemini-3.1-pro-preview"]
+
 # Rápido/volume: triagem do Radar, classificação, filtragem (pouco raciocínio)
 # Haiku primário (Anthropic, confiável, na conta que o Dr. Eduardo controla). Gemini só como último fallback.
 RAPIDO = [_env("CD_M_RAPIDO", "claude-haiku-4-5-20251001"), "gpt-5.6-luna", "gemini-3.6-flash"]

@@ -65,6 +65,37 @@ A corrente nova usa 5 prompts, todos na raiz de `src/`: `analise_prompt.md` (fat
 
 ---
 
+### LEI 8: O CLASSIFICADOR É A DECISÃO — NÃO É UMA ETIQUETA (02/Ago/2026)
+
+**Palavras do Dr. Eduardo:** *"por este motivo que o classificador não pode errar — se ele colocar um
+trabalho na caixa errada, vamos usar o motor errado, o prompt errado, análise e notas erradas...
+estas ações não têm como ficar para o analisador decidir."*
+
+Até 02/Ago o tipo do documento parecia um detalhe de organização de pasta. **Não é.** Desde que cada
+tipo ganhou prompt próprio (01/Ago) e motor de notas próprio (02/Ago), a decisão do classificador
+**determina toda a cadeia**:
+
+| Se o classificador erra a caixa | então |
+|---|---|
+| pasta errada | **PROMPT errado** — cobra randomização de uma diretriz, ou PRISMA de um RCT |
+| tipo errado | **MOTOR errado** — pondera 6 domínios de meta num artigo original |
+| motor errado | **NOTAS erradas** — as duas, aplicabilidade e rigor |
+| notas erradas | **PERÍCIA errada** — o redator recebe o veredito e escreve em cima dele |
+| tudo errado | **publica** — e nenhuma trava a jusante pega, porque cada peça está "coerente" |
+
+**Consequências que passam a valer:**
+
+1. **O tipo é decidido UMA vez, no classificador, e todo o resto OBEDECE.** É proibido cada etapa
+   decidir o tipo por conta própria — foi assim que nasceu a incoerência de 02/Ago, em que a escolha
+   do prompt olhava a PASTA e a escolha do motor olhava o campo `desenho` dos FATOS. Duas fontes de
+   verdade para a mesma pergunta é a definição de buraco.
+2. **Erro de classificação não é erro pequeno.** Não existe "o analisador conserta depois". Não existe
+   "o modelo percebe". A jusante ninguém percebe: tudo fica internamente coerente e errado.
+3. **O classificador tem que provar acerto ANTES de qualquer lote.** Padrão-ouro conferido a mão,
+   medição, e nada sobe sem bater. Medido em 31/Jul: produção 91,9 % · corrigido 99,1 %.
+4. **Na dúvida, REVISÃO HUMANA.** Classificar errado custa mais caro que não classificar. O
+   `nao_classificavel` e a pasta `REVISAO_HUMANA` existem para isso e devem ser usados sem vergonha.
+
 ### LEI 1: NUNCA PROPOR ABANDONAR PARTE DO PROJETO
 - O Claude NUNCA deve sugerir abandonar, descontinuar, remover ou desistir de qualquer funcionalidade planejada ou em desenvolvimento do CardioDaily.
 - Se uma abordagem tecnica nao funciona, o Claude deve propor ALTERNATIVAS, nunca eliminacao.
