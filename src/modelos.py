@@ -56,6 +56,14 @@ PERICIA = [_env("CD_M_PERICIA", "gpt-5.6-terra"), "claude-sonnet-5", "gemini-3.1
 # Haiku primário (Anthropic, confiável, na conta que o Dr. Eduardo controla). Gemini só como último fallback.
 RAPIDO = [_env("CD_M_RAPIDO", "claude-haiku-4-5-20251001"), "gpt-5.6-luna", "gemini-3.6-flash"]
 
+# CLASSIFICACAO — o tipo do documento (Chave 1). MEDIDO, não escolhido por gosto:
+# em 31/07/2026, nos 111 artigos do gabarito do Dr. Eduardo, com o prompt v3:
+#     gpt-5.6-luna 110/111 = 99,1 %   ·   sonnet-5 e haiku ficaram atrás E custam mais
+# Luna é o MAIS BARATO da casa ($0,20/$1,20 por 1M) e o mais exato nesta tarefa — não é trade-off.
+# Por que merece cadeia própria e não usa a RAPIDO: na RAPIDO o Luna é FALLBACK, e quem responderia
+# seria o Haiku. A LEI 8 diz que o classificador não pode errar; aqui o primário tem de ser o medido.
+CLASSIFICACAO = [_env("CD_M_CLASSIF", "gpt-5.6-luna"), "claude-haiku-4-5-20251001", "claude-sonnet-5"]
+
 # Guidelines: contexto longo (200+ páginas). GPT-5.6 Sol tem ~1,05M de janela → aguenta como primário.
 # Gemini 3.1 Pro (1M) fica de fallback (Claude não cabe, ~200k).
 GUIDELINE_LONGO = [_env("CD_M_GUIDELINE", "gpt-5.6-sol"), "gemini-3.1-pro-preview"]

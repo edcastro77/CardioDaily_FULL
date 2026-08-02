@@ -29,6 +29,8 @@ from classificador_pubmed import (
     RedeIndisponivel,
 )
 
+import classificador_prompt as CP     # O PROMPT: um lugar só (prova e produção leem daqui)
+
 SUB_RETRY = "RETENTAR_REDE"  # falha de rede (não é troncho): revisar/rodar de novo
 SUB_DUP = "DUPLICATAS"       # mesmo DOI/artigo 2x: não sobrescreve (GOLDEN GATE)
 
@@ -110,34 +112,46 @@ def rotulo_original(texto):
 
 # ============================ CAMADA B/C — SONNET lê a 1ª página ============================
 # Nota: META já foi decidida pelo título ANTES do Sonnet. Aqui o Sonnet NÃO tem a opção meta.
-_PROMPT = """Você classifica artigos científicos de cardiologia. Leia a PRIMEIRA PÁGINA abaixo
-(título, rótulo do tipo, abstract, keywords) e responda SOMENTE com UMA destas palavras exatas:
-artigo_original | revisao_geral | guideline | ponto_de_vista | relato_de_caso | carta_de_pesquisa | incerto
-
-(Meta-análise NÃO é opção aqui — já foi decidida pelo título. Se o artigo parecer meta/revisão sistemática, escolha revisao_geral.)
-
-Como decidir — o CONTEÚDO do Methods é o juiz (a estrutura IMRD engana):
-- artigo_original: coleta dados primários em sujeitos. Methods diz "recruited/enrolled/studied N patients", medições, estatística (regression, Cox, ROC, p-values). RCT ("randomized trial", "randomly assigned", "intention-to-treat", registro NCT/EudraCT) também é artigo_original.
-- revisao_geral: revisão narrativa, integrativa OU sistemática. Sinais: "literature search", "we review", "state-of-the-art review", "synthesized". Se o rótulo/título diz "Review" → é revisao_geral.
-- guideline: diretriz, consenso, scientific statement de sociedade. Em geral SEM IMRD (abstract narrativo). Rótulo/título "Scientific Statement"/"Guideline"/"Consensus".
-- ponto_de_vista: editorial, viewpoint, perspectiva, comentário.
-- relato_de_caso: relato de caso único ou descrição de técnica em paciente(s).
-- carta_de_pesquisa: "research letter" / carta (formato breve).
-- incerto: se não der para decidir com segurança.
-
-PRIMEIRA PÁGINA:
-{texto}
-"""
 
 _llm_erro_mostrado = False
 
 
-def classify_sonnet(texto):
-    """Claude Sonnet lendo a 1ª página. Rótulo canônico, 'relato_de_caso'/'carta_de_pesquisa',
-    'incerto' ou None (erro). Nunca engole erro em silêncio."""
+def classificar_llm(caminho):
+    """O JUIZ LLM da cascata — migrado para a versão MEDIDA em 02/Ago/2026 (LEI 8, tarefa #33).
+
+    O QUE MUDOU, e por quê (três coisas, todas medidas):
+      1. PROMPT: era um texto próprio, daqui, que **contradizia a DECISÃO D-01 do Dr. Eduardo**
+         ("revisão sistemática É meta-análise"): mandava literalmente escolher `revisao_geral`
+         quando o artigo parecesse meta. Também não conhecia `minirevisao`.
+         Agora vem de `classificador_prompt.py` — o MESMO texto que a prova mede. Um só.
+      2. QUANTO LÊ: era `texto[:5000]` do começo. Agora são as PÁGINAS 1 A 3, porque o RÓTULO
+         IMPRESSO da seção — que é a REGRA 1 do prompt — muitas vezes só aparece na página 2 ou 3.
+         (medido: detecção do rótulo subiu de 54 % para 87 %)
+      3. MODELO: era a cadeia EXTRACAO (sonnet-5). Agora é a CLASSIFICACAO (gpt-5.6-luna), que
+         acertou 110/111 = 99,1 % e custa 10× menos. Não é trade-off: é melhor e mais barato.
+
+    Devolve (tipo, confianca, prova) — ou (None, "", "") em erro. Nunca engole erro em silêncio.
+    A CONFIANÇA e a PROVA são novas: a produção antiga só recebia a palavra do tipo, sem nenhuma
+    forma de saber se o modelo tinha base para dizê-la.
+    """
     global _llm_erro_mostrado
-    if not ANTHROPIC_KEY or not texto:
-        return None
+    try:
+        texto3 = CP.paginas_1a3(caminho)
+    except Exception as e:
+        print(f"   ⚠️ não li as páginas 1-3 de {os.path.basename(caminho)}: {type(e).__name__}")
+        return None, "", ""
+    if not texto3.strip():
+        return None, "", ""
+    try:
+        import llm_client, modelos as M
+        out = llm_client.gerar(M.CLASSIFICACAO, CP.montar(texto3), max_tokens=700, temperatura=0)
+        tipo, conf, prova = CP.ler_resposta(out)
+        return (tipo or None), conf, prova
+    except Exception as e:
+        if not _llm_erro_mostrado:
+            print(f"   ⚠️ classificador LLM falhou: {type(e).__name__} - {e}")
+            _llm_erro_mostrado = True
+        return None, "", ""
     try:
         import llm_client, modelos as M              # cadeia EXTRACAO (sonnet-5) + fallback; teto folgado p/ thinking
         out = llm_client.gerar(M.EXTRACAO, _PROMPT.format(texto=texto[:5000]),
@@ -215,18 +229,28 @@ def classificar(pasta, dry_run=True, max_n=0):
         elif (rot_o := rotulo_original(texto)):
             destino, marca, via = "artigo_original", "🏷️", f"rótulo do topo: {rot_o}"
         else:
-            # CAMADA B/C — Sonnet lê a 1ª página (META NÃO é opção aqui; já decidida pelo título)
-            tipo = classify_sonnet(texto)
+            # CAMADA B/C — o JUIZ LLM lê as PÁGINAS 1 A 3 com o prompt v3 (medido: 110/111 = 99,1 %)
+            tipo, conf, prova = classificar_llm(caminho)
             via_sonnet += 1
+            # A CONFIANÇA E A PROVA SÃO NOVAS, e mandam (LEI 8, ponto 4: "na dúvida, REVISÃO HUMANA.
+            # Classificar errado custa mais caro que não classificar"). Antes a produção recebia só a
+            # palavra do tipo: um chute com cara de certeza e um acerto seguro chegavam iguais.
+            # Agora o modelo tem de CITAR o trecho do artigo que sustenta a resposta — sem trecho,
+            # ou com confiança 'baixa', ninguém entra em pasta nenhuma.
+            sem_base = (conf == "baixa") or (len((prova or "").strip()) < 12)
             if tipo in ("relato_de_caso", "carta_de_pesquisa"):
-                destino, marca, via = "DESCARTE", "⛔", f"Sonnet: {tipo}"
-            elif tipo == "revisao_sistematica_meta_analise":
-                # Sonnet disse meta mas o título não declara → não confiar; revisão humana
-                destino, marca, via = "REVISAO", "🔴", "meta sem título → revisar"
+                destino, marca, via = "DESCARTE", "⛔", f"LLM: {tipo} ({conf})"
+            elif tipo is None:
+                destino, marca, via = "REVISAO", "🔴", "o LLM não respondeu"
+            elif sem_base:
+                destino, marca, via = "REVISAO", "🔴", f"LLM disse {tipo} mas SEM BASE (conf={conf or '—'})"
             elif tipo in FOLDERS:
-                destino, marca, via = tipo, "🤖", "Sonnet (1ª página)"
+                # META deixou de ir para revisão humana: o prompt v3 tem a TRAVA DA REVISÃO
+                # SISTEMÁTICA (só responde meta se o artigo DECLARAR busca/PRISMA/I²/pooled), e foi
+                # com essa trava que o 99,1 % foi medido. Desconfiar aqui seria desperdiçar a trava.
+                destino, marca, via = tipo, "🤖", f"LLM v3 pág.1-3 ({conf}): {prova[:60]}"
             else:
-                destino, marca, via = "REVISAO", "🔴", f"ambíguo (Sonnet={tipo})"
+                destino, marca, via = "REVISAO", "🔴", f"ambíguo (LLM={tipo or 'vazio'})"
 
         # EXPERT OPINION / editorial → trilha MINIRREVISÃO (Dr. Eduardo 26/07): JACC/Circulation/NEJM
         # trazem minirevisões rotuladas como opinião. Vão pra ferramenta minirevisao (condutas+fluxograma),
