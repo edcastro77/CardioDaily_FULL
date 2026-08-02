@@ -56,9 +56,31 @@ FOLDERS = {
 SUB_ANALISE, SUB_DESCARTE, SUB_REVISAO = "CLASSIFICADOS", "DESCARTADOS", "REVISAO_HUMANA"
 SUB_FILA = "FILA_ESPERA"   # ahead-of-print: espera o PubMed catalogar (re-check diário)
 
+# ═══ MAPA DO PUBMED — CORRIGIDO EM 02/Ago/2026 (a causa raiz dos 3 erros que sobreviveram) ═══
+#
+# O QUE ACONTECEU: em 02/Ago o classificador novo (prompt v3, 99,1 % medido) foi para produção e
+# REPETIU os mesmos erros — revisão sistemática caindo em REVISOES, Scientific Statement caindo em
+# REVISOES. O motivo NÃO era o LLM: era esta tabela, que decide ANTES dele e o impede de opinar.
+#
+# Duas coisas estavam erradas na linha final `("revisao_geral", {"Review", "Systematic Review"})`:
+#
+# 1. "Systematic Review" ia para `revisao_geral` — **violação direta da DECISÃO D-01 do Dr. Eduardo**
+#    (31/07: "revisão sistemática É meta-análise, mesma trilha"). A regra foi corrigida no PROMPT em
+#    02/Ago e ficou VIVA AQUI, porque eu consertei onde achei e não procurei a mesma regra no resto
+#    do sistema. Duas cópias da mesma regra é a definição de buraco (LEI 5/LEI 8).
+#
+# 2. "Review" é o BALDE GENÉRICO do PubMed: ele cataloga como "Review" um AHA Scientific Statement,
+#    uma revisão narrativa e um state-of-the-art — tudo junto. Tratá-lo como AUTORITATIVO fazia o
+#    mapa responder `revisao_geral` com autoridade e **curto-circuitar o LLM**, que teria lido
+#    "AHA SCIENTIFIC STATEMENT" impresso na página 1 e respondido `guideline`.
+#
+# REGRA NOVA: o PubMed é autoritativo para o que é ESPECÍFICO, e cala-se no que é genérico.
+# "Review" sozinho não decide nada — desce a cascata até o LLM, que lê o rótulo impresso (REGRA 1
+# do prompt v3, a que sustenta os 99,1 %).
 _PUBTYPE_PRIORITY = [
     ("guideline",                        {"Practice Guideline", "Guideline"}),
-    ("revisao_sistematica_meta_analise", {"Meta-Analysis"}),  # só meta; revisão sistemática s/ meta = revisão
+    # D-01 (Dr. Eduardo, 31/07): revisão sistemática = meta-análise, MESMA TRILHA.
+    ("revisao_sistematica_meta_analise", {"Meta-Analysis", "Systematic Review"}),
     ("ponto_de_vista",                   {"Editorial", "Comment"}),  # "Letter" agora é descarte
     ("artigo_original",                  {"Randomized Controlled Trial", "Clinical Trial",
                                           "Controlled Clinical Trial", "Comparative Study",
@@ -66,8 +88,9 @@ _PUBTYPE_PRIORITY = [
                                           "Equivalence Trial", "Pragmatic Clinical Trial",
                                           "Validation Study", "Clinical Trial, Phase III",
                                           "Clinical Trial, Phase II"}),
-    ("revisao_geral",                    {"Review", "Systematic Review"}),
 ]
+# NÃO é autoritativo: cai para as camadas de baixo (rótulo impresso → LLM v3).
+PUBTYPE_GENERICO = {"Review", "Journal Article", "Historical Article", "Introductory Journal Article"}
 _CASO_RE = re.compile(
     r"\b(case report|case series|a case of|technique for|technique with|first[- ]in[- ]human|"
     r"how (we|i) do it|step[- ]by[- ]step)\b", re.I)
@@ -126,6 +149,52 @@ def extrair_doi(texto):
         doi = doi[:-1]
     doi = doi.rstrip(".,;:")
     return doi or None
+
+
+# ═══ DOI EMPRESTADO — o PDF traz o DOI de OUTRO artigo (02/Ago/2026) ═══
+#
+# O CASO REAL, medido: o Seminar do Lancet "Atrial fibrillation" (Lancet 2026;407:1000-13) tinha um
+# ÚNICO DOI no texto — `10.1055/a-2787-0186`. Prefixo 10.1055 = Thieme; o Lancet é 10.1016.
+# O DOI era do "AF Better Care Pathway", de Thrombosis and Haemostasis, que É uma revisão sistemática.
+# Resultado: o PubMed respondeu com AUTORIDADE sobre o artigo ERRADO, o Seminar foi para META_ANALISES
+# e ainda foi RENOMEADO com o título e a revista do outro. O LLM nunca chegou a ser chamado.
+# O Dr. Eduardo viu isso repetir "TODAS AS VEZES" — não era teimosia do modelo, era o DOI.
+#
+# ⚠️ A PROVA (Chave 6) NUNCA VERIA ESTE BUG: ela mede só o LLM, sem DOI e sem PubMed. Por isso o
+# classificador podia bater 99,1 % na prova e errar este artigo na produção, toda vez.
+#
+# O TESTE: o PubMed devolve `title` e `journal` do artigo que ELE acha que é. Se NEM o título NEM a
+# revista aparecem nas páginas 1-3 do PDF, o DOI não é deste documento.
+# Exige que os DOIS falhem, de propósito: um PDF com título mal renderizado (hifenização, ligadura,
+# sobrescrito) falharia o teste do título sozinho, e seria acusado à toa.
+_GENERICAS = {"journal", "american", "european", "international", "medicine", "clinical",
+              "research", "cardiology", "college", "society", "association", "official"}
+
+
+def _norm(s):
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).split())
+
+
+def doi_e_deste_artigo(meta, texto):
+    """True se o DOI parece ser DESTE PDF. False = DOI EMPRESTADO (não confiar no PubMed).
+    Função pura: sem rede, sem custo — dá para testar exaustivamente."""
+    if not meta:
+        return True                                   # sem metadado, nada a contradizer
+    x = _norm(texto)
+    if not x:
+        return True
+    titulo = _norm(meta.get("title"))
+    # o título bate se os primeiros 50 caracteres normalizados aparecem no texto
+    bate_titulo = bool(titulo) and (titulo[:50] in x if len(titulo) >= 50 else titulo in x)
+    # a revista bate se alguma palavra DISTINTIVA dela aparece ('Lancet' sim; 'Journal' não vale)
+    sig = [w for w in _norm(meta.get("journal")).split() if len(w) >= 5 and w not in _GENERICAS]
+    # ESCOLHA REGISTRADA (LEI 6): revista SEM palavra distintiva ("Journal of Cardiology") NÃO
+    # confirma nada — vale como falha, não como aval. Pego pelo próprio teste em 02/Ago.
+    # A direção do erro é de propósito: acusar à toa manda o artigo para o LLM (99,1 %, centavos);
+    # deixar passar mantém o bug que carimba o artigo errado E renomeia com o título de outro.
+    # Na dúvida, quem decide é quem lê o documento — LEI 8, ponto 4.
+    bate_revista = any(w in x for w in sig)
+    return bate_titulo or bate_revista
 
 
 def _params(extra):

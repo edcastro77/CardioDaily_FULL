@@ -586,6 +586,117 @@ def teste_veredito_aberto():
           not RE_A.search(v), f"veio {v[:90]!r}")
 
 
+# ══════════════ 3e · A CASCATA DO CLASSIFICADOR (02/Ago) — o que o LLM NÃO decide ══════════════
+def teste_mapa_pubmed():
+    """O ERRO REAL DE 02/Ago, que não pode voltar.
+
+    O classificador novo (prompt v3, 99,1 % medido) foi para produção e REPETIU os erros antigos:
+    revisão sistemática em REVISOES, Scientific Statement em REVISOES. O LLM não tinha culpa —
+    ele NUNCA FOI CHAMADO. O mapa de pubtype do PubMed decide ANTES dele, e mandava:
+        ("revisao_geral", {"Review", "Systematic Review"})
+      1. "Systematic Review" → revisao_geral  = violação da D-01, que eu tinha corrigido no PROMPT
+         e deixado viva AQUI (consertei onde achei, não procurei a regra no resto do sistema)
+      2. "Review" tratado como AUTORITATIVO — mas é o balde genérico do PubMed: Scientific Statement,
+         revisão narrativa e state-of-the-art são todos "Review". Curto-circuitava o LLM.
+
+    Estas travas são de FUNÇÃO PURA: rodam sem rede, sem PubMed, sem custo. Se alguém reescrever a
+    tabela, a Chave 8 reprova antes de virar 350 análises erradas."""
+    from classificador_pubmed import map_pubtype, PUBTYPE_GENERICO
+
+    # D-01 (Dr. Eduardo, 31/07): revisão sistemática É meta-análise, MESMA TRILHA.
+    for pt in (["Systematic Review"], ["Systematic Review", "Journal Article"],
+               ["Meta-Analysis"], ["Systematic Review", "Meta-Analysis"]):
+        checa(f"D-01: {pt} → trilha da meta",
+              map_pubtype(pt) == "revisao_sistematica_meta_analise", f"veio {map_pubtype(pt)}")
+
+    # "Review" SOZINHO não decide nada — tem de descer até o LLM ler o rótulo impresso
+    for pt in (["Review"], ["Review", "Journal Article"], ["Journal Article"], []):
+        checa(f"{pt} NÃO é autoritativo (desce p/ o LLM)", map_pubtype(pt) is None,
+              f"decidiu {map_pubtype(pt)} e calaria o LLM")
+    checa("'Review' está declarado como genérico", "Review" in PUBTYPE_GENERICO)
+
+    # o que o PubMed sabe de verdade continua mandando
+    for pt, esperado in ((["Practice Guideline"], "guideline"),
+                         (["Guideline"], "guideline"),
+                         (["Randomized Controlled Trial"], "artigo_original"),
+                         (["Observational Study"], "artigo_original"),
+                         (["Editorial"], "ponto_de_vista")):
+        checa(f"{pt} → {esperado}", map_pubtype(pt) == esperado, f"veio {map_pubtype(pt)}")
+
+    # PRECEDÊNCIA: um documento com vários rótulos não pode cair no mais fraco
+    checa("Practice Guideline vence Review",
+          map_pubtype(["Review", "Practice Guideline"]) == "guideline")
+    checa("Meta-Analysis vence Review",
+          map_pubtype(["Review", "Meta-Analysis"]) == "revisao_sistematica_meta_analise")
+    checa("RCT vence Journal Article",
+          map_pubtype(["Journal Article", "Randomized Controlled Trial"]) == "artigo_original")
+
+    # ── F-02 · BRIEF REPORT → MINIRREVISÃO (aberta desde 31/Jul, consertada em 02/Ago) ──
+    # O Dr. Eduardo reportou em 31/Jul ("SEGUNDA FALHA - BRIEF REPORTING COMO ARTIGO ORIGINAL"),
+    # ficou no docs/FALHAS_AUDITORIA.md como F-02, e em 02/Ago voltou idêntica: "errou 6 artigos
+    # originais que eram minirevisões — todos tinham acima do título BRIEF REPORT".
+    # A palavra "brief" não existia em NENHUM bloco do classificador. Esta trava impede o retorno.
+    from classificador_ouro import rotulo_topo
+    CORPO = "\nEfeito da droga X em 400 pacientes randomizados\nMethods: we enrolled 400 patients"
+    for rot in ("BRIEF REPORT", "Brief Report", "brief reports", "BRIEF COMMUNICATION",
+                "Short Report", "RESEARCH BRIEF", "Short Communication"):
+        checa(f"F-02: '{rot}' → minirevisao", rotulo_topo(rot + CORPO)[0] == "minirevisao",
+              f"veio {rotulo_topo(rot + CORPO)[0]}")
+    # e os outros rótulos não podem ter sido contaminados
+    for rot, esperado in (("EDITORIAL", "ponto_de_vista"), ("Viewpoint", "ponto_de_vista"),
+                          ("RESEARCH LETTER", "DESCARTE"), ("Correspondence", "DESCARTE"),
+                          ("ORIGINAL INVESTIGATION", None), ("Seminar", None),
+                          ("CLINICAL RESEARCH", None)):
+        checa(f"'{rot}' continua → {esperado}", rotulo_topo(rot + CORPO)[0] == esperado,
+              f"veio {rotulo_topo(rot + CORPO)[0]}")
+    # 'brief' NO MEIO do texto não pode disparar (é rótulo de LINHA INTEIRA, no topo)
+    checa("'brief report' no meio de uma frase NÃO dispara",
+          rotulo_topo("Original Article\nWe present a brief report of our findings")[0] is None)
+    # e o prompt (bloco 3) tem de dizer a mesma coisa — LEI 9
+    import classificador_prompt as _CP
+    checa("bloco 3: BRIEF REPORT também está no prompt", "BRIEF REPORT" in _CP.PROMPT)
+    checa("bloco 3: SEMINAR também está no prompt", "SEMINAR" in _CP.PROMPT)
+    checa("prompt foi versionado ao mudar (senão a prova não refaz)",
+          _CP.PROMPT_VERSAO != "v3", f"continua {_CP.PROMPT_VERSAO}")
+
+    # ── DOI EMPRESTADO: o PDF traz o DOI de OUTRO artigo (caso real do Seminar do Lancet) ──
+    from classificador_pubmed import doi_e_deste_artigo as ok
+    LANCET = ("Seminar www.thelancet.com Vol 407 March 7, 2026 Lancet 2026; 407: 1000-13 "
+              "Department of Cardiovascular and Metabolic Medicine, University of Liverpool "
+              "Atrial fibrillation Deirdre A Lane, Gregory Y H Lip. Atrial fibrillation affects "
+              "approximately 37.6 million people worldwide. The Atrial fibrillation Better Care "
+              "pathway is recommended for integrated care.")
+    emprestado = {"title": "The Atrial Fibrillation Better Care Pathway for Integrated Care of "
+                           "Atrial Fibrillation: A Systematic Review and Meta-Analysis",
+                  "journal": "Thrombosis and haemostasis"}
+    checa("DOI emprestado é PEGO (Seminar do Lancet com DOI da Thieme)",
+          not ok(emprestado, LANCET), "passou como se fosse deste artigo")
+    # e o do próprio artigo continua valendo — a trava não pode acusar inocente
+    for bom in ({"title": "Atrial fibrillation", "journal": "Lancet"},
+                {"title": "Atrial fibrillation", "journal": "The Lancet"},
+                {"title": "", "journal": "Lancet"},                       # só a revista bate
+                {"title": "Atrial fibrillation", "journal": ""}):         # só o título bate
+        checa(f"DOI verdadeiro NÃO é acusado ({bom})", ok(bom, LANCET))
+    checa("sem metadado nenhum, não acusa", ok({}, LANCET))
+    checa("sem texto, não acusa", ok(emprestado, ""))
+    # palavra genérica de revista não pode salvar um DOI emprestado
+    checa("'Journal'/'Cardiology' sozinhas não validam a revista",
+          not ok({"title": "Outro artigo totalmente diferente sobre insuficiencia renal cronica",
+                  "journal": "Journal of Cardiology"}, LANCET))
+
+    # A TABELA em si, não o texto do arquivo. (1ª versão desta trava era grep e se acusou sozinha:
+    # eu tinha CITADO a linha errada no comentário que a documenta. Conferir estrutura, não string.)
+    from classificador_pubmed import _PUBTYPE_PRIORITY
+    destinos = {canon for canon, _ in _PUBTYPE_PRIORITY}
+    checa("nenhum pubtype decide 'revisao_geral' (é o balde genérico — quem decide é o LLM)",
+          "revisao_geral" not in destinos, f"tabela devolve {sorted(destinos)}")
+    for canon, gat in _PUBTYPE_PRIORITY:
+        if "Systematic Review" in gat:
+            checa("D-01 na tabela: 'Systematic Review' só na trilha da meta",
+                  canon == "revisao_sistematica_meta_analise", f"está em '{canon}'")
+        checa(f"'Review' genérico não entrou em '{canon}'", "Review" not in gat)
+
+
 # ══════════════ 4 · REGRESSÃO: os 6 artigos do gabarito do Dr. Eduardo ══════════════
 def teste_gabarito_dos_artigos():
     for nome, fatos in N.FIXTURES.items():
@@ -620,7 +731,7 @@ if __name__ == "__main__":
               teste_revisao_pode_chegar_a_10, teste_revisao_fala_por_cima,
               teste_revisao_custo_brasil, teste_revisao_vies_de_selecao,
               teste_revisao_atualidade, teste_revisao_contrato_e_silencio,
-              teste_os_quatro_motores_nao_se_misturam, teste_veredito_aberto,
+              teste_os_quatro_motores_nao_se_misturam, teste_veredito_aberto, teste_mapa_pubmed,
               teste_gabarito_dos_artigos, teste_contrato_de_saida]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:

@@ -20,7 +20,10 @@ HISTÓRICO DAS VERSÕES (medido em 31/07/2026, 111 artigos do gabarito do Dr. Ed
   v2 — case-based educacional = minirevisao · TRAVA da revisão sistemática.
        Luna 110/111 = 99,1 %. (2 dos 3 "erros" eram do GABARITO: os artigos DECLARAVAM PRISMA.)
        Erro restante: "JACC STATE-OF-THE-ART REVIEW" virou minirevisao.
-  v3 — o RÓTULO IMPRESSO de seção vence a impressão de "parece opinião". ← EM USO
+  v3 — o RÓTULO IMPRESSO de seção vence a impressão de "parece opinião".
+  v4 (02/Ago) — BRIEF REPORT/SHORT REPORT → minirevisao (F-02, aberta desde 31/Jul) e SEMINAR
+       (rótulo do Lancet) → revisao_geral. ⚠️ O texto MUDOU: os 99,1 % foram medidos no v3 e
+       NÃO valem para o v4 até a Chave 6 rodar de novo. ← EM USO
 """
 import re
 
@@ -28,7 +31,7 @@ import fitz
 
 # VERSÃO DO PROMPT — entra na chave de retomada da prova. Sem isto, mudar o prompt e rodar de novo
 # NÃO refaz nada (o CSV acha que já foi feito) e a comparação entre versões fica impossível.
-PROMPT_VERSAO = "v3"
+PROMPT_VERSAO = "v4"
 
 # DECISÃO D-01 do Dr. Eduardo (31/07): revisão sistemática = meta-análise, mesma trilha.
 PROMPT = """Você classifica o TIPO de um artigo científico de cardiologia. Abaixo estão as
@@ -66,10 +69,14 @@ REGRAS QUE VALEM MAIS QUE A SUA IMPRESSÃO:
      ORIGINAL RESEARCH ARTICLE · ORIGINAL ARTICLE · ORIGINAL INVESTIGATION · CLINICAL RESEARCH
         → artigo_original
      STATE-OF-THE-ART REVIEW · REVIEW ARTICLE · JACC REVIEW TOPIC OF THE WEEK · IN DEPTH · FRONTIERS
+     SEMINAR (é como o Lancet chama suas revisões) · CLINICAL UPDATE · THERAPY IN PRACTICE
         → revisao_geral   (NUNCA minirevisao — por mais que o texto pareça ensaio de opinião)
      AHA SCIENTIFIC STATEMENT · SCIENTIFIC STATEMENT · CLINICAL PRACTICE GUIDELINE · CONSENSUS
      DOCUMENT · POSITION PAPER  → guideline
-     THE HEART OF THE MATTER  → minirevisao
+     THE HEART OF THE MATTER · BRIEF REPORT · BRIEF COMMUNICATION · SHORT REPORT
+     RESEARCH BRIEF · SHORT COMMUNICATION  → minirevisao
+        (decisão do Dr. Eduardo: BRIEF REPORT é minirevisão, NÃO artigo original — mesmo quando
+         traz dado primário. O formato breve não sustenta a perícia de um original.)
      EDITORIAL · EDITORIAL COMMENT · VIEWPOINT  → ponto_de_vista
    Só use o julgamento dos itens 2 a 5 quando NÃO houver rótulo impresso.
 2. Se não houver rótulo, o juiz é o METHODS: quem COLETA dado de paciente é artigo_original;

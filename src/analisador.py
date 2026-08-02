@@ -222,17 +222,27 @@ def processar(pdf, staging):
     fatos = None
     if os.path.exists(fatos_cache) and os.path.getsize(fatos_cache) > 50:
         cache = json.load(open(fatos_cache, encoding="utf-8"))
-        # SÓ reaproveita se o cache tem o schema ATUAL. Checa o campo MAIS NOVO ('fracao_ejecao', que
-        # alimenta a trava de inversão no portão): sua presença garante também 'retrospectivo' (LEI 0).
-        # Ausente = extração velha → re-extrai, senão os consertos não pegam retroativo.
-        if "fracao_ejecao" in cache:
+        # SÓ reaproveita se o cache tem o schema ATUAL **DO TIPO DESTE DOCUMENTO** (LEI 8).
+        #
+        # ⚠️ O BURACO QUE ISTO FECHA (achado em 02/Ago, ANTES do lote — teria estragado a rodada
+        # inteira em silêncio). Desde 02/Ago cada tipo tem um EXTRATOR e um SCHEMA próprios:
+        #   diretriz → bloco `agree` + contagem de classe/nível   ·   revisão → bloco `qualidade_revisao`
+        # O cheque antigo perguntava só por 'fracao_ejecao', que é campo do schema do ARTIGO ORIGINAL.
+        # Consequência: um artigo que o classificador NOVO move para GUIDELINES, mas que já tinha
+        # staging da rodada antiga, traria os fatos VELHOS (com 'fracao_ejecao') — o cache seria dado
+        # como bom, o extrator da diretriz NUNCA rodaria, e o motor AGREE receberia zero fatos.
+        # Resultado: rigor 5 por prudência em TODA diretriz e TODA revisão do lote, sem nenhum aviso.
+        tipo_doc = tipo_do_documento(pdf)
+        _CHAVE_DO_TIPO = {"diretriz": "agree", "revisao_narrativa": "qualidade_revisao"}
+        chave = _CHAVE_DO_TIPO.get(tipo_doc, "fracao_ejecao")
+        if chave in cache:
             fatos = cache
             print("       ↻ fatos reaproveitados (staging) — não re-extrai")
         else:
-            print("       ↻ fatos do cache SEM schema atual (fracao_ejecao/retrospectivo) — re-extraindo")
+            print(f"       ↻ cache SEM o schema de '{tipo_doc}' (falta '{chave}') — re-extraindo")
     reextraiu = False
     if fatos is None:
-        fatos = A.extrair_fatos(pdf)
+        fatos = A.extrair_fatos(pdf, tipo=tipo_do_documento(pdf))
         json.dump(fatos, open(fatos_cache, "w", encoding="utf-8"), ensure_ascii=False)
         reextraiu = True
     if reextraiu:

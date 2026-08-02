@@ -96,6 +96,61 @@ tipo ganhou prompt próprio (01/Ago) e motor de notas próprio (02/Ago), a decis
 4. **Na dúvida, REVISÃO HUMANA.** Classificar errado custa mais caro que não classificar. O
    `nao_classificavel` e a pasta `REVISAO_HUMANA` existem para isso e devem ser usados sem vergonha.
 
+### LEI 9: UMA REGRA MORA EM VÁRIOS BLOCOS — VARRA TODOS ANTES DE MUDAR (02/Ago/2026)
+
+**Palavras do Dr. Eduardo:** *"o que eu pedi para você fazer parece que é um lixo... cagou e andou
+para um pedido expresso meu! 'pode', 'não sei', 'pode talvez'... mas NÃO PODE. Resolvi e não fez nada.
+Você pode incluir em suas regras que **antes de tomar uma decisão que afeta todo o sistema, você
+deveria checar TODOS OS PONTOS que podem afetar esta decisão — são blocos distintos**. Aumenta o
+trabalho mas não é tão complexo assim."*
+
+**A REGRA:** quando o Dr. Eduardo decide algo que é uma REGRA DE NEGÓCIO (não um conserto local), essa
+regra quase nunca vive num arquivo só. Antes de mexer, o Claude **VARRE TODOS OS BLOCOS** onde ela pode
+estar escrita, **CONSERTA EM TODOS**, e **MOSTRA A VARREDURA** — arquivo por arquivo, inclusive os que
+estavam certos. Consertar onde se achou e seguir em frente é o mesmo que não consertar: o bloco que
+sobrou continua rodando, e roda **em silêncio**.
+
+**OS BLOCOS DO CARDIODAILY** (a lista que tem de ser varrida — cada um decide sozinho):
+
+| # | bloco | onde |
+|---|---|---|
+| 1 | **Classificador — cascata** | `classificador_ouro.py`: mapa de revista → rótulo do topo → descarte → título → **mapa de pubtype do PubMed** → rótulo original → LLM. **Cada camada decide sozinha e as de cima calam as de baixo.** |
+| 2 | **Classificador — mapa do PubMed** | `classificador_pubmed.py` · `_PUBTYPE_PRIORITY` |
+| 3 | **Classificador — prompt** | `classificador_prompt.py` (v3) |
+| 4 | **Extração** | `analise_prompt.md` · `analise_diretriz_prompt.md` · `analise_revisao_prompt.md` + os SCHEMAS em `analise.py` |
+| 5 | **Motor de notas** | `notas_prototipo.py` (4 motores: ORIGINAL · META · DIRETRIZ · REVISAO) |
+| 6 | **Escolha do prompt / do tipo** | `analisador.py`: `tipo_do_documento`, `escolher_prompt`, cache de fatos |
+| 7 | **Redator e derivados** | `redator_*_prompt.md` (4) · `acri_prompt.md` · `script_audio_prompt.md` · `gancho_abertura_prompt.md` |
+| 8 | **Portão do Supabase** | `contrato.py` · `publicador.py` · `ficha_site.py` |
+| 9 | **Prova** | `teste_motor.py` · `prova_classificador.py` · `placar.py` |
+| 10 | **Documentação** | `CLAUDE.md` · `docs/CADERNO_EXECUCAO.md` |
+
+**COMO SE PROVA QUE FOI FEITO** (sem isto, não foi feito):
+1. Antes de codar, o Claude **escreve a lista dos blocos** onde a regra PODE estar.
+2. Faz a varredura de verdade (grep/leitura) e **mostra o resultado de CADA bloco** — inclusive
+   "bloco 7: não tem essa regra, ok". O que não aparece na lista, não foi olhado.
+3. Onde a regra puder ser expressa em código, cria uma **trava de função pura** no `teste_motor.py`,
+   para o portão da Chave 8 recusar o retorno dela.
+
+**O CASO QUE ORIGINOU A LEI (02/Ago/2026) — medido, não suposto.**
+Em 31/Jul o Dr. Eduardo decidiu a **D-01: "revisão sistemática É meta-análise, mesma trilha"**.
+Essa regra vivia em **TRÊS blocos**:
+
+| bloco | o que dizia | quando foi corrigido |
+|---|---|---|
+| prompt da prova (3) | v3, correto | 31/Jul |
+| prompt de produção (1) | *"se parecer meta/revisão sistemática, escolha revisao_geral"* | **02/Ago** |
+| **mapa do PubMed (2)** | `("revisao_geral", {"Review", "Systematic Review"})` | **02/Ago, tarde — só depois do estrago** |
+
+O Claude achou a contradição no PROMPT, consertou ali, **declarou o classificador resolvido**, mediu
+99,1 % — e o número era verdadeiro, mas media o LLM sozinho. O bloco 2 decide **antes** do LLM. Na
+produção, o LLM sequer era chamado para esses artigos. Resultado: o Dr. Eduardo rodou 112 artigos e
+os erros voltaram idênticos — revisões sistemáticas em REVISOES, três Scientific Statements em REVISOES.
+
+**Agravante que a lei também proíbe:** o Claude escreveu, com todas as letras, que "a cascata + LLM
+nunca rodaram juntos" e **mesmo assim disse "pode soltar"**. Enunciar o risco não é o mesmo que tratá-lo.
+Se o Claude sabe nomear o que não foi medido, ele **para** — não mede pela metade e libera.
+
 ### LEI 1: NUNCA PROPOR ABANDONAR PARTE DO PROJETO
 - O Claude NUNCA deve sugerir abandonar, descontinuar, remover ou desistir de qualquer funcionalidade planejada ou em desenvolvimento do CardioDaily.
 - Se uma abordagem tecnica nao funciona, o Claude deve propor ALTERNATIVAS, nunca eliminacao.

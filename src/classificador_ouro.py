@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 
 from classificador_pubmed import (
     PDFExtractor, extrair_doi, pubmed_lookup, europepmc_lookup, map_pubtype,
-    eh_descartavel, _novo_nome, FOLDERS, SUB_ANALISE, SUB_DESCARTE, SUB_REVISAO,
+    eh_descartavel, _novo_nome, doi_e_deste_artigo, FOLDERS, SUB_ANALISE, SUB_DESCARTE, SUB_REVISAO,
     RedeIndisponivel,
 )
 
@@ -68,8 +68,14 @@ def mapa_revista(doi):
 
 # ============================ META PELO TÍTULO ============================
 # Regra do Dr. Eduardo: as revistas OBRIGAM meta-análise/revisão sistemática a declarar no TÍTULO.
-# Logo, META não sai do Sonnet (que exagera lendo conteúdo) — sai do título. Determinístico.
-_META_TITULO = re.compile(r"meta[-\s]?analys", re.I)
+# Logo, META não sai do LLM (que exagera lendo conteúdo) — sai do título. Determinístico.
+#
+# ⚠️ CORRIGIDO EM 02/Ago (varredura da LEI 9, bloco 1). O comentário dizia "meta-análise/revisão
+# SISTEMÁTICA", mas o regex só casava "meta-analys". Uma revisão sistemática SEM meta-análise no
+# título passava batido por esta camada — o que só não doeu porque o mapa do PubMed pegava depois…
+# e o mapa do PubMed mandava ela para `revisao_geral`. Os dois erros se somavam em silêncio.
+# D-01 (31/07): revisão sistemática = meta-análise, MESMA TRILHA. O regex agora diz isso.
+_META_TITULO = re.compile(r"meta[-\s]?analys|systematic\s+review|revis[ãa]o\s+sistem[áa]tica", re.I)
 
 
 # ============================ RÓTULO DO TOPO (manda antes do PubMed) ============================
@@ -78,10 +84,17 @@ _META_TITULO = re.compile(r"meta[-\s]?analys", re.I)
 # e nesses casos o DOI é suspeito (emprestado) → não renomeia pelo PubMed (título verídico > bonito).
 _ROT_PV = re.compile(r"^(editorial(\s+comment)?|editorials|viewpoint|perspective|commentary|point of view)$", re.I)
 _ROT_DESC = re.compile(r"^(research letter|letters?|letter to the editor|correspondence|reply|reply to.*)$", re.I)
+# BRIEF REPORT → MINIRREVISÃO. Decisão do Dr. Eduardo (F-02 do docs/FALHAS_AUDITORIA.md, 31/Jul,
+# repetida em 02/Ago: "errou 6 artigos originais que eram minirevisões — todos tinham acima do
+# título BRIEF REPORT"). A falha estava registrada havia dois dias e a palavra "brief" NÃO EXISTIA
+# em nenhum bloco do classificador: nem aqui, nem no prompt, nem no mapa.
+_ROT_BRIEF = re.compile(r"^(brief report|brief reports|brief communication|research brief|"
+                        r"brief research report|short report|short communication)$", re.I)
 
 
 def rotulo_topo(texto):
-    """Olha as primeiras linhas da 1ª página. Devolve ('ponto_de_vista'|'DESCARTE', rótulo) ou (None, None).
+    """Olha as primeiras linhas da 1ª página. Devolve (destino, rótulo) ou (None, None).
+    destino ∈ {'ponto_de_vista', 'DESCARTE', 'minirevisao'}.
     Ancorado em LINHA inteira (não 'contém'), só no topo → não confunde artigo original."""
     linhas = [l.strip() for l in (texto or "")[:600].splitlines()]
     linhas = [l for l in linhas if l and not re.fullmatch(r"[.\s·•]+", l)]
@@ -90,6 +103,8 @@ def rotulo_topo(texto):
             return "ponto_de_vista", l
         if _ROT_DESC.match(l):
             return "DESCARTE", l
+        if _ROT_BRIEF.match(l):
+            return "minirevisao", l
     return None, None
 
 
@@ -114,6 +129,8 @@ def rotulo_original(texto):
 # Nota: META já foi decidida pelo título ANTES do Sonnet. Aqui o Sonnet NÃO tem a opção meta.
 
 _llm_erro_mostrado = False
+_MODELO_USADO = None      # quem de fato respondeu na última chamada (pode não ser o primário)
+_LOG = []                 # o diário da rodada: uma linha por artigo (ver REGISTRO DA DECISÃO)
 
 
 def classificar_llm(caminho):
@@ -146,26 +163,21 @@ def classificar_llm(caminho):
         import llm_client, modelos as M
         out = llm_client.gerar(M.CLASSIFICACAO, CP.montar(texto3), max_tokens=700, temperatura=0)
         tipo, conf, prova = CP.ler_resposta(out)
+        # QUEM RESPONDEU DE VERDADE (02/Ago). `llm_client.gerar` troca de modelo EM SILÊNCIO quando
+        # o primário falha (429/timeout). Numa rodada de 383 artigos isso é provável — e o Luna
+        # (99,1 % medido) seria substituído pelo Haiku (89,2 %) sem ninguém saber. Um lote inteiro
+        # pode degradar sem UMA linha de aviso. Agora o troco aparece na tela e vai para o log.
+        global _MODELO_USADO
+        _MODELO_USADO = llm_client._ULTIMO_MODELO[0]
+        if _MODELO_USADO and _MODELO_USADO != M.CLASSIFICACAO[0]:
+            print(f"        ⚠️ FALLBACK: quem respondeu foi {_MODELO_USADO}, "
+                  f"não {M.CLASSIFICACAO[0]} — a acurácia medida NÃO vale para esta linha")
         return (tipo or None), conf, prova
     except Exception as e:
         if not _llm_erro_mostrado:
             print(f"   ⚠️ classificador LLM falhou: {type(e).__name__} - {e}")
             _llm_erro_mostrado = True
         return None, "", ""
-    try:
-        import llm_client, modelos as M              # cadeia EXTRACAO (sonnet-5) + fallback; teto folgado p/ thinking
-        out = llm_client.gerar(M.EXTRACAO, _PROMPT.format(texto=texto[:5000]),
-                               max_tokens=2000).strip().lower()
-        for cat in ("revisao_sistematica_meta_analise", "artigo_original", "revisao_geral",
-                    "guideline", "ponto_de_vista", "carta_de_pesquisa", "relato_de_caso"):
-            if cat in out:
-                return cat
-        return "incerto"
-    except Exception as e:
-        if not _llm_erro_mostrado:
-            print(f"   ⚠️ Sonnet falhou: {type(e).__name__} - {e}")
-            _llm_erro_mostrado = True
-        return None
 
 
 # ============================ A CORRENTE ============================
@@ -176,6 +188,7 @@ def classificar(pasta, dry_run=True, max_n=0):
     if max_n:
         pdfs = pdfs[:max_n]
 
+    _LOG.clear()                          # cada rodada tem o seu diário
     print(f"\n{'DRY-RUN (nada é movido)' if dry_run else 'EXECUTANDO (move arquivos)'} — {len(pdfs)} PDF(s)")
     print("cascata: mapa de revista → descarte → Sonnet(1ª página) → revisão humana\n")
     cont = {}
@@ -203,6 +216,25 @@ def classificar(pasta, dry_run=True, max_n=0):
                 print(f"        ⚠️ REDE caiu: {e}")
 
         rotulado = False  # rótulo do topo disparou → DOI suspeito (emprestado), não renomear pelo PubMed
+        # ZERAR POR ARTIGO (02/Ago). `conf`, `prova` e `_MODELO_USADO` só são preenchidos quando o
+        # LLM roda. Sem este reset, um artigo decidido pelo PubMed herdava a confiança, o trecho e
+        # o modelo DO ARTIGO ANTERIOR — o diário mentiria, e mentiria de forma convincente.
+        # (Pego na revisão do diff, antes de commitar. Era o defeito mais perigoso do dia: um
+        #  instrumento de medição que erra é pior que instrumento nenhum.)
+        conf = prova = ""
+        globals()["_MODELO_USADO"] = None
+
+        # ═══ TRAVA DO DOI EMPRESTADO (02/Ago/2026) ═══
+        # O PDF pode trazer o DOI de OUTRO artigo — e aí o PubMed responde, com autoridade, sobre o
+        # documento errado. Caso real: o Seminar do Lancet "Atrial fibrillation" tinha só o DOI
+        # 10.1055/a-2787-0186 (Thieme / Thrombosis & Haemostasis, do "AF Better Care Pathway", que É
+        # revisão sistemática). O Seminar virou META_ANALISES e foi renomeado com o título do outro —
+        # "TODAS AS VEZES", nas palavras do Dr. Eduardo. Não era o modelo: o LLM nem era chamado.
+        # Aqui o metadado é CONFRONTADO com as páginas 1-3 antes de ter qualquer autoridade.
+        if meta and not doi_e_deste_artigo(meta, texto[:20000]):
+            print(f"        🚫 DOI EMPRESTADO: o PubMed devolveu «{(meta.get('title') or '')[:52]}»"
+                  f" ({meta.get('journal') or '?'}), que não é este PDF — ignorando o PubMed")
+            pubtypes, meta, rotulado = [], {}, True   # sem pubtype, sem rename, sem dedup por DOI
 
         # TRAVA: rede caiu → NÃO classifica, NÃO renomeia. Vai pro balde de retentar.
         if falha_rede:
@@ -251,6 +283,23 @@ def classificar(pasta, dry_run=True, max_n=0):
                 destino, marca, via = tipo, "🤖", f"LLM v3 pág.1-3 ({conf}): {prova[:60]}"
             else:
                 destino, marca, via = "REVISAO", "🔴", f"ambíguo (LLM={tipo or 'vazio'})"
+
+        # ═══ REGISTRO DA DECISÃO (02/Ago/2026) ═══
+        # POR QUE: em 02/Ago o Dr. Eduardo rodou 383 artigos e viu erros voltarem. Eu rodei a cascata
+        # inteira no PDF, camada por camada, e o código do disco classificava CERTO — mas eu não tinha
+        # como saber o que tinha acontecido NA RODADA DELE, porque nada era gravado. Fiquei com duas
+        # hipóteses e zero evidência, e a LEI 7 proíbe diagnosticar o que não foi olhado.
+        # A partir daqui, TODA decisão fica escrita: qual camada decidiu, o que o PubMed disse, qual
+        # modelo respondeu de verdade, com que confiança e citando qual trecho.
+        # Uma rodada passa a responder sozinha o que antes eu tentava adivinhar.
+        _LOG.append({
+            "arquivo": nome, "destino": destino, "camada": via, "doi": doi or "",
+            "pubtypes": "|".join(pubtypes or []),
+            "pubmed_title": (meta.get("title") or "")[:90],
+            "doi_emprestado": "SIM" if rotulado else "",
+            "modelo": _MODELO_USADO or "", "confianca": conf or "",
+            "prova": (prova or "")[:150],
+        })
 
         # EXPERT OPINION / editorial → trilha MINIRREVISÃO (Dr. Eduardo 26/07): JACC/Circulation/NEJM
         # trazem minirevisões rotuladas como opinião. Vão pra ferramenta minirevisao (condutas+fluxograma),
@@ -305,7 +354,33 @@ def classificar(pasta, dry_run=True, max_n=0):
             shutil.move(caminho, os.path.join(dest_dir, novo))
 
     print("\nResumo:", ", ".join(f"{k}={v}" for k, v in sorted(cont.items())))
-    print(f"Resolvidos: MAPA {via_mapa} | PubMed autoritativo {via_pubmed} | Sonnet {via_sonnet}  (grátis: {via_mapa + via_pubmed})")
+    print(f"Resolvidos: MAPA {via_mapa} | PubMed autoritativo {via_pubmed} | LLM {via_sonnet}  (grátis: {via_mapa + via_pubmed})")
+
+    # ─── O DIÁRIO DA RODADA (02/Ago/2026) ───
+    # Sem isto, quando um lote sai errado ninguém sabe QUAL CAMADA decidiu nem QUAL MODELO respondeu —
+    # e a conversa vira palpite. Uma linha por artigo, gravada ao lado dos PDFs.
+    if _LOG:
+        import csv as _csv, datetime as _dt
+        import modelos as _M
+        saida = os.path.join(pasta, f"_CLASSIFICACAO_{_dt.datetime.now():%Y%m%d-%H%M}.csv")
+        try:
+            with open(saida, "w", newline="", encoding="utf-8-sig") as fh:
+                w = _csv.DictWriter(fh, fieldnames=list(_LOG[0].keys()))
+                w.writeheader(); w.writerows(_LOG)
+            print(f"\n📋 diário da rodada: {saida}")
+            primario = _M.CLASSIFICACAO[0]
+            fb = [r for r in _LOG if r["modelo"] and r["modelo"] != primario]
+            if fb:
+                print(f"   ⚠️ {len(fb)} artigo(s) NÃO foram respondidos por {primario} "
+                      f"(fallback) — a acurácia medida não vale para eles:")
+                for m in sorted({r["modelo"] for r in fb}):
+                    print(f"        {m}: {sum(1 for r in fb if r['modelo'] == m)}")
+            emp = [r for r in _LOG if r["doi_emprestado"]]
+            if emp:
+                print(f"   🚫 {len(emp)} artigo(s) com DOI EMPRESTADO (PubMed ignorado)")
+        except Exception as e:
+            print(f"\n⚠️ não gravei o diário: {type(e).__name__}: {e}")
+
     if dry_run:
         print("(dry-run — nada foi movido.)")
 
