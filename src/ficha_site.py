@@ -160,13 +160,34 @@ def montar(pasta):
     acri = open(acri_f[0], encoding="utf-8").read() if acri_f else ""
 
     # fenótipo de fração de ejeção (fato da extração) — vira a TRAVA do portão contra a inversão HFpEF↔reduzida
+    # e o MOTOR que deu a nota (02/Ago): sem ele, uma nota 8 de DIRETRIZ e uma de ORIGINAL são
+    # indistinguíveis no banco — e são réguas completamente diferentes.
     fatos_f = glob.glob(os.path.join(pasta, "*_fatos.json"))
-    fracao_ejecao = None
+    fracao_ejecao, motor, tipo_documento, veredito_dominios = None, "ORIGINAL", "original", {}
     if fatos_f:
         try:
-            fracao_ejecao = json.load(open(fatos_f[0], encoding="utf-8")).get("fracao_ejecao")
+            _f = json.load(open(fatos_f[0], encoding="utf-8"))
+            fracao_ejecao = _f.get("fracao_ejecao")
+            import notas_prototipo as _N
+            _r = _N.score(_f)
+            motor = _r.get("motor") or "ORIGINAL"
+            tipo_documento = _N.tipo_do_documento(_f)
+            # OS DOMÍNIOS ABERTOS, num campo só (jsonb). Decisão do Dr. Eduardo, 02/Ago:
+            # colunas específicas por tipo (pct_nivel_c, utilidade…) CRIARIAM buraco por desenho —
+            # toda meta-análise nasceria com elas vazias. Ele viu isso na minha proposta e recusou.
+            # Aqui cada artigo carrega os domínios DO SEU motor: nunca vazio, nunca campo de outro tipo.
+            veredito_dominios = {"motor": motor,
+                                 **{k: v for k, v in (_r.get("dominios_meta")
+                                                      or _r.get("dominios_agree")
+                                                      or _r.get("dominios_revisao_rigor") or {}).items()},
+                                 **({"utilidade": _r["utilidade"],
+                                     **(_r.get("dominios_revisao_util") or {})} if motor == "REVISAO" else {}),
+                                 **({"pct_nivel_c": _r.get("pct_nivel_c"),
+                                     "pct_classe_i_em_c": _r.get("pct_classe_i_em_c")} if motor == "DIRETRIZ" else {}),
+                                 **({"teto_desenho": _r.get("teto_desenho"),
+                                     "nhlbi": _r.get("nhlbi")} if motor == "ORIGINAL" else {})}
         except Exception:
-            fracao_ejecao = None
+            pass
 
     titulo = _campo(canon, "titulo")
     revista = _campo(canon, "revista")
@@ -200,21 +221,59 @@ def montar(pasta):
 
     arq = lambda pat: (glob.glob(os.path.join(pasta, pat)) or [""])[0]
     pdf = arq("*_analise.pdf") or arq("*_analise.md")     # análise crítica (peça central); PDF se já renderizado
-    audio = arq("*_audio.mp3")
-    visual = arq("*_visual*") or arq("*_INFOGRAFICO.png") or arq("*_infografico*")
     md = arq("*_analise.md")
     resumo = open(md, encoding="utf-8").read() if md else ""     # → resumo_markdown
-    gab = arq("*_gancho_abertura.txt")                           # gancho de abertura (nota≥8) — gerado no PORTÃO
-    gancho_abertura = open(gab, encoding="utf-8").read().strip() if gab else None
+
+    # ═══════════ OS DOIS SELOS — 02/Ago/2026, decisão do Dr. Eduardo ═══════════
+    #
+    # "a tabela tem que ser igual em todas as pastas — se um campo for ficar vazio naquela pasta
+    #  porque não tem o campo, a pasta já preenche o 'não se aplica' nos campos que iriam ficar vazios"
+    #
+    # O QUE ISTO CONSERTA: hoje a mesma coluna VAZIA quer dizer três coisas diferentes, e ninguém
+    # consegue distinguir olhando o banco:
+    #     (a) não se aplica àquele tipo   (b) não atingiu a porta   (c) BURACO — o sistema falhou
+    # Medido em 02/Ago nas 4.307 linhas: `mcid_avaliacao` 35,8 % vazio, `caminho_audio` 71,7 %,
+    # `gancho_abertura` 75,8 %. Impossível saber quanto daquilo era defeito e quanto era natureza.
+    #
+    # A REGRA: "não se aplica" e "não gerado" são INFORMAÇÃO e vão escritos, com o motivo.
+    # Vazio (NULL) passa a significar UMA coisa só: DEFEITO. Aí o NOT NULL vira trava de verdade.
+    NAO_SE_APLICA = "nao_se_aplica"   # o tipo do documento não tem esse conceito. Nunca terá.
+    NAO_GERADO = "nao_gerado"         # poderia ter, não atingiu a porta por nota.
+
+    def _porta(caminho, nota_minima, o_que):
+        """Arquivo que existe → caminho. Não existe → DIZ POR QUÊ, não deixa vazio."""
+        if caminho:
+            return caminho
+        if nota is not None and nota < nota_minima:
+            return f"{NAO_GERADO}: nota {nota} (a porta do {o_que} e {nota_minima})"
+        return f"{NAO_GERADO}: nota {nota} atingiu a porta do {o_que} mas o arquivo NAO existe"
+
+    audio = _porta(arq("*_audio.mp3"), 8, "audio")
+    visual = _porta(arq("*_visual*") or arq("*_INFOGRAFICO.png") or arq("*_infografico*"), 7, "visual")
+    gab = arq("*_gancho_abertura.txt")                           # gancho de abertura (nota≥8) — no PORTÃO
+    gancho_abertura = (open(gab, encoding="utf-8").read().strip() if gab
+                       else _porta("", 8, "gancho de abertura"))
 
     # campos extras que a tabela REAL usa (a tabela NÃO tem 'slug')
     ano = _data_valida(_campo(canon, "ano"))
     tipo = _campo(canon, "tipo")
     mrig = re.search(r"nota_trabalho_estatistico:\s*(\d+)", canon)
     rigor = int(mrig.group(1)) if mrig else None
+
+    # MCID — SÓ EXISTE para artigo original e meta-análise. Os extratores de DIRETRIZ e de REVISÃO
+    # NARRATIVA não produzem `relevancia_clinica` (conferido em 02/Ago: 0 menções nos dois prompts),
+    # e isso é CERTO: diretriz não tem desfecho primário, revisão narrativa não tem efeito agregado
+    # próprio. Cobrar MCID delas seria o mesmo "superficializar" que a gente combateu o dia inteiro.
     mcid_classe = _campo(canon, "classificacao")
     mcid_frase = _campo(canon, "frase_chave")
-    mcid = f"[{mcid_classe}] {mcid_frase}" if (mcid_classe and mcid_classe != "n/a") else (mcid_frase or "")
+    if mcid_classe and mcid_classe != "n/a":
+        mcid = f"[{mcid_classe}] {mcid_frase}"
+    elif mcid_frase:
+        mcid = mcid_frase
+    elif motor in ("DIRETRIZ", "REVISAO"):
+        mcid = (f"{NAO_SE_APLICA}: {'diretriz nao tem desfecho primario' if motor == 'DIRETRIZ' else 'revisao narrativa nao tem efeito agregado proprio'}")
+    else:
+        mcid = f"{NAO_SE_APLICA}: MCID nao reportado pelos autores"
 
     return {                                    # nomes = colunas REAIS da tabela artigos (Supabase)
         "doc_id": doi if doi and doi != "n/a" else slugify(titulo),
@@ -239,6 +298,9 @@ def montar(pasta):
         "caminho_pdf": pdf,
         "caminho_audio": audio,
         "caminho_visual_abstract": visual,
+        "motor": motor,                         # ORIGINAL | META | DIRETRIZ | REVISAO — a régua usada
+        "tipo_documento": tipo_documento,
+        "veredito_dominios": veredito_dominios,  # jsonb: os domínios medidos que produziram a nota
         "publicar_no_site": False,              # sobe como rascunho; você libera no Administrador/site
         "descartado": False,
         "created_at": datetime.date.today().isoformat(),

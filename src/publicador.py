@@ -82,7 +82,8 @@ SCHEMA_ARTIGOS = {
     "aplicabilidade_pratica": "text", "impacto_conduta": "text", "tamanho_beneficio": "text",
     "conclusao_geral": "text", "bullets_praticos": "jsonb", "gancho_lista": "text",
     "gancho_abertura": "text", "publicar_no_site": "boolean", "nota_trabalho_estatistico": "integer",
-    "mcid_avaliacao": "text", "muda_conduta": "text", "por_que_importa": "text",
+    "mcid_avaliacao": "text", "muda_conduta": "text",
+    "motor": "text", "tipo_documento": "text", "veredito_dominios": "jsonb", "por_que_importa": "text",
     "principais_recomendacoes": "text", "nota_metodologica": "numeric", "embedding": "USER-DEFINED",
     "descartado": "boolean",
 }

@@ -250,6 +250,107 @@ Decisão pendente do Dr. Eduardo: descartar na porta ou dar trilha própria.
   (b) **abaixo de 5 critérios respondidos a contagem NÃO capa** (`MIN_CRITERIOS_RESPONDIDOS`), senão
       todo artigo cujo extrator falou pouco seria punido por silêncio do modelo, não por má qualidade.
 
+### 🔴 A MIGRAÇÃO DA TABELA `artigos` — PRONTA, FALTA SÓ RODAR (02/Ago/2026)
+
+**O CÓDIGO JÁ ESTÁ NO GITHUB E TESTADO.** O que falta é o SQL, e ele é a parte irreversível — por
+isso ficou para a cabeça descansada. **Enquanto o SQL não rodar, a Chave 2 continua funcionando
+normalmente** (o `ficha_site` manda 3 campos novos que a tabela ainda não tem → o publicador os
+ignora; nada quebra).
+
+**A DECISÃO QUE MUDOU TUDO — do Dr. Eduardo, 02/Ago.** Eu havia proposto criar colunas por tipo
+(`pct_nivel_c`, `pct_classe_i_em_c`, `utilidade_pratica`). Ele recusou na hora:
+
+> *"ao criar estes campos você não está criando o fundamento para ter buracos — já que meta-análise
+> e outros não terão estes campos?"*
+
+Estava certo: toda meta-análise e todo artigo original nasceriam com 3 colunas vazias **por desenho**.
+A `veredito_dominios` **jsonb** resolve: uma coluna, sempre preenchida, com os domínios **do motor
+daquele artigo** — nunca campo de outro tipo.
+
+**E A REGRA DOS DOIS SELOS** (também dele):
+
+> *"a tabela tem que ser igual em todas as pastas — se um campo for ficar vazio naquela pasta porque
+> não tem o campo, a pasta já preenche o 'não se aplica' nos campos que iriam ficar vazios"*
+
+Hoje a mesma coluna VAZIA quer dizer três coisas e ninguém distingue: (a) não se aplica ao tipo,
+(b) não atingiu a porta por nota, (c) BURACO — o sistema falhou. Agora:
+
+| selo | quando | exemplo |
+|---|---|---|
+| `nao_se_aplica: <motivo>` | o tipo não tem esse conceito, e nunca terá | `nao_se_aplica: diretriz nao tem desfecho primario` |
+| `nao_gerado: <motivo>` | poderia ter, não atingiu a porta | `nao_gerado: nota 6 (a porta do audio e 8)` |
+| **NULL** | **DEFEITO. Só isso.** | — |
+
+A diferença que isso compra, medida no teste: `nota 6 → nao_gerado: nota 6 (a porta do audio e 8)`
+(natureza) vs `nota 9 → nao_gerado: nota 9 atingiu a porta do audio mas o arquivo NAO existe`
+(**defeito, que antes era invisível**).
+
+**O QUE JÁ ESTÁ FEITO NO CÓDIGO** (commitado):
+- `ficha_site.py` → manda **28 campos, ZERO vazios** (testado com uma diretriz nota 6 sintética):
+  `motor` · `tipo_documento` · `veredito_dominios` (jsonb) + os dois selos em `mcid_avaliacao`,
+  `caminho_audio`, `caminho_visual_abstract`, `gancho_abertura`.
+- `publicador.py` → `SCHEMA_ARTIGOS` já conhece as 3 colunas novas e já perdeu `nota_geral`.
+
+**O SQL — 4 blocos, um por vez, conferindo entre eles:**
+
+```sql
+-- 1 · O CORTE (buraco zero: só fica o que está INTEIRO). De 4.028 → 1.639.
+delete from artigos where not (
+  nota_aplicabilidade >= 6 and nota_trabalho_estatistico is not null
+  and titulo is not null and length(titulo) >= 30 and titulo !~ '^\s*\d+(\.\d+)*\s*[—\-\.]'
+  and doc_id is not null and btrim(doc_id) <> '' and doi is not null and btrim(doi) <> ''
+  and revista is not null and btrim(revista) <> '' and tipo_estudo is not null
+  and caminho_pdf is not null
+  and resumo_markdown is not null and length(resumo_markdown) >= 500);
+select count(*) from artigos;   -- 1639
+```
+```sql
+-- 2 · AS 7 COLUNAS MORTAS (o sistema nunca preencheu; medido: 99,7 % a 100 % vazias)
+alter table artigos
+  drop column analysis_datetime, drop column nota_metodologica, drop column por_que_importa,
+  drop column principais_recomendacoes, drop column populacao, drop column intervencao,
+  drop column palavras_chave, drop column caminho_pasta;
+```
+⚠️ **Depois deste bloco, tirar as mesmas 7 do `SCHEMA_ARTIGOS` em `src/publicador.py`** — o comentário
+dele já manda ("Atualizar se a tabela mudar"). Os dois andam JUNTOS ou o preflight valida fantasma.
+
+```sql
+-- 3 · AS TRÊS NOVAS. 'LEGADO' marca para sempre o que veio do motor único (antes de 02/Ago).
+alter table artigos
+  add column motor text not null default 'LEGADO',
+  add column tipo_documento text not null default 'legado',
+  add column veredito_dominios jsonb not null default '{}'::jsonb;
+alter table artigos add constraint motor_valido
+  check (motor in ('ORIGINAL','META','DIRETRIZ','REVISAO','LEGADO'));
+```
+```sql
+-- 4 · AS TRAVAS — o BANCO passa a recusar buraco, não só o portão do publicador
+alter table artigos
+  alter column titulo set not null, alter column doc_id set not null,
+  alter column doi set not null, alter column revista set not null,
+  alter column tipo_estudo set not null, alter column caminho_pdf set not null,
+  alter column resumo_markdown set not null, alter column nota_aplicabilidade set not null,
+  alter column nota_trabalho_estatistico set not null;
+alter table artigos add constraint pericia_de_verdade check (length(resumo_markdown) >= 500);
+alter table artigos add constraint nota_na_escala check (nota_aplicabilidade between 0 and 10);
+```
+
+**Rede de segurança:** `artigos_backup_20260802` tem as 4.307 linhas originais. Some com
+`drop table artigos_backup_20260802;` quando não precisar mais.
+
+**A consulta que mostra buraco em QUALQUER coluna, sem listar nome nenhum** (guardar, é reutilizável):
+```sql
+select j.key as coluna,
+       count(*) filter (where j.value = 'null'::jsonb or j.value::text in ('""','[]','{}')) as buracos,
+       count(*) as linhas,
+       round(100.0*count(*) filter (where j.value='null'::jsonb or j.value::text in ('""','[]','{}'))/count(*),1) as pct
+from artigos t, lateral jsonb_each(to_jsonb(t) - 'embedding') as j(key, value)
+group by j.key order by 4 desc;
+```
+
+*(E fica registrado o código do Dr. Eduardo para BURACO: **231136** — b=2, u=21→3, r=19→1, a=1,
+c=3, o=15→6. Não foi usado no sistema; virou piada oficial do projeto.)*
+
 ### 🔴 ONDE PARAMOS — 02/Ago/2026, fim do dia (LEIA ISTO PRIMEIRO NA PRÓXIMA SESSÃO)
 
 **Decisão do Dr. Eduardo, depois de um plantão de 24h:** parar de reprocessar o acervo, **limpar o
