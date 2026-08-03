@@ -91,9 +91,40 @@ _PUBTYPE_PRIORITY = [
 ]
 # NÃO é autoritativo: cai para as camadas de baixo (rótulo impresso → LLM v3).
 PUBTYPE_GENERICO = {"Review", "Journal Article", "Historical Article", "Introductory Journal Article"}
+# ⚠️ 'technique for/with' e 'first-in-human' SAÍRAM em 03/Ago/2026 (decisão do Dr. Eduardo).
+# CASOS REAIS que eles descartaram, os dois com "STATE-OF-THE-ART REVIEW" impresso na 2ª linha:
+#   • "Leaflet Modification TECHNIQUE WITH UNICORN in Failed Aortic Bioprosthesis" (JACC Interv)
+#   • "The ELASTA-T TECHNIQUE FOR TTVR After Failed T-TEER" (JACC Interv)
+# O regex varre os 400 primeiros caracteres — que é exatamente onde o TÍTULO mora. E em cardiologia
+# intervencionista "technique" é palavra do dia a dia: o filtro pegava o vocabulário da especialidade,
+# não o formato do artigo. 'first-in-human' saiu pelo mesmo motivo: primeiro implante de dispositivo
+# costuma ser notícia de peso, não relato descartável.
+# 'case series' FICOU por decisão dele (é o formato, não o desenho, que o CardioDaily não cobre).
 _CASO_RE = re.compile(
-    r"\b(case report|case series|a case of|technique for|technique with|first[- ]in[- ]human|"
-    r"how (we|i) do it|step[- ]by[- ]step)\b", re.I)
+    r"\b(case report|case series|a case of|how (we|i) do it|step[- ]by[- ]step)\b", re.I)
+
+# ═══ O RÓTULO IMPRESSO BLOQUEIA O DESCARTE — 03/Ago/2026 ═══
+# Decisão do Dr. Eduardo. Se o PDF DECLARA no topo o que ele é, essa é a prova mais forte que
+# existe (é a REGRA 1 do prompt v4) — e nem o regex de título nem o pubtype do PubMed passam por cima.
+#
+# POR QUE PRECISOU: o JACC Clinical Electrophysiology "Endocardial I(to-slow) Overexpression…"
+# diz ORIGINAL RESEARCH na LINHA 1, é ciência translacional — e o **PubMed catalogou como
+# 'Case Reports'**. O indexador errou, e a trava _NAO_DESCARTAR não salvava porque ela só
+# consulta o PubMed, que é justamente quem estava errado. Faltava ouvir o documento.
+_ROT_NAO_DESCARTA = re.compile(
+    r"^(state[- ]of[- ]the[- ]art review|review article|review|original (article|research|"
+    r"investigation)|clinical research|scientific statement|clinical practice guideline|"
+    r"consensus (document|statement)|position paper|guideline|seminar|frontiers|in depth)\b", re.I)
+
+
+def rotulo_protege(texto, linhas_do_topo=15):
+    """True se o topo do PDF declara um tipo que NÃO se descarta. Devolve o rótulo achado."""
+    linhas = [l.strip() for l in (texto or "")[:2000].splitlines()]
+    linhas = [l for l in linhas if l and not re.fullmatch(r"[.\s·•]+", l)]
+    for l in linhas[:linhas_do_topo]:
+        if _ROT_NAO_DESCARTA.match(l):
+            return l
+    return None
 # cabeçalho de research letter (formato carta breve) → descarte (decisão do Dr. Eduardo)
 _LETTER_RE = re.compile(r"\bresearch letter\b|^\s*letters?\b", re.I)
 _NAO_DESCARTAR = {"Meta-Analysis", "Systematic Review", "Practice Guideline", "Guideline",
@@ -283,7 +314,13 @@ def map_pubtype(pubtypes):
 
 
 def eh_descartavel(pubtypes, titulo, texto):
-    """Relato de caso/técnica OU research letter → descarte (fora da análise, quarentena)."""
+    """Relato de caso OU research letter → descarte (fora da análise, quarentena).
+
+    ORDEM (03/Ago/2026): o RÓTULO IMPRESSO no PDF vem PRIMEIRO e vence tudo — inclusive o pubtype
+    do PubMed. O documento dizendo o que é vale mais que o catálogo dizendo o que ele acha que é."""
+    prot = rotulo_protege(texto)
+    if prot:
+        return False                      # o PDF declarou: REVIEW / ORIGINAL RESEARCH / GUIDELINE…
     s = set(pubtypes or [])
     if "Case Reports" in s or "Letter" in s:
         return True
