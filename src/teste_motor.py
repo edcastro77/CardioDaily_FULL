@@ -659,6 +659,27 @@ def teste_mapa_pubmed():
     checa("prompt foi versionado ao mudar (senão a prova não refaz)",
           _CP.PROMPT_VERSAO != "v3", f"continua {_CP.PROMPT_VERSAO}")
 
+    # ── "SEM BASE" NÃO SE MEDE POR TAMANHO (erro meu, medido em 03/Ago no lote real) ──
+    # A regra original exigia 12 caracteres de prova. Seis artigos foram para REVISAO_HUMANA com
+    # confiança ALTA citando o RÓTULO IMPRESSO da revista — a prova mais forte que o prompt aceita.
+    # Quanto MELHOR o rótulo (curto e canônico), mais eu recusava. Estes são os casos REAIS do lote.
+    def sem_base(conf, prova):
+        return (conf == "baixa") or not (prova or "").strip()
+
+    for conf, prova, nome in [("alta", "REVIEW", "Circulation Arrhythmia"),
+                              ("alta", "FRONTIERS", "Circulation MACE-Cog"),
+                              ("alta", "Viewpoint", "JAMA Cardiology"),
+                              ("alta", "VIEWPOINT", "JAMA Cardio-Onc"),
+                              ("alta", "TRIBUTE", "JACC Braunwald"),
+                              ("alta", "A Review", "JAMA Atrial Dyssynchrony")]:
+        checa(f"rótulo curto NÃO vai p/ revisão humana: {prova!r} ({nome})",
+              not sem_base(conf, prova), f"{len(prova)} chars foram recusados")
+    # e o que DEVE ir para revisão humana continua indo
+    checa("confiança baixa → revisão humana", sem_base("baixa", "ORIGINAL INVESTIGATION"))
+    checa("sem trecho nenhum → revisão humana", sem_base("alta", ""))
+    checa("só espaço em branco → revisão humana", sem_base("alta", "   "))
+    checa("confiança alta com prova → NÃO vai", not sem_base("alta", "Original Investigation"))
+
     # ── DOI EMPRESTADO: o PDF traz o DOI de OUTRO artigo (caso real do Seminar do Lancet) ──
     from classificador_pubmed import doi_e_deste_artigo as ok
     LANCET = ("Seminar www.thelancet.com Vol 407 March 7, 2026 Lancet 2026; 407: 1000-13 "

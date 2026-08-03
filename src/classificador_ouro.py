@@ -42,6 +42,16 @@ SUB_RETRY = "RETENTAR_REDE"  # falha de rede (não é troncho): revisar/rodar de
 # Agora: N quedas SEGUIDAS = a rede está fora, não é azar de um artigo → PARA a rodada e diz o que
 # já foi feito. Consecutivas de propósito: um soluço isolado não pode abortar uma rodada boa.
 MAX_QUEDAS_SEGUIDAS = 3
+
+# ═══ QUANTAS LINHAS DO TOPO CONTAM COMO "O TOPO" — MEDIDO, não chutado (03/Ago/2026) ═══
+# Era 6, um número que eu inventei. Medido em 200 PDFs reais do acervo do Dr. Eduardo, olhando
+# onde o RÓTULO IMPRESSO de seção aparece de fato (depois de descartar linhas em branco):
+#     linha 1: 57%   ·   até a 5: 73%   ·   até a 6: 91%   ·   até a 15: 100%
+# O corte em 6 perdia 9% dos rótulos — e a linha 6 é um PICO (21 dos 112), ou seja, eu tinha
+# cortado exatamente em cima da concentração. Quando o rótulo escapa desta camada, o artigo cai
+# no LLM sem que ninguém saiba que a via determinística falhou.
+# Estender não custa NADA: é texto já lido, sem chamada de API. 15 cobre 100% do medido.
+LINHAS_DO_TOPO = 15
 SUB_DUP = "DUPLICATAS"       # mesmo DOI/artigo 2x: não sobrescreve (GOLDEN GATE)
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -106,9 +116,9 @@ def rotulo_topo(texto):
     """Olha as primeiras linhas da 1ª página. Devolve (destino, rótulo) ou (None, None).
     destino ∈ {'ponto_de_vista', 'DESCARTE', 'minirevisao'}.
     Ancorado em LINHA inteira (não 'contém'), só no topo → não confunde artigo original."""
-    linhas = [l.strip() for l in (texto or "")[:600].splitlines()]
+    linhas = [l.strip() for l in (texto or "")[:2000].splitlines()]
     linhas = [l for l in linhas if l and not re.fullmatch(r"[.\s·•]+", l)]
-    for l in linhas[:6]:
+    for l in linhas[:LINHAS_DO_TOPO]:
         if _ROT_PV.match(l):
             return "ponto_de_vista", l
         if _ROT_DESC.match(l):
@@ -127,9 +137,9 @@ _ROT_ORIG = re.compile(
 
 def rotulo_original(texto):
     """Rótulo de seção que declara ARTIGO ORIGINAL (ex.: 'CLINICAL RESEARCH', 'ORIGINAL RESEARCH')."""
-    linhas = [l.strip() for l in (texto or "")[:600].splitlines()]
+    linhas = [l.strip() for l in (texto or "")[:2000].splitlines()]
     linhas = [l for l in linhas if l and not re.fullmatch(r"[.\s·•]+", l)]
-    for l in linhas[:6]:
+    for l in linhas[:LINHAS_DO_TOPO]:
         if _ROT_ORIG.match(l):
             return l
     return None
@@ -283,7 +293,20 @@ def classificar(pasta, dry_run=True, max_n=0):
             # palavra do tipo: um chute com cara de certeza e um acerto seguro chegavam iguais.
             # Agora o modelo tem de CITAR o trecho do artigo que sustenta a resposta — sem trecho,
             # ou com confiança 'baixa', ninguém entra em pasta nenhuma.
-            sem_base = (conf == "baixa") or (len((prova or "").strip()) < 12)
+            # SEM BASE = o modelo não sustentou a resposta. Duas coisas, e só duas:
+            #   • disse que a confiança é BAIXA, ou
+            #   • não citou trecho NENHUM.
+            #
+            # ⚠️ ERRO MEU, MEDIDO EM 03/Ago e corrigido no mesmo dia. A regra original exigia
+            # 12 CARACTERES de prova — um número que eu inventei sem medir. Resultado no lote real:
+            # seis artigos foram para REVISAO_HUMANA com confiança ALTA, citando o RÓTULO IMPRESSO
+            # da revista, que é a REGRA 1 do prompt e a prova mais forte que existe:
+            #     "REVIEW" (6) · "FRONTIERS" (9) · "Viewpoint" (9) · "TRIBUTE" (7) · "A Review" (8)
+            # Quanto MELHOR o rótulo — mais curto e mais canônico — mais eu recusava.
+            # Palavras do Dr. Eduardo: "está colocando artigos excelentes e que teoricamente seriam
+            # fáceis de decidir em revisão humana".
+            # Um rótulo de seção é uma palavra. Medir prova por tamanho é medir a coisa errada.
+            sem_base = (conf == "baixa") or not (prova or "").strip()
             if tipo in ("relato_de_caso", "carta_de_pesquisa"):
                 destino, marca, via = "DESCARTE", "⛔", f"LLM: {tipo} ({conf})"
             elif tipo is None:
