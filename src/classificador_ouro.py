@@ -32,6 +32,16 @@ from classificador_pubmed import (
 import classificador_prompt as CP     # O PROMPT: um lugar só (prova e produção leem daqui)
 
 SUB_RETRY = "RETENTAR_REDE"  # falha de rede (não é troncho): revisar/rodar de novo
+
+# ═══ DISJUNTOR DE REDE — 03/Ago/2026 ═══
+# A trava de rede era POR ARTIGO: detectava a queda, mandava o PDF pra RETENTAR_REDE e seguia
+# pro próximo — que também falhava, e o próximo, e os 364. Com a internet fora, ele marchava pelo
+# lote inteiro gastando tempo e entregando um resultado sem valor nenhum.
+# Palavras do Dr. Eduardo (03/Ago, ao interromper na mão no 5º artigo):
+#     "a internet desconectou do nada e ele nao para..."
+# Agora: N quedas SEGUIDAS = a rede está fora, não é azar de um artigo → PARA a rodada e diz o que
+# já foi feito. Consecutivas de propósito: um soluço isolado não pode abortar uma rodada boa.
+MAX_QUEDAS_SEGUIDAS = 3
 SUB_DUP = "DUPLICATAS"       # mesmo DOI/artigo 2x: não sobrescreve (GOLDEN GATE)
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -194,6 +204,7 @@ def classificar(pasta, dry_run=True, max_n=0):
     cont = {}
     via_mapa = via_sonnet = via_pubmed = 0
     vistos_doi = {}    # DOI confiável → nome do 1º arquivo (dedup por identidade)
+    quedas_seguidas = 0   # disjuntor: N seguidas = rede fora, para a rodada
     alvos_usados = {}  # nome-alvo → 1º arquivo (rede de segurança contra colisão de nome)
 
     for i, nome in enumerate(pdfs, 1):
@@ -213,7 +224,10 @@ def classificar(pasta, dry_run=True, max_n=0):
                     _, meta = europepmc_lookup(doi)
             except RedeIndisponivel as e:
                 falha_rede = True
-                print(f"        ⚠️ REDE caiu: {e}")
+                quedas_seguidas += 1
+                print(f"        ⚠️ REDE caiu ({quedas_seguidas}/{MAX_QUEDAS_SEGUIDAS}): {e}")
+            else:
+                quedas_seguidas = 0        # respondeu → a rede voltou, zera o contador
 
         rotulado = False  # rótulo do topo disparou → DOI suspeito (emprestado), não renomear pelo PubMed
         # ZERAR POR ARTIGO (02/Ago). `conf`, `prova` e `_MODELO_USADO` só são preenchidos quando o
@@ -352,6 +366,16 @@ def classificar(pasta, dry_run=True, max_n=0):
         if not dry_run:
             os.makedirs(dest_dir, exist_ok=True)
             shutil.move(caminho, os.path.join(dest_dir, novo))
+
+        # DISJUNTOR: rede fora não é problema deste artigo, é da rodada. Parar é o certo.
+        if quedas_seguidas >= MAX_QUEDAS_SEGUIDAS:
+            print(f"\n{'='*70}")
+            print(f"⛔ REDE FORA — {quedas_seguidas} quedas SEGUIDAS. Rodada INTERROMPIDA em {i}/{len(pdfs)}.")
+            print(f"   Os {len(pdfs)-i} restantes continuam na fila, intactos.")
+            print(f"   Os que já foram para {SUB_RETRY}/ devem voltar pra fila quando a rede estabilizar")
+            print(f"   (Chave 10 · Devolver para a Fila).")
+            print(f"{'='*70}")
+            break
 
     print("\nResumo:", ", ".join(f"{k}={v}" for k, v in sorted(cont.items())))
     print(f"Resolvidos: MAPA {via_mapa} | PubMed autoritativo {via_pubmed} | LLM {via_sonnet}  (grátis: {via_mapa + via_pubmed})")
