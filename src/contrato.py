@@ -30,10 +30,36 @@ def _txt(v):
     return isinstance(v, str) and v.strip()
 
 
+# ═══ OS TRÊS SELOS E QUEM ACEITA CADA UM — 03/Ago/2026 ═══
+# O `ficha_site` passou a nunca mandar campo vazio (o BANCO agora exige NOT NULL). Mas há dois
+# tipos de "não vazio" com significados opostos, e misturá-los seria trocar um buraco por outro:
+#
+#   nao_se_aplica: …  → o TIPO não tem esse conceito (diretriz não tem desfecho primário). LEGÍTIMO.
+#   nao_gerado: …     → não atingiu a porta por nota (áudio só ≥8). LEGÍTIMO.
+#   ausente: …        → a peça DEVIA existir e não veio (bloco do ACRI vazio). É DEFEITO.
+#
+# ⚠️ O ERRO QUE ISTO CONSERTA, pego antes de rodar: os selos `ausente:` têm 27 a 48 caracteres, e o
+# contrato aprovava por TAMANHO — `aplicabilidade_pratica` exige ≥40 e o selo tem 48; `impacto_conduta`
+# exige ≥20 e o selo tem 30; `gancho_lista` exige ≥10 e o selo tem 27. Os três PASSARIAM.
+# Eu teria fechado o buraco no banco e aberto um no portão editorial, que é o que importa.
+# O banco garante que a linha está COMPLETA; o contrato garante que ela está BOA. Trabalhos diferentes.
+PREFIXO_DEFEITO = "ausente:"
+
+
 def validar(ficha, checar_arquivos=True):
     """Recebe a ficha (dict com os 16 campos). Devolve lista de VIOLAÇÕES (vazia = passou).
     Cada violação é uma string dizendo QUAL campo furou e por quê — vira o relatório do _REVISAR."""
     v = []
+
+    # 0) SELO DE DEFEITO — vale mais que qualquer checagem de tamanho, e vem antes de todas.
+    for c, valor in ficha.items():
+        if c.startswith("_"):
+            continue
+        alvos = valor if isinstance(valor, list) else [valor]
+        for x in alvos:
+            if isinstance(x, str) and x.strip().startswith(PREFIXO_DEFEITO):
+                v.append(f"{c}: {x.strip()} — a peça devia existir e não veio (RETÉM, não publica)")
+                break
 
     # 1) presença de todos os campos
     for c in CAMPOS:

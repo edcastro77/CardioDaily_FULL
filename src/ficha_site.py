@@ -275,23 +275,35 @@ def montar(pasta):
     else:
         mcid = f"{NAO_SE_APLICA}: MCID nao reportado pelos autores"
 
+    # ═══ NENHUM CAMPO SAI VAZIO — 03/Ago/2026 ═══
+    # Medido antes de travar o banco: com um ACRI vazio, 8 dos 10 campos saíam em branco. Se o
+    # NOT NULL entrasse primeiro, a Chave 2 morreria no primeiro artigo com ACRI fraco — eu teria
+    # entregue uma trava que quebra em vez de proteger. Ordem certa: o CÓDIGO garante, depois o banco exige.
+    #
+    # A regra é a mesma dos dois selos: campo em branco vira uma FRASE que diz o que faltou. O banco
+    # nunca recebe vazio, e quem lê a linha sabe na hora qual peça do pacote falhou.
+    def _ou_selo(valor, de_onde):
+        if isinstance(valor, list):
+            return valor if valor else [f"ausente: {de_onde}"]
+        return valor if (valor and str(valor).strip()) else f"ausente: {de_onde}"
+
     return {                                    # nomes = colunas REAIS da tabela artigos (Supabase)
         "doc_id": doi if doi and doi != "n/a" else slugify(titulo),
         "doi": doi if doi and doi != "n/a" else None,   # SEM doi → NULL (não ""): dois "" colidem na UNIQUE(doi)
         "titulo": titulo,
         "revista": revista,
-        "data_publicacao": ano,
+        "data_publicacao": _ou_selo(ano, "o documento nao traz ano legivel"),
         "tipo_estudo": tipo,
-        "doenca_principal": _tema(selo, keywords),
+        "doenca_principal": _ou_selo(_tema(selo, keywords), "sem tema no canonico"),
         "nota_aplicabilidade": nota,
         "nota_trabalho_estatistico": rigor,
-        "muda_conduta": muda,
-        "keywords": keywords,
-        "contexto_tema": a_bloco,
-        "aplicabilidade_pratica": aplic,
-        "impacto_conduta": i_bloco,
-        "bullets_praticos": bullets,
-        "gancho_lista": gancho,
+        "muda_conduta": _ou_selo(muda, "campo muda_conduta ausente no canonico"),
+        "keywords": _ou_selo(keywords, "sem keywords no canonico"),
+        "contexto_tema": _ou_selo(a_bloco, "bloco A do ACRI vazio"),
+        "aplicabilidade_pratica": _ou_selo(aplic, "campo aplicabilidade ausente no canonico"),
+        "impacto_conduta": _ou_selo(i_bloco, "bloco I do ACRI vazio"),
+        "bullets_praticos": _ou_selo(bullets, "sem frase acionavel no ACRI"),
+        "gancho_lista": _ou_selo(gancho, "sem gancho no ACRI"),
         "gancho_abertura": gancho_abertura,     # abertura provocativa (nota≥8) — gerada no portão, não por fora
         "mcid_avaliacao": mcid,
         "resumo_markdown": resumo,

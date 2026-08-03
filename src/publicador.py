@@ -73,18 +73,15 @@ def _upsert_supabase(payload):
 # Schema REAL da tabela artigos (Supabase) — fonte da verdade p/ o preflight. Atualizar se a tabela mudar.
 SCHEMA_ARTIGOS = {
     "id": "uuid", "doi": "text", "doc_id": "text", "titulo": "text", "revista": "text",
-    "data_publicacao": "date", "tipo_estudo": "text", "doenca_principal": "text",
-    "populacao": "ARRAY", "intervencao": "ARRAY", "nota_aplicabilidade": "integer",
-    "resumo_markdown": "text", "caminho_pasta": "text",
-    "caminho_pdf": "text", "caminho_audio": "text", "analysis_datetime": "timestamp",
-    "created_at": "timestamp", "updated_at": "timestamp", "palavras_chave": "ARRAY",
+    "data_publicacao": "date", "tipo_estudo": "text", "doenca_principal": "text", "nota_aplicabilidade": "integer",
+    "resumo_markdown": "text",
+    "caminho_pdf": "text", "caminho_audio": "text",
+    "created_at": "timestamp", "updated_at": "timestamp",
     "caminho_visual_abstract": "text", "keywords": "ARRAY", "contexto_tema": "text",
-    "aplicabilidade_pratica": "text", "impacto_conduta": "text", "tamanho_beneficio": "text",
-    "conclusao_geral": "text", "bullets_praticos": "jsonb", "gancho_lista": "text",
+    "aplicabilidade_pratica": "text", "impacto_conduta": "text", "bullets_praticos": "jsonb", "gancho_lista": "text",
     "gancho_abertura": "text", "publicar_no_site": "boolean", "nota_trabalho_estatistico": "integer",
     "mcid_avaliacao": "text", "muda_conduta": "text",
-    "motor": "text", "tipo_documento": "text", "veredito_dominios": "jsonb", "por_que_importa": "text",
-    "principais_recomendacoes": "text", "nota_metodologica": "numeric", "embedding": "USER-DEFINED",
+    "motor": "text", "tipo_documento": "text", "veredito_dominios": "jsonb",
     "descartado": "boolean",
 }
 
