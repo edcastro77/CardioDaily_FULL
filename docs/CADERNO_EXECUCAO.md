@@ -250,6 +250,73 @@ Decisão pendente do Dr. Eduardo: descartar na porta ou dar trilha própria.
   (b) **abaixo de 5 critérios respondidos a contagem NÃO capa** (`MIN_CRITERIOS_RESPONDIDOS`), senão
       todo artigo cujo extrator falou pouco seria punido por silêncio do modelo, não por má qualidade.
 
+### 🔴 ONDE PARAMOS — 02/Ago/2026, fim do dia (LEIA ISTO PRIMEIRO NA PRÓXIMA SESSÃO)
+
+**Decisão do Dr. Eduardo, depois de um plantão de 24h:** parar de reprocessar o acervo, **limpar o
+Supabase e o corpus**, e voltar na semana seguinte com **50 a 100 artigos NOVOS**. Está certo, e a
+medição do dia sustenta: acervo já processado não serve de prova (ver LEI 10 abaixo).
+
+**O QUE FICOU PRONTO E COMMITADO** (`7a5040f`, no GitHub):
+
+| | |
+|---|---|
+| 4 motores por tipo | ORIGINAL · META · DIRETRIZ (AGREE) · REVISÃO (rigor × utilidade) |
+| 2 extratores novos | `analise_diretriz_prompt.md` · `analise_revisao_prompt.md` |
+| Veredito ABERTO | o redator recebe os domínios medidos, não o número nu |
+| Classificador | prompt v4 único (prova + produção), páginas 1-3, gpt-5.6-luna |
+| Travas novas | DOI emprestado · BRIEF REPORT (F-02) · D-01 no mapa do PubMed · SEMINAR |
+| Diário da rodada | CSV com camada, modelo, confiança e trecho citado |
+| Provas | `teste_motor.py`, 30 baterias, função pura |
+| Leis | LEI 8 (o classificador é a decisão) · LEI 9 (varrer todos os blocos) |
+
+**O QUE FICOU ABERTO:**
+1. **Limpar o Supabase** — `docs/LIMPEZA_02AGO.sql` (o Dr. Eduardo executa; o Claude nunca apaga).
+2. **Limpar/arquivar o corpus** de `ARTIGOS/` — recomeçar com PDFs novos.
+3. **Medir o prompt v4** — os 99,1 % eram do v3. O v4 mudou o texto e **não foi medido**.
+4. **Tarefa #34** — fonte única do tipo para original/meta (hoje o prompt olha a pasta, o motor olha
+   os fatos). Só depois que o classificador estiver provado.
+
+**A PRIMEIRA COISA A FAZER NA VOLTA:** com os artigos novos, rodar a Chave 1 **em `--dry-run`**, ler
+o diário, e só então deixar mover. Nunca soltar um lote sem olhar o CSV antes.
+
+### LEI 10 (candidata) — REPROCESSAR O ACERVO NÃO É PROVA (02/Ago/2026)
+
+**Palavras do Dr. Eduardo:** *"quando rodamos novamente um artigo que já tinha sido analisado de forma
+errada e nomeado de forma errada, vai arrastar este erro porque o sistema inocente acredita no título
+de uma análise errada anterior — por isso refazer o trabalho nunca é uma prova de fato do que tem
+pela frente."*
+
+**Verificado no código, e o mecanismo é mais preciso do que "acredita no título":**
+
+1. **O erro não é arrastado — é REGENERADO.** A classificação NÃO lê o nome do arquivo (`_META_TITULO`
+   olha o título do PubMed ou o texto do PDF). Mas o DOI emprestado continua **dentro do PDF**: mesma
+   entrada → mesma resposta do PubMed → mesma pasta. Rodar de novo é a mesma conta dando o mesmo
+   resultado, não um teste. "Errou de novo" NÃO distingue *o conserto falhou* de *o conserto não toca
+   essa camada*.
+2. **O corpus já foi mutado.** Os PDFs de hoje são a SAÍDA do sistema velho — renomeados, já triados.
+   Medir a cascata contra eles mede as rodadas anteriores. (Prova: no diário de 02/Ago o `mapa de
+   revista` acertou 49 de 49 — porque os artigos de revista mista já tinham saído em rodadas passadas.)
+3. **O nome errado contamina o que vem DEPOIS.** `analisador.py`: `base = basename(pdf)` — e esse nome
+   vira `{base}_fatos.json`, `_analise.md`, `_visual.png` e a ficha do site. A classificação não lê o
+   nome; **todo o resto lê**.
+
+**A CONSEQUÊNCIA:** prova é contra o **GABARITO**, com o **diário da cascata**, em PDFs **como chegam
+da revista**. Nunca "rodar o acervo de novo e ver se melhorou".
+
+**A MEDIÇÃO DA CASCATA INTEIRA (a 1ª que existiu — e que expôs o buraco):**
+
+| camada | julgou | errou | acerto |
+|---|---|---|---|
+| A · mapa de revista | 49 | 0 | 100 % |
+| B · rótulo do topo | 3 | 0 | 100 % |
+| D · título = meta | 6 | 0 | 100 % |
+| E · PubMed | 9 | 1 | 88,9 % |
+| G · LLM | 38 | 5 | 86,8 % |
+
+⚠️ **Este número NÃO vale como prova** — é justamente o caso da LEI 10. Mas ele revelou o que importa:
+**o LLM decide só 31 % dos artigos** (114 de 369). Os 99,1 % medidos em 31/Jul cobriam UM TERÇO do
+classificador; os outros 69 % (mapa, rótulo, título, PubMed) **nunca tinham sido medidos**.
+
 ### O VEREDITO ABERTO — 02/Ago/2026: a nota não é rótulo, é VOLANTE (medido)
 
 **O experimento do Dr. Eduardo.** Ele rodou a MESMA revisão narrativa (Nature Rev Endocrinol,

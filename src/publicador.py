@@ -75,7 +75,7 @@ SCHEMA_ARTIGOS = {
     "id": "uuid", "doi": "text", "doc_id": "text", "titulo": "text", "revista": "text",
     "data_publicacao": "date", "tipo_estudo": "text", "doenca_principal": "text",
     "populacao": "ARRAY", "intervencao": "ARRAY", "nota_aplicabilidade": "integer",
-    "nota_geral": "integer", "resumo_markdown": "text", "caminho_pasta": "text",
+    "resumo_markdown": "text", "caminho_pasta": "text",
     "caminho_pdf": "text", "caminho_audio": "text", "analysis_datetime": "timestamp",
     "created_at": "timestamp", "updated_at": "timestamp", "palavras_chave": "ARRAY",
     "caminho_visual_abstract": "text", "keywords": "ARRAY", "contexto_tema": "text",
