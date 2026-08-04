@@ -1,24 +1,36 @@
-Chave 8: prever o conflito add/add do llm_client (o portao pegou e abortou certo)
+Auditoria das chaves: o erro fatidico do reuso + 4 buracos operacionais
 
-A 1a versao da Chave 8 previa 3 conflitos (CLAUDE.md, article_analyzer, radar_pubmed) e
-ABORTOU ao encontrar um 4o: src/llm_client.py. O portao funcionou como devia - nao adivinhou
-e nao deixou a pasta suja (merge --abort limpo).
+O #34 (a pasta manda) estava certo e mesmo assim o erro voltou. A causa nao
+estava no analisador — estava no laco de blocos:
 
-POR QUE EU NAO TINHA PREVISTO: simulei a fusao com `git merge-tree` e procurei por
-"changed in both". O llm_client.py e conflito ADD/ADD - as duas branches criaram o arquivo
-de forma independente, a partir de um ancestral que nao o tinha. Add/add nao aparece como
-"changed in both". Erro de analise meu, nao do script.
+    if os.path.exists(pasta + "/_OK"): reusa; continue   # nunca chama processar()
 
-CONFERIDO FUNCAO A FUNCAO (01/Ago) - a LAB vence, com folga:
-  main = 86 linhas, 5 funcoes
-  lab  = 189 linhas, 9 funcoes - SUPERCONJUNTO ESTRITO
-  A lab tem tudo o que a main tem, MAIS:
-    - gerar_json (saida estruturada / tool use: JSON invalido vira impossivel)
-    - _registrar_uso (instrumentacao: custo, cache, thinking, stop_reason)
-    - contexto_uso (etapa/artigo no log)
-    - _transitorio + retry com espera crescente
-  gerar() - a funcao que o RADAR chama - tem ASSINATURA IDENTICA nas duas; a da lab so
-  acrescenta retry em erro de rede. NADA que a main tenha falta na lab.
+A pasta do staging e indexada pelo NOME DO ARQUIVO, nao pela pasta de origem.
+Mover o PDF de META_ANALISES para REVISOES nao mudava nada: o _OK continuava
+la e a analise VELHA era republicada. A correcao manual do Dr. Eduardo ia para
+o lixo num `continue` — que tambem pulava as tres travas que moram DENTRO de
+processar(): a checagem de tipo no cache, o apagamento dos derivados e a LEI 8.
 
-Tambem registrado nos comentarios da chave, para quem abrir amanha entender a decisao
-sem precisar refazer a analise.
+Segunda camada do mesmo buraco: _staging_atual(), escrita em 27/Jul contra
+exatamente isto ("254 de 268 _OK eram de schema velho e furavam os consertos
+por reuso"), estava DEFINIDA E NUNCA ERA CHAMADA. Codigo morto.
+
+  1. rodar_em_blocos: _staging_serve() — so reusa se o tipo gravado nos fatos
+     bater com a pasta de HOJE e o schema daquele tipo estiver presente.
+     Staging sem `tipo_documento` = feito antes de 03/Ago = nao serve.
+     Quando recusa, diz na tela POR QUE.
+  2. rodar_em_blocos: PDF fora de pasta de tipo NAO ENTRA na fila (LEI 8) —
+     antes virava 'original' calado, com motor e prompt no chute.
+  3. rodar_em_blocos: codigo de saida passa a valer (1 se houve falha, 130 no
+     Ctrl+C) + lista das falhas no fim, que antes rolavam a tela e sumiam.
+  4. Chave 2: TRAVA DE SAIDA — o minirevisao.py so roda se o analisador
+     terminar bem. Antes um Ctrl+C caia direto em mais 81 artigos pagos.
+     Era o "eu interrompi e ele nao para".
+  5. Chaves 1 e 2: mostram fila + custo estimado e pedem [s/N] antes de gastar.
+     Eram as duas unicas que gastavam dinheiro sem perguntar nada.
+  6. Chave 2: DIARIO em outputs/LOGS/chave2_*.log. So imprimia na janela, e
+     quando a janela fechava a prova ia junto.
+  7. teste_motor: teste_reuso_de_staging (16 combinacoes de pasta cruzada) e
+     teste_pdf_sem_pasta_nao_entra — travas puras, sem LLM e sem rede.
+
+Bateria: APROVADO. Todos os .py compilam.

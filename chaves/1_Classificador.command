@@ -1,11 +1,38 @@
 #!/bin/bash
 # ═══ CHAVE 1 · CLASSIFICADOR ═══  (classifica e nomeia os PDFs baixados → CLASSIFICADOS/<tipo>/)
+#
+# 03/Ago: passou a MOSTRAR o que vai fazer e PEDIR [s/N] antes de gastar. Junto com a Chave 2,
+# eram as duas únicas que gastavam dinheiro e moviam arquivo sem perguntar nada — enquanto a 7,
+# a 8 e a 10, que fazem bem menos estrago, todas perguntavam.
+# ═══════════════════════════════════════════════════════════════════════════
 cd "$(dirname "$0")" && source ./config.sh && source "$CD_VENV/bin/activate"
+
 echo "═══════════════════════════════════════"
 echo " CHAVE 1 · CLASSIFICADOR"
 echo " Lendo PDFs de: $CD_INBOX"
 echo "═══════════════════════════════════════"
+echo
+
+N=$(ls "$CD_INBOX"/*.pdf 2>/dev/null | grep -cv '/\._')
+[ -z "$N" ] && N=0
+if [ "$N" -eq 0 ]; then
+  echo "   Nenhum PDF na RAIZ de ARTIGOS/ — é só daí que esta chave lê."
+  echo "   Se os PDFs já estão nas pastas de CLASSIFICADOS e você quer reclassificar,"
+  echo "   rode a Chave 10 (Devolver para a Fila) primeiro."
+  echo
+  read -p "Enter para fechar. "; exit 0
+fi
+
+echo "   $N PDF na fila  ·  vão ser LIDOS, RENOMEADOS e MOVIDOS para CLASSIFICADOS/<tipo>/"
+echo "   Custo aproximado: US\$ $(awk "BEGIN{printf \"%.2f\", $N*0.02}")"
+echo "   (o modelo só é chamado quando as camadas determinísticas não decidem sozinhas)"
+echo
+read -r -p "   Começar? [s/N]: " OK
+case "$OK" in s|S|sim|SIM) ;; *) echo "   Cancelado. Nada foi gasto e nada foi movido."; read -p "Enter. "; exit 0 ;; esac
+echo
+
 python "$CD_FULL/src/classificador_ouro.py" "$CD_INBOX"
 echo
 echo "✔ Classificados em: $CD_CLASSIFICADOS"
+echo "  Diário desta rodada: o _CLASSIFICACAO_*.csv em ARTIGOS/ — confira ANTES de rodar a Chave 2."
 read -p "Enter para fechar. "

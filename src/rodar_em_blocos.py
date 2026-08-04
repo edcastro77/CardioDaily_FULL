@@ -25,18 +25,59 @@ FILA_FORA = ("_PUBLICADOS", "_RECUSADOS", "MINIRREVISOES")   # NÃO são fila do
 # (MINIRREVISOES é a trilha da minirevisão/opinião: condutas+fluxograma via minirevisao.py, não sobe no Supabase)
 
 
-def _staging_atual(pasta):
-    """O marcador _OK só vale se o staging foi feito com o SCHEMA ATUAL. Sinal: os fatos têm 'fracao_ejecao'
-    (campo mais novo). Sem ele, a nota/análise são PRÉ-CONSERTO — sem teto LEI 0 de retrospectivo, sem
-    glossário de FE — e o _OK republicaria conteúdo velho com cara nova. Nesse caso NÃO reusa: re-analisa.
-    Correção do buraco de 27/07: 254 de 268 _OK eram de schema velho e furavam os consertos por reuso."""
+_CHAVE_DO_TIPO = {"diretriz": "agree", "revisao_narrativa": "qualidade_revisao"}
+
+
+def _staging_serve(pasta, pdf):
+    """O `_OK` autoriza REUSAR o staging. Esta função decide se ele ainda vale.
+
+    ═══ O ERRO FATÍDICO DE 03/Ago — por que esta função voltou a existir ═══
+
+    Palavras do Dr. Eduardo: *"consertei manualmente os artigos nas pastas e na primeira análise
+    ele me lê uma REVISÃO com PROMPT DE ARTIGO ORIGINAL."*
+
+    A causa não estava no analisador — estava AQUI. O laço de blocos fazia só isto:
+
+        if os.path.exists(pasta + "/_OK"): reusa; continue   # nunca chama processar()
+
+    E a pasta do staging é indexada pelo NOME DO ARQUIVO, não pela pasta de origem. Quando ele
+    movia o PDF de META_ANALISES para REVISOES, o staging era o mesmo, tinha `_OK`, e era
+    REPUBLICADO com a análise velha. A correção manual dele ia para o lixo num `continue`.
+
+    Pior: TODAS as travas que existem para isso moram DENTRO de `processar()` — a checagem de
+    tipo no cache de fatos, o apagamento dos derivados velhos, e a LEI 8 ("a pasta manda").
+    O `continue` passava por cima das três. Elas eram INALCANÇÁVEIS.
+
+    E havia uma segunda camada do mesmo buraco: a `_staging_atual()`, escrita em 27/Jul contra
+    exatamente isto (*"254 de 268 _OK eram de schema velho e furavam os consertos por reuso"*),
+    estava DEFINIDA E NUNCA ERA CHAMADA. Código morto. Aquele conserto nunca chegou a rodar.
+
+    REGRA AGORA — só reusa se as DUAS forem verdade:
+      1. os fatos do staging foram extraídos para o MESMO tipo que a pasta de hoje diz (LEI 8);
+      2. o schema daquele tipo está presente nos fatos (a `_staging_atual` de julho, viva).
+
+    Staging sem o campo `tipo_documento` = feito antes de 03/Ago = feito pela corrente quebrada.
+    Não serve. Re-analisa. Isso é de propósito e custa dinheiro uma vez só.
+    """
+    if not os.path.exists(os.path.join(pasta, "_OK")):
+        return False, "sem _OK"
     fj = glob.glob(os.path.join(pasta, "*_fatos.json"))
     if not fj:
-        return False
+        return False, "sem fatos.json"
     try:
-        return "fracao_ejecao" in json.load(open(fj[0], encoding="utf-8"))
+        fatos = json.load(open(fj[0], encoding="utf-8"))
     except Exception:
-        return False
+        return False, "fatos.json ilegível"
+
+    tipo_hoje = A.tipo_do_documento(pdf)                    # ← a PASTA de agora
+    tipo_staging = fatos.get("tipo_documento")
+    if tipo_staging != tipo_hoje:
+        return False, (f"staging é de '{tipo_staging or 'antes de 03/Ago'}', "
+                       f"a pasta hoje diz '{tipo_hoje}'")
+    chave = _CHAVE_DO_TIPO.get(tipo_hoje, "fracao_ejecao")  # schema do tipo (conserto de 27/Jul)
+    if chave not in fatos:
+        return False, f"fatos sem o schema de '{tipo_hoje}' (falta '{chave}')"
+    return True, ""
 
 
 def analisar_e_publicar_um(pdf, staging=None, publicar=True):
@@ -61,14 +102,21 @@ def analisar_e_publicar_um(pdf, staging=None, publicar=True):
 
 
 def _pdfs_na_fila(classificados):
-    """Todos os PDFs ainda por fazer (ignora o que já saiu p/ _PUBLICADOS / _RECUSADOS)."""
-    fila = []
+    """Todos os PDFs ainda por fazer (ignora o que já saiu p/ _PUBLICADOS / _RECUSADOS).
+
+    03/Ago — LEI 8: PDF FORA de uma pasta de tipo NÃO ENTRA. Depois que a pasta virou a fonte
+    única do tipo, um PDF solto na raiz de CLASSIFICADOS é um PDF SEM TIPO — e o
+    `tipo_do_documento` devolvia 'original' calado, escolhendo motor e prompt no chute. Adivinhar
+    aqui é criar a segunda fonte de verdade que a LEI 8 proíbe. Devolve (fila, sem_pasta).
+    """
+    fila, sem_pasta = [], []
     for root, dirs, files in os.walk(classificados):
         dirs[:] = [d for d in dirs if d not in FILA_FORA]   # não desce nas pastas de concluídos
+        conhecida = os.path.basename(root) in A._TIPO_POR_PASTA
         for f in sorted(files):
             if f.lower().endswith(".pdf") and not f.startswith("._"):
-                fila.append(os.path.join(root, f))
-    return sorted(fila)
+                (fila if conhecida else sem_pasta).append(os.path.join(root, f))
+    return sorted(fila), sorted(sem_pasta)
 
 
 def _tirar_da_fila(pdf, classificados, subpasta):
@@ -84,7 +132,14 @@ def _tirar_da_fila(pdf, classificados, subpasta):
 def main(classificados, tam_bloco=20, maximo=0):
     staging = os.path.abspath(os.path.join(_HERE, "..", "outputs", "STAGING"))
     os.makedirs(staging, exist_ok=True)
-    fila = _pdfs_na_fila(classificados)
+    fila, sem_pasta = _pdfs_na_fila(classificados)
+    if sem_pasta:
+        print(f"⛔ {len(sem_pasta)} PDF FORA de pasta de tipo — NÃO entram (LEI 8: sem pasta, sem tipo):")
+        for p in sem_pasta[:10]:
+            print(f"     · {os.path.relpath(p, classificados)}")
+        if len(sem_pasta) > 10:
+            print(f"     · (+{len(sem_pasta)-10})")
+        print("   Mova-os para a pasta certa, ou devolva à fila (Chave 10) e rode a Chave 1.\n")
     if maximo:                                          # teste de confiança: só os primeiros N
         fila = fila[:maximo]
     total = len(fila)
@@ -94,6 +149,7 @@ def main(classificados, tam_bloco=20, maximo=0):
     n_blocos = (total + tam_bloco - 1) // tam_bloco
     print(f"EM BLOCOS DE {tam_bloco}  ·  {total} artigo(s) na fila  ·  {n_blocos} bloco(s)  →  {staging}\n")
     pub_ok = pub_rec = 0
+    falhou = []                      # 03/Ago: as falhas rolavam a tela e sumiam. Agora viram lista no fim.
     for i in range(0, total, tam_bloco):
         bloco = fila[i:i + tam_bloco]
         nb = i // tam_bloco + 1
@@ -103,10 +159,14 @@ def main(classificados, tam_bloco=20, maximo=0):
         for pdf in bloco:
             base = os.path.splitext(os.path.basename(pdf))[0]
             pasta = os.path.join(staging, base)
-            if os.path.exists(os.path.join(pasta, "_OK")):
+            serve, porque = _staging_serve(pasta, pdf)
+            if serve:
                 analisados.append((pdf, pasta))
                 print(f"   reusado    {base[:42]:42} (staging pronto)")
                 continue
+            if os.path.exists(os.path.join(pasta, "_OK")):
+                # tinha _OK mas NÃO serve — é o caso que queimou o Dr. Eduardo. Diz por quê, alto.
+                print(f"   ↻ REANALISA {base[:42]:42} — {porque}")
             try:
                 base, nota, mc, ents, sobe = A.processar(pdf, staging)
                 analisados.append((pdf, os.path.join(staging, base)))
@@ -114,6 +174,7 @@ def main(classificados, tam_bloco=20, maximo=0):
             except Exception as e:
                 print(f"   ⚠️  análise falhou (fica na fila p/ refazer): "
                       f"{os.path.basename(pdf)[:42]} — {type(e).__name__}: {e}")
+                falhou.append((os.path.basename(pdf), f"análise · {type(e).__name__}: {str(e)[:50]}"))
         # 2) publica o bloco no Supabase; só o que SUBIU sai da fila
         for pdf, pasta in analisados:
             try:
@@ -126,10 +187,18 @@ def main(classificados, tam_bloco=20, maximo=0):
             except Exception as e:
                 print(f"   ⚠️  publicação falhou (fica na fila p/ refazer): "
                       f"{os.path.basename(pasta)[:40]} — {type(e).__name__}: {e}")
+                falhou.append((os.path.basename(pasta), f"publicação · {type(e).__name__}: {str(e)[:50]}"))
         print(f"═══ BLOCO {nb}/{n_blocos} fechado · publicados até agora {pub_ok} · recusados {pub_rec} · "
               f"se cair agora, só este bloco refaz ═══\n")
     print(f"FIM · {pub_ok} publicado(s) no Supabase (rascunho) · {pub_rec} recusado(s) (em _RECUSADOS).")
+    if falhou:
+        print(f"\n⚠️  {len(falhou)} artigo(s) FALHARAM e ficaram na fila para refazer:")
+        for nome, motivo in falhou[:15]:
+            print(f"     · {nome[:44]:44} {motivo}")
+        if len(falhou) > 15:
+            print(f"     · (+{len(falhou)-15} — veja o diário completo)")
     print("Se sobrou algo na fila (falha de rede), é só clicar a Chave 2 de novo — ela continua.")
+    return 1 if falhou else 0
 
 
 if __name__ == "__main__":
@@ -139,4 +208,12 @@ if __name__ == "__main__":
     tb = int(args[1]) if len(args) > 1 else 20
     if not cl or not os.path.isdir(cl):
         print("uso: python rodar_em_blocos.py <pasta_CLASSIFICADOS> [tam_bloco=20] [--max=N]"); sys.exit(1)
-    main(cl, tb, mx)
+    # 03/Ago — o código de saída passa a VALER: a Chave 2 lê ele e só chama o minirevisao se for 0.
+    # Antes, um Ctrl+C aqui caía direto na trilha da minirevisão (mais 81 artigos pagos): o
+    # "eu interrompi e ele não para" do Dr. Eduardo.
+    try:
+        sys.exit(main(cl, tb, mx) or 0)
+    except KeyboardInterrupt:
+        print("\n\n⛔ INTERROMPIDO POR VOCÊ (Ctrl+C). O que já publicou está salvo no Supabase;"
+              "\n   o resto continua na fila. Clique a Chave 2 de novo quando quiser continuar.")
+        sys.exit(130)

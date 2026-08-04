@@ -146,6 +146,88 @@ def teste_rigor_conhece_o_desenho():
     checa("garbage-in ainda derruba a coorte", r["trabalho"] <= 5, f"veio {r['trabalho']}")
 
 
+# ══════════════ N · O REUSO DE STAGING NÃO PODE IGNORAR A PASTA (o erro fatídico, 03/Ago) ══════════════
+def teste_reuso_de_staging():
+    """O laço de blocos reusava o staging só porque existia `_OK`. A pasta do staging é indexada
+    pelo NOME DO ARQUIVO — então mover o PDF de META_ANALISES para REVISOES não mudava nada: o
+    `_OK` continuava lá e a análise VELHA era republicada. A correção manual do Dr. Eduardo era
+    jogada fora num `continue`, que também pulava as três travas que moram dentro de `processar()`.
+
+    Esta trava é pura: monta stagings de mentira em disco temporário, sem LLM e sem rede."""
+    import os, json, tempfile, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import rodar_em_blocos as R
+
+    SCHEMA = {"original": "fracao_ejecao", "meta": "fracao_ejecao",
+              "diretriz": "agree", "revisao_narrativa": "qualidade_revisao"}
+    PASTA = {"original": "ARTIGOS_ORIGINAIS", "meta": "META_ANALISES",
+             "diretriz": "GUIDELINES", "revisao_narrativa": "REVISOES"}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        def montar(tipo_gravado, com_ok=True, com_schema=True):
+            d = os.path.join(tmp, f"art_{tipo_gravado}_{com_ok}_{com_schema}")
+            os.makedirs(d, exist_ok=True)
+            f = {}
+            if tipo_gravado is not None:
+                f["tipo_documento"] = tipo_gravado
+            if com_schema and tipo_gravado:
+                f[SCHEMA[tipo_gravado]] = "qualquer coisa"
+            json.dump(f, open(os.path.join(d, "art_fatos.json"), "w"))
+            if com_ok:
+                open(os.path.join(d, "_OK"), "w").write("")
+            return d
+
+        pdf = lambda tipo: f"/x/CLASSIFICADOS/{PASTA[tipo]}/art.pdf"
+
+        # 1) MESMO tipo + schema presente → reusa (senão a retomada morre e tudo vira dinheiro queimado)
+        for t in SCHEMA:
+            serve, _ = R._staging_serve(montar(t), pdf(t))
+            checa(f"reuso: staging '{t}' na pasta '{PASTA[t]}' PODE ser reusado", serve)
+
+        # 2) o Dr. Eduardo MOVEU o artigo: toda combinação cruzada tem de RECUSAR o reuso
+        for gravado in SCHEMA:
+            for agora in SCHEMA:
+                if gravado == agora:
+                    continue
+                serve, _ = R._staging_serve(montar(gravado), pdf(agora))
+                checa(f"reuso: staging '{gravado}' NÃO pode ser reusado na pasta '{PASTA[agora]}'",
+                      not serve, "é o erro fatídico de 03/Ago voltando")
+
+        # 3) staging ANTIGO (sem o campo tipo_documento) = feito pela corrente quebrada → nunca reusa
+        for agora in SCHEMA:
+            serve, _ = R._staging_serve(montar(None), pdf(agora))
+            checa(f"reuso: staging pré-03/Ago não serve para '{PASTA[agora]}'", not serve)
+
+        # 4) sem _OK nunca reusa · sem o schema do tipo nunca reusa (a _staging_atual de 27/Jul, viva)
+        for t in SCHEMA:
+            serve, _ = R._staging_serve(montar(t, com_ok=False), pdf(t))
+            checa(f"reuso: sem _OK não reusa ({t})", not serve)
+            serve, _ = R._staging_serve(montar(t, com_schema=False), pdf(t))
+            checa(f"reuso: sem o schema de '{t}' não reusa", not serve)
+
+
+# ══════════════ N+1 · PDF SEM PASTA DE TIPO NÃO ENTRA NA FILA (LEI 8) ══════════════
+def teste_pdf_sem_pasta_nao_entra():
+    """Um PDF solto na raiz de CLASSIFICADOS é um PDF SEM TIPO — e o `tipo_do_documento` devolvia
+    'original' calado, escolhendo motor e prompt no chute. Adivinhar é a segunda fonte de verdade
+    que a LEI 8 proíbe."""
+    import os, tempfile, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import rodar_em_blocos as R
+
+    with tempfile.TemporaryDirectory() as tmp:
+        for d in ("ARTIGOS_ORIGINAIS", "REVISOES", "GUIDELINES", "PASTA_INVENTADA"):
+            os.makedirs(os.path.join(tmp, d), exist_ok=True)
+            open(os.path.join(tmp, d, "a.pdf"), "w").write("x")
+        open(os.path.join(tmp, "solto.pdf"), "w").write("x")          # na raiz
+        fila, fora = R._pdfs_na_fila(tmp)
+        checa("fila: só entram PDFs de pasta de tipo conhecida", len(fila) == 3, f"veio {len(fila)}")
+        checa("fila: PDF na raiz de CLASSIFICADOS fica de FORA",
+              any(f.endswith("solto.pdf") for f in fora))
+        checa("fila: PDF em pasta inventada fica de FORA",
+              any("PASTA_INVENTADA" in f for f in fora))
+
+
 # ══════════════ 3 · FALHAS FATAIS REPROVAM (não descontam) ══════════════
 def teste_falhas_fatais():
     for f in N.FALHAS_FATAIS:
@@ -792,7 +874,7 @@ if __name__ == "__main__":
               teste_revisao_custo_brasil, teste_revisao_vies_de_selecao,
               teste_revisao_atualidade, teste_revisao_contrato_e_silencio,
               teste_os_quatro_motores_nao_se_misturam, teste_veredito_aberto, teste_mapa_pubmed,
-              teste_a_pasta_manda,
+              teste_a_pasta_manda, teste_reuso_de_staging, teste_pdf_sem_pasta_nao_entra,
               teste_gabarito_dos_artigos, teste_contrato_de_saida]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:
