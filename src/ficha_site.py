@@ -151,6 +151,22 @@ def _data_valida(ano):
     return ""
 
 
+def _do_nome_do_arquivo(pasta):
+    """Título, revista e ano a partir do NOME que o classificador deu — `AAAA-MM-Revista-Titulo`.
+    O classificador monta esse nome com metadado do PubMed, então isto é CATÁLOGO, não chute.
+    Devolve {} se o nome não seguir o padrão (PDF solto, nome manual) — e aí o campo fica vazio
+    mesmo, que é o certo: melhor o contrato recusar do que inventar capa."""
+    import re as _re
+    base = os.path.basename(str(pasta).rstrip("/"))
+    m = _re.match(r"^(\d{4})-(\d{2})-([^-]+)-(.+)$", base)
+    if not m:
+        return {}
+    ano, mes, rev, tit = m.groups()
+    return {"ano": ano, "mes": mes,
+            "revista": rev.replace("_", " ").strip(),
+            "titulo": tit.replace("_", " ").strip()}
+
+
 def montar(pasta):
     """Lê uma pasta do STAGING e devolve a ficha (dict com os 16 campos)."""
     base = os.path.basename(pasta.rstrip("/"))
@@ -192,6 +208,22 @@ def montar(pasta):
     titulo = _campo(canon, "titulo")
     revista = _campo(canon, "revista")
     doi = _campo(canon, "doi")
+
+    # ═══════════ 04/Ago 06h — A CAPA TEM DUAS FONTES, E A SEGUNDA É MELHOR ═══════════
+    # 10 meta-análises com nota 6 a 9 — perícia, PDF, áudio e visual prontos, tudo pago — foram
+    # RECUSADAS pelo contrato com "titulo vazio · revista vazia · data_publicacao ausente". O
+    # `SCHEMA_FATOS_META`, que escrevi de madrugada, tinha os blocos de método (PRISMA, Cochrane,
+    # AMSTAR-2, GRADE) e não tinha a IDENTIFICAÇÃO. O portão estava certo; o buraco era meu.
+    #
+    # O schema já foi corrigido. Mas existe uma segunda fonte, e ela é MAIS CONFIÁVEL que o LLM
+    # relendo o PDF: o NOME DO ARQUIVO. Quem o montou foi o classificador, com metadado do PubMed —
+    # `AAAA-MM-Revista-Titulo`. Isso é dado de catálogo, não leitura de modelo.
+    #
+    # Por isso a ordem passa a ser: FATOS primeiro; se vier vazio, o NOME. Custa zero, não chama
+    # LLM nenhum, e recupera os 10 artigos já pagos sem re-analisar nada.
+    _n = _do_nome_do_arquivo(pasta)
+    titulo = titulo or _n.get("titulo", "")
+    revista = revista or _n.get("revista", "")
     keywords = _lista_yaml(canon, "keywords")
     aplic = _campo(canon, "aplicabilidade")
     mnota = re.search(r"nota_aplicabilidade_clinica:\s*(\d+)", canon)
@@ -255,7 +287,7 @@ def montar(pasta):
                        else _porta("", 8, "gancho de abertura"))
 
     # campos extras que a tabela REAL usa (a tabela NÃO tem 'slug')
-    ano = _data_valida(_campo(canon, "ano"))
+    ano = _data_valida(_campo(canon, "ano")) or _data_valida(_n.get("ano", ""))   # 04/Ago: 2ª fonte, o nome do PubMed
     tipo = _campo(canon, "tipo")
     mrig = re.search(r"nota_trabalho_estatistico:\s*(\d+)", canon)
     rigor = int(mrig.group(1)) if mrig else None

@@ -44,6 +44,25 @@ para o próximo. Só desça na árvore quando a porteira não resolver.
 
 ---
 
+## TÓPICO −1 · IDENTIFICAÇÃO — SEM ISTO A ANÁLISE INTEIRA É JOGADA FORA
+
+Antes de qualquer método, a capa. `titulo`, `revista` e `ano` são OBRIGATÓRIOS.
+
+Em 04/Ago dez meta-análises foram analisadas com nota 6 a 9 — perícia, PDF, áudio e visual prontos,
+tudo pago — e o contrato de publicação recusou as dez, porque o extrator não tinha pedido a capa.
+"titulo vazio · revista vazia · data_publicacao ausente". O portão estava certo; faltava o dado.
+
+  `titulo` ..... o título completo do artigo, como está na primeira página. Não abrevie.
+  `revista` .... o nome do periódico (NEJM, JAMA Cardiology, European Heart Journal, Circulation…).
+  `ano` ........ o ano de publicação, 4 dígitos.
+  `doi` ........ se estiver no documento; senão `null`.
+  `autores` .... o primeiro autor + "et al.", se der.
+
+Se o PDF estiver truncado e a capa não aparecer, diga `null` — o sistema tem uma segunda fonte
+(o nome do arquivo, que o classificador montou com metadado do PubMed). Mas NÃO invente.
+
+---
+
 ## TÓPICO 0 · A PORTEIRA DE TUDO — QUE TIPO DE META É ESTA?
 
 `tipo_meta` é OBRIGATÓRIO. Ele muda a régua inteira, não é etiqueta.

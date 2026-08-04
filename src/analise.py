@@ -158,7 +158,14 @@ SCHEMA_FATOS = {
 SCHEMA_FATOS_META = {
     "type": "object",
     "properties": {
-        # ── identificação e desenho ──
+        # ── identificação — 04/Ago 06h: O QUE FALTAVA E RECUSOU 10 ARTIGOS ═══════════════════
+        # Montei este schema pelos blocos METODOLÓGICOS (PRISMA, Cochrane, AMSTAR-2, GRADE) e não
+        # copiei a IDENTIFICAÇÃO que o extrator do artigo original já pedia. Resultado: 10 metas
+        # analisadas com nota 6 a 9, com perícia, PDF, áudio e visual prontos — e TODAS recusadas
+        # pelo contrato com "titulo vazio · revista vazia · data_publicacao ausente".
+        # O portão estava certo (LEI: o site não recebe buraco). O buraco era meu, no schema.
+        "titulo": _S, "revista": _S, "ano": _S, "doi": _S, "autores": _S,
+        # ── desenho ──
         "desenho": {"type": "string", "enum": ["meta"]},
         "pergunta": {"type": "string", "enum": ["intervencao", "etiologia", "prognostico", "diagnostico"]},
         "tipo_meta": {"type": "string",
@@ -250,8 +257,8 @@ SCHEMA_FATOS_META = {
         "conclusao_nao_bate_desenho": _B3,
         "falhas_fatais": {"type": "array", "items": _S},
     },
-    "required": ["desenho", "pergunta", "qualidade_meta", "relevancia_clinica",
-                 "achados_principais", "aplicabilidade"],
+    "required": ["titulo", "revista", "ano", "desenho", "pergunta", "qualidade_meta",
+                 "relevancia_clinica", "achados_principais", "aplicabilidade"],
 }
 
 
