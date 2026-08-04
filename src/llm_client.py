@@ -162,27 +162,66 @@ def _json_anthropic(mod, instrucao, schema, contexto, max_tokens, nome):
 
 
 def _json_openai(mod, instrucao, schema, contexto, max_tokens, nome):
-    """OpenAI chama de FUNCTION CALLING — é a mesma coisa que o tool use da Anthropic, com outro nome.
-    Escolhido em vez do `response_format: json_schema` porque o modo `strict` exige que TODA propriedade
-    esteja em `required` e `additionalProperties: false` em todo objeto; nossos schemas de FATOS não são
-    assim (campo que o artigo não reporta fica de fora de propósito), e o strict recusaria o schema."""
+    """Saída estruturada na OpenAI.
+
+    ═══ 04/Ago/2026 — O ERRO QUE A CHAVE 12 PEGOU, E QUE IA CUSTAR OS 431 ARTIGOS ═══
+
+    A 1ª versão disto usava `/v1/chat/completions`. A API devolveu, com todas as letras:
+
+        "Function tools with reasoning_effort are not supported for gpt-5.6-terra in
+         /v1/chat/completions. To use function tools, use /v1/responses or set
+         reasoning_effort to 'none'."
+
+    Ou seja: os GPT-5.6 são modelos de RACIOCÍNIO, e nessa rota antiga eles não aceitam function
+    tools. Falhava em TODOS eles — terra, sol e luna — e caía para o modo texto ("peça JSON em prosa
+    e torça"), que é exatamente o mecanismo que derrubou 74% da rodada de 25/07.
+
+    O tamanho do estrago evitado: o terra tinha acabado de virar PRIMÁRIO da extração. Os 431 artigos
+    rodariam sem schema imposto, e ninguém veria — a linha "modo: texto" passa rolando na tela.
+    Não foi o modelo que falhou nem o LLM que alucinou: foi a rota errada, escrita por mim às 23h.
+
+    Agora: `/v1/responses` primeiro (mantém o raciocínio E aceita as ferramentas). Se o modelo não
+    conhecer essa rota, cai para o chat com `reasoning_effort='none'` — a outra saída que a própria
+    mensagem de erro indicou. Só depois disso é que existiria o modo texto.
+    """
     import json
     from openai import OpenAI
     cli = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""),
                  timeout=TIMEOUT_S, max_retries=_RETRIES_SDK)
     texto = (contexto + "\n\n" + instrucao) if contexto else instrucao
+
+    # ── 1) /v1/responses — a rota que a OpenAI mandou usar ──
+    try:
+        r = cli.responses.create(
+            model=mod, input=texto, max_output_tokens=max_tokens,
+            tools=[{"type": "function", "name": nome,
+                    "description": "Devolve os dados estruturados pedidos.",
+                    "parameters": schema}],
+            tool_choice={"type": "function", "name": nome})
+        _registrar_uso(r, mod)
+        for item in (getattr(r, "output", None) or []):
+            if getattr(item, "type", "") == "function_call":
+                _ULTIMO_MODO[0] = "function_calling(responses)"
+                return json.loads(item.arguments)
+        raise RuntimeError("responses não devolveu function_call")
+    except Exception as e:
+        if _transitorio(e):
+            raise                      # rede/429 → deixa o laço de fora re-tentar
+        _erro_responses = e            # rota indisponível → tenta a saída alternativa
+
+    # ── 2) chat/completions com reasoning_effort='none' (a 2ª saída que o erro indicou) ──
     r = cli.chat.completions.create(
-        model=mod, max_completion_tokens=max_tokens,
+        model=mod, max_completion_tokens=max_tokens, reasoning_effort="none",
         messages=[{"role": "user", "content": texto}],
         tools=[{"type": "function",
                 "function": {"name": nome, "description": "Devolve os dados estruturados pedidos.",
                              "parameters": schema}}],
-        tool_choice={"type": "function", "function": {"name": nome}})   # OBRIGA
+        tool_choice={"type": "function", "function": {"name": nome}})
     _registrar_uso(r, mod)
     for tc in (r.choices[0].message.tool_calls or []):
-        _ULTIMO_MODO[0] = "function_calling"
+        _ULTIMO_MODO[0] = "function_calling(sem raciocínio)"
         return json.loads(tc.function.arguments)
-    raise RuntimeError("modelo não devolveu function_call")
+    raise RuntimeError(f"nem /responses nem chat devolveram function_call (responses: {_erro_responses})")
 
 
 def _json_gemini(mod, instrucao, schema, contexto, max_tokens, nome):

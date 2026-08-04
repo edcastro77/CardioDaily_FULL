@@ -119,7 +119,7 @@ def main():
             try:
                 L._ULTIMO_MODO[0] = None
                 L.gerar_json([m], "Devolva ok=true, reportado=null, n=7.", SCHEMA_TESTE,
-                             max_tokens=200, nome="teste")
+                             max_tokens=2000, nome="teste")   # 2000, não 200: o Gemini gasta o teto pensando e devolve texto vazio
                 t_js = f"✅ {L._ULTIMO_MODO[0] or '?'} {time.time()-t0:.1f}s"
             except Exception as e:
                 t_js = "❌"
