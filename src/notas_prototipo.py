@@ -940,14 +940,23 @@ def score(a):
                   "o extrator não conseguiu classificar o desenho: o motor NÃO chuta")
         # 'motor' SEMPRE presente: a saída de rota era a única que não trazia a chave, e quem lê
         # r["motor"] (veredito, painel) quebrava. Pego pelo teste_motor em 02/Ago.
+        # 03/Ago: e o rótulo era "ORIGINAL" FIXO — uma meta que o extrator não soube ler ia para a
+        # revisão humana carimbada como artigo original. O rótulo é a PASTA, mesmo quando não pontua.
         return {"trabalho": None, "aplic": 0, "teto_desenho": None, "teto_externa": None,
-                "muda_conduta": "N/A", "rota": r0, "falhas_fatais": [], "motor": "ORIGINAL",
+                "muda_conduta": "N/A", "rota": r0, "falhas_fatais": [],
+                "motor": {"meta": "META", "diretriz": "DIRETRIZ",
+                          "revisao_narrativa": "REVISAO"}.get(t, "ORIGINAL"),
                 "flags": [motivo]}
 
     # META tem motor próprio, recuperado do prompt_meta_analise_v2.md dele. ORIGINAL segue na LEI 0.
-    # ⏳ FALTA: revisão narrativa.
+    #
+    # ⚠️ 03/Ago: este ramo olhava `a["desenho"] == "meta"` — a ÚLTIMA sobra das duas fontes de
+    # verdade. Um artigo que o Dr. Eduardo move para META_ANALISES, mas cujo extrator leu
+    # `desenho=rct`, caía no motor ORIGINAL. O `t` acima já é a decisão da PASTA; é ele que manda.
+    # Pego pelo próprio teste_motor (`teste_a_pasta_manda`) antes de rodar.
     dom_meta = frase_meta = None
-    if a.get("desenho") == "meta":
+    eh_meta = (t == "meta" or a.get("desenho") == "meta")
+    if eh_meta:
         s, dom_meta, frase_meta = nota_meta(a)
         fl = ([f"meta [{k} {v}]" for k, v in dom_meta.items()] if dom_meta
               else [frase_meta])          # sem fatos: registra que a ponderação NÃO foi aplicada
@@ -978,7 +987,9 @@ def score(a):
     r = {"trabalho": s, "aplic": aplic, "teto_desenho": td, "teto_externa": te,
          "teto_falha_fatal": tf, "teto_mcid": tm, "muda_conduta": muda_conduta(a, aplic),
          "rota": ROTA_CLINICA, "falhas_fatais": ff,
-         "motor": "META" if dom_meta else "ORIGINAL",
+         # o rótulo é a TRILHA que rodou, não o resultado dela. Vinha de `dom_meta` — logo, uma meta
+         # sem os 6 domínios extraídos era carimbada "ORIGINAL" e o redator recebia a perícia errada.
+         "motor": "META" if eh_meta else "ORIGINAL",
          "nhlbi": {"cumpre": cum, "falha": falh, "nao_reporta": sil, "teto": tn,
                    "criterios_falhos": criterios_falhos},
          "flags": fl}

@@ -94,25 +94,32 @@ def tipo_do_documento(pdf_path=""):
     return _TIPO_POR_PASTA.get(os.path.basename(os.path.dirname(pdf_path or "")), "original")
 
 
-# ⚠️ INCOERÊNCIA AINDA ABERTA (tarefa #34, 02/Ago): para ORIGINAL e META o prompt continua sendo
-# escolhido pelo campo `desenho` dos FATOS, e não por esta função. São duas fontes de verdade para a
-# mesma pergunta — o que a LEI 8 proíbe. NÃO foi unificado hoje de propósito: fechar tudo na pasta
-# transfere 100% da decisão para o classificador, e o classificador corrigido AINDA NÃO ESTÁ EM
-# PRODUÇÃO (tarefa #33, produção roda a 91,9%). Unificar antes disso PIORA hoje para melhorar depois.
-# A ordem correta é: #33 (classificador em produção) → #34 (unificar aqui). Decisão do Dr. Eduardo.
+def escolher_prompt(fatos=None, pdf_path=""):
+    """Qual perícia este documento merece. **A PASTA MANDA. PONTO.**
 
+    ═══ FECHADO EM 03/Ago/2026 — a tarefa #34, e o erro que ela causou ═══
 
-def escolher_prompt(fatos, pdf_path=""):
-    """Qual perícia este documento merece. FATOS mandam; a pasta é o desempate."""
-    pasta = os.path.basename(os.path.dirname(pdf_path or ""))
-    if pasta in ("GUIDELINES", "REVISOES"):        # tipos que o schema de fatos não distingue
-        return _PROMPT_POR_PASTA[pasta]
-    d = (fatos or {}).get("desenho")
-    if d in _PROMPT_POR_DESENHO:
-        return _PROMPT_POR_DESENHO[d]
-    if pasta in _PROMPT_POR_PASTA:
-        return _PROMPT_POR_PASTA[pasta]
-    return "redator_original_prompt.md"            # o mais completo, como rede
+    Palavras do Dr. Eduardo, depois de consertar as pastas na mão e ver o resultado:
+        "consertei manualmente os artigos nas pastas e na primeira análise ele me lê uma
+         REVISÃO com PROMPT DE ARTIGO ORIGINAL... A PASTA DE REVISÃO SÓ PODE APLICAR PROMPT
+         DE REVISÃO — A PASTA DE ORIGINAL SÓ PODE APLICAR PROMPT DE ARTIGO ORIGINAL."
+
+    O CÓDIGO ANTIGO fazia isto: para GUIDELINES e REVISOES obedecia a pasta; para
+    ARTIGOS_ORIGINAIS e META_ANALISES olhava o campo `desenho` dos FATOS. Duas fontes de
+    verdade para a MESMA pergunta — exatamente o que a LEI 8 proíbe. Consequência real:
+    o Dr. Eduardo move um artigo para a pasta certa, o extrator devolve `desenho=rct`,
+    e a perícia sai com o prompt de artigo original mesmo assim. A correção manual dele
+    era simplesmente IGNORADA.
+
+    Eu sabia do buraco desde 02/Ago (deixei escrito aqui mesmo) e adiei "até o classificador
+    melhorar". Errado: enquanto o classificador não fica bom, a correção MANUAL é a única
+    verdade que existe — e era justamente ela que o código descartava.
+
+    Agora: pasta → tipo → prompt. Uma decisão, um lugar. Se a pasta estiver errada, o
+    conserto é mover o arquivo; e mover o arquivo passa a FUNCIONAR.
+    """
+    tipo = tipo_do_documento(pdf_path)
+    return _PROMPT_POR_TIPO_DOC[tipo]
 
 
 # ─────────── FIM DO CORTE SILENCIOSO — 01/Ago/2026 ───────────
@@ -257,6 +264,13 @@ def processar(pdf, staging):
             except OSError: pass
         shutil.rmtree(os.path.join(dst, "assets"), ignore_errors=True)
         print("       ↻ derivados velhos apagados (re-extração) — regerando limpos")
+    # ═══ A PASTA MANDA NO MOTOR TAMBÉM (03/Ago/2026) ═══
+    # Não bastava consertar o prompt: o MOTOR também escolhia a régua pelo campo `desenho` dos
+    # fatos. Um artigo que o Dr. Eduardo move para REVISOES tem de ser julgado pelo motor da
+    # REVISÃO — não pelo motor do artigo original só porque o extrator leu `desenho=rct`.
+    # Injetar aqui é o que faz `notas_prototipo.tipo_do_documento()` obedecer à pasta:
+    # ela lê `fatos["tipo_documento"]` ANTES de olhar `desenho`.
+    fatos["tipo_documento"] = tipo_do_documento(pdf)
     r = N.score(fatos)
     ents, sobe = decidir_entregaveis(r["aplic"])
     # ROTA FORA DA ESCALA CLÍNICA (01/Ago/2026): pré-clínico e 'não classificável' não recebem nota —

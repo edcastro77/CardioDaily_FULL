@@ -718,6 +718,45 @@ def teste_mapa_pubmed():
         checa(f"'Review' genérico não entrou em '{canon}'", "Review" not in gat)
 
 
+# ══════════════ 3f · A PASTA MANDA — prompt E motor (03/Ago, tarefa #34) ══════════════
+def teste_a_pasta_manda():
+    """O ERRO QUE ISTO IMPEDE — palavras do Dr. Eduardo, 03/Ago:
+    'consertei manualmente os artigos nas pastas e na primeira análise ele me lê uma REVISÃO
+     com PROMPT DE ARTIGO ORIGINAL... A PASTA DE REVISÃO SÓ PODE APLICAR PROMPT DE REVISÃO.'
+
+    O código escolhia o prompt pela PASTA só para GUIDELINES e REVISOES; para ARTIGOS_ORIGINAIS
+    e META_ANALISES olhava o campo `desenho` dos FATOS. Duas fontes de verdade (LEI 8 proíbe).
+    Resultado: a correção MANUAL da pasta era ignorada — que é o pior tipo de bug, porque
+    desfaz em silêncio o trabalho que a pessoa acabou de fazer à mão."""
+    from analisador import escolher_prompt, tipo_do_documento
+
+    ESPERADO = {"ARTIGOS_ORIGINAIS": "redator_original_prompt.md",
+                "META_ANALISES":     "redator_meta_prompt.md",
+                "GUIDELINES":        "redator_guideline_prompt.md",
+                "REVISOES":          "redator_revisao_prompt.md",
+                "MINIRREVISOES":     "redator_revisao_prompt.md",
+                "EDITORIAIS":        "redator_revisao_prompt.md"}
+    # os FATOS mentem de propósito, em TODAS as combinações. A pasta tem de vencer sempre.
+    for pasta, prompt in ESPERADO.items():
+        for desenho in ("rct", "meta", "coorte", "nao_classificavel", "serie_de_casos", None):
+            p = f"/x/CLASSIFICADOS/{pasta}/artigo.pdf"
+            got = escolher_prompt({"desenho": desenho}, p)
+            checa(f"pasta {pasta} + fatos(desenho={desenho}) → {prompt}", got == prompt,
+                  f"veio {got}")
+    # e o MOTOR também obedece à pasta (o analisador injeta tipo_documento antes de pontuar)
+    MOTOR = {"ARTIGOS_ORIGINAIS": "ORIGINAL", "META_ANALISES": "META",
+             "GUIDELINES": "DIRETRIZ", "REVISOES": "REVISAO"}
+    for pasta, motor in MOTOR.items():
+        fatos = _bom(pergunta="intervencao", desenho="rct")          # os fatos dizem RCT
+        fatos["tipo_documento"] = tipo_do_documento(f"/x/CLASSIFICADOS/{pasta}/a.pdf")
+        r = N.score(fatos)
+        checa(f"pasta {pasta} + fatos(desenho=rct) → motor {motor}", r["motor"] == motor,
+              f"veio {r['motor']}")
+    # PDF fora das pastas conhecidas: cai em 'original', que é a rede
+    checa("PDF solto → prompt original (rede)",
+          escolher_prompt({"desenho": "meta"}, "/tmp/qualquer.pdf") == "redator_original_prompt.md")
+
+
 # ══════════════ 4 · REGRESSÃO: os 6 artigos do gabarito do Dr. Eduardo ══════════════
 def teste_gabarito_dos_artigos():
     for nome, fatos in N.FIXTURES.items():
@@ -753,6 +792,7 @@ if __name__ == "__main__":
               teste_revisao_custo_brasil, teste_revisao_vies_de_selecao,
               teste_revisao_atualidade, teste_revisao_contrato_e_silencio,
               teste_os_quatro_motores_nao_se_misturam, teste_veredito_aberto, teste_mapa_pubmed,
+              teste_a_pasta_manda,
               teste_gabarito_dos_artigos, teste_contrato_de_saida]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:
