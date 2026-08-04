@@ -1,328 +1,80 @@
-O BURACO DO ESTUDO NEGATIVO — o motor punia o trabalho que muda conduta
+A CAPA QUE FALTAVA E A TABELA QUE NÃO CABIA — 04/Ago/2026
 
-O Dr. Eduardo rodou a prova da extracao numa meta-analise de DADOS INDIVIDUAIS
-de betabloqueador pos-IAM com FE preservada (NEJM 2026, 5 RCTs, 17.801 pacientes).
-Os dois modelos deram NOTA 4/10 — que na escala do CardioDaily e "confianca
-criticamente baixa, NAO serve de base para conduta".
+Três defeitos que só apareciam DEPOIS de a análise estar paga, e duas travas para
+que não voltem.
 
-Palavras dele:
-  "antes eu ensinava aos residentes o MONABICHA. O M caiu (morfina reduz absorcao
-   de antiplaquetario e aumenta fibrose), o O caiu (oxigenio so se SatO2<90%,
-   senao aumenta radical livre), o B deixou de ser mantra (sem disfuncao de VE,
-   sem betabloqueador). Se o meu programa esta na contramao disto, meu programa
-   esta totalmente errado."
+═══ 1 · A CAPA (10 artigos recusados no portão) ═══
 
-Ele tem razao. Metade da cardiologia que ele ensina veio de estudo NEGATIVO —
-COURAGE, ISCHEMIA, ORBITA, TOPCAT, CABANA, REDUCE-AMI. Um sistema que da 4/10
-para essa classe descarta exatamente o conteudo que mais muda conduta. E pode
-explicar boa parte dos 75 recusados de 122 da ultima rodada.
+O SCHEMA_FATOS_META foi escrito com os blocos de método da meta-análise — PRISMA,
+Cochrane, AMSTAR-2, GRADE — e sem a identificação do artigo. Dez meta-análises
+saíram com nota 6 a 9, pacote completo (perícia, PDF, áudio, visual), e o contrato
+recusou as dez:
 
-CAUSA RAIZ — nao foi o modelo, nao foi alucinacao: O VOCABULARIO NAO TINHA A
-PALAVRA. O enum de `relevancia_clinica.classificacao` so oferecia:
-    robusto | provavel | incerto | significativo_mas_abaixo_do_mcid |
-    nao_relevante | nao_avaliavel
-Um trabalho que PROVA que a droga nao ajuda era obrigado a se declarar
-`nao_relevante` — teto 6. O extrator nao conseguiria acertar nem se quisesse.
-Segunda camada: `muda_conduta` exigia `efeito_relevante_consistente`, que um
-estudo nulo nunca tem. Por construcao, o trabalho que TIROU o betabloqueador
-do pos-IAM saia com "muda conduta: NAO".
+    "data_publicacao: ausente · titulo vazio · revista vazia"   × 10
 
-A DISTINCAO (metodologica, nao de gosto) — tres coisas que caiam no mesmo balde:
-  · significativo abaixo do MCID  → achou efeito, ninguem sente        → teto 6
-  · INCONCLUSIVO                  → poder fraco / IC largo             → teto 7
-  · AUSENCIA DEMONSTRADA          → poder ok + IC exclui beneficio     → SEM TETO
+O portão estava certo: a linha sobe COMPLETA ou não sobe. Faltava o dado.
 
-Decisoes do Dr. Eduardo (04/Ago):
-  · nulo demonstrado pode chegar a 10, como qualquer positivo forte
-  · so vale com as DUAS provas: IC exclui beneficio relevante E poder declarado
-  · sem elas, o motor REBAIXA sozinho para `incerto` — quem decide e o codigo,
-    nao a palavra do modelo (mesma razao de a LEI 0 ser deterministica)
+  · analise.py .............. titulo/revista/ano/doi/autores no SCHEMA_FATOS_META,
+                              os três primeiros obrigatórios
+  · analise_meta_prompt.md .. TÓPICO −1 · IDENTIFICAÇÃO, antes de qualquer método
+  · ficha_site.py ........... 2ª fonte da capa: o nome do arquivo (metadado do PubMed
+                              posto ali pelo classificador — catálogo, não leitura de LLM)
+  · pdf_analise.py .......... a MESMA 2ª fonte, esquecida na primeira passada (ver LEI 9)
+  · reparar_capa.py [NOVO] .. repara os pacotes já feitos consultando o DOI no PubMed.
+                              Sem LLM, sem Supabase, sem mover arquivo. 26/26 reparados.
 
-VARREDURA (LEI 9) — a regra morava em 5 blocos vivos, corrigidos todos:
-  1. analise.py            SCHEMA: enum + campo `ic_exclui_beneficio_relevante`
-  2. analise_prompt.md     ensina a separar os tres casos, com exemplo numerico
-  3. notas_prototipo.py    TETO_MCID + `_nulo_esta_demonstrado` + muda_conduta
-  4. redator_original_prompt.md   nao escrever o nulo como fracasso; escrever o
-                                  que ele permite DEIXAR DE FAZER, e em quem
-  5. teste_motor.py        teste_nulo_informativo — 12 travas puras
-  (blocos so de leitura, conferidos e sem regra propria: veredito.py,
-   ficha_site.py, contrato.py; legado nao tocado: article_analyzer, prompts/)
+Resultado, medido: o contrato passou de 11 para 23 pacotes aprovados, sem re-analisar
+nada e sem gastar um centavo.
 
-MEDIDO no caso real (meta, desfecho duro, dominios NHLBI completos):
-    antes  "nao_relevante"                    teto  6 → nota 6 → muda conduta NAO
-    depois nulo demonstrado                   teto 10 → nota 8 → muda conduta SIM
-    depois nulo sem IC excluir beneficio      teto  7 → nota 7 → muda conduta NAO
+═══ 2 · A TABELA CORTADA ═══
 
-MAIS, da mesma rodada:
-  · prova_extracao agora grava os FATOS CRUS e mostra QUAL TETO MORDEU — sem isso
-    nao dava para saber de onde veio o 4 sem pagar a extracao de novo.
-  · gemini-3.1-pro-preview falha por COTA (429 RESOURCE_EXHAUSTED), nao por nome
-    errado. E o ultimo fallback de 5 das 7 cadeias: na pratica ha DOIS degraus.
-  · checar_modelos.py + Chave 12: bate na porta de cada modelo (texto e JSON
-    estruturado) e diz quantos degraus cada cadeia tem DE VERDADE.
-  · erros de LLM nao vem mais cortados em 120 chars.
+O CSS dizia só `width: 100%`. Sem `table-layout`, isso é um PEDIDO: o motor mede a
+largura mínima de cada coluna pelo conteúdo, soma, e se passar da página TRANSBORDA.
+Medido no JACC: 192,2 mm numa página de 170 mm úteis — a coluna "Peso na agregação"
+saía cortada na margem. Em TODOS os PDFs.
 
-Bateria: APROVADO. Todos os .py compilam.
+  · table-layout: fixed → transbordar vira matematicamente impossível
+  · estilo de revista (decisão do Dr. Eduardo): sem grade vertical, três traços
+    horizontais como NEJM/Lancet, zebra levíssima
+  · coluna não reportada em NENHUM estudo é podada — e DECLARADA em nota sob a tabela.
+    Dado não some calado: a informação ter sido pedida e não existir é um achado sobre
+    a revisão, não um detalhe de diagramação.
+  · o título vira legenda da tabela (caption): é parte dela, não fica órfão nunca mais
+  · linha não se parte entre páginas · cabeçalho repete em tabela longa
 
-═══════════════════════════════════════════════════════════════════════════
+Medido: 24/24 perícias sem uma tabela cortada. 217 tabelas com título embutido,
+41 com coluna podada e declarada.
 
-MAIS DOIS, no mesmo embalo (ordem do Dr. Eduardo, 04/Ago 02h30):
+═══ 3 · O REGEX QUE ENGOLIU PARÁGRAFOS ═══
 
-A) FIM DO "SEMPRE CALCULE NNT" — a regra que empurrava o modelo a inventar.
-   NNT = 1/ARR, logo so existe com TRES coisas declaradas: risco basal (de HR/
-   RR/OR sozinhos NAO sai NNT), horizonte de tempo (o mesmo tratamento tem NNT
-   diferente em 1, 3 e 5 anos) e a mesma escala do desfecho.
-   Casos: artigo reporta -> copia com horizonte e risco basal dele; da n/N dos
-   dois bracos + seguimento -> calcula e declara o horizonte; so tem HR/RR/OR ->
-   "nao calculavel a partir do reportado"; META com risco basal heterogeneo ->
-   NNT unico e ficcao; IC 95% CRUZA O NULO -> NAO SE APLICA (o intervalo do NNT
-   vai de negativo a infinito, e "trata X salva 1" vira frase inventada sobre um
-   efeito que nao existe). Proibido NNT sem horizonte ao lado.
+`<h2>(.*?)</h2>\s*<table>` parece certo e está errado. O `.*?` preguiçoso para no
+primeiro fechamento — mas se o `<table>` não vier logo depois, o motor VOLTA ATRÁS e
+estica até um `</h2>` lá na frente que tenha tabela em seguida. Parágrafos inteiros da
+perícia viraram legenda: oito linhas em maiúscula azul na tela do Dr. Eduardo.
 
-   Varredura (LEI 9) — 5 arquivos VIVOS corrigidos:
-     analise_prompt.md · analise_revisao_prompt.md · redator_meta_prompt.md ·
-     redator_original_prompt.md · script_audio_prompt.md
-   O script_audio era o PIOR: pedia "o numero que impressiona — trata X, salva 1"
-   sempre. E o audio vai direto no ouvido do assinante, sem tabela ao lado para
-   conferir. (redator_prompt.md nao foi tocado: ninguem o chama — e legado.)
+Conserto: ponto temperado `(?:(?!</h\1>).)*?` — um curinga que se recusa a atravessar
+o fechamento. Sem esse freio não existe quantificador preguiçoso que segure.
 
-B) GEMINI FORA DAS CADEIAS — "ele e bom mas sempre da problema, limites doidos".
-   Medido na mesma noite: 429 RESOURCE_EXHAUSTED nos dois caminhos, em dois
-   artigos seguidos. Era o ultimo degrau de 5 das 7 cadeias — a LEI DA
-   EQUIVALENCIA tinha na pratica DOIS degraus, e ninguem sabia porque fallback so
-   e exercitado quando o primario cai, no meio de um lote, de madrugada.
-     PROFUNDO   opus-5  -> sol   -> sonnet-5
-     ESCRITA    sonnet-5-> terra -> sol
-     EXTRACAO   sonnet-5-> terra -> sol
-     PERICIA    terra   -> sonnet-5 -> sol
-     RAPIDO     haiku   -> luna  -> sonnet-5
-     GUIDELINE_LONGO  sol -> terra
-   PERDA DECLARADA: o gemini era a unica outra janela de ~1M. O 2o degrau do
-   GUIDELINE_LONGO passa a ter ~400k. Como essa cadeia nao e chamada por ninguem
-   ainda, a perda e teorica — mas fica escrita para nao virar surpresa.
+═══ 4 · AS DUAS TRAVAS (teste_motor.py — 37 verdes) ═══
 
-═══════════════════════════════════════════════════════════════════════════
+  · teste_todo_schema_tem_a_capa — compara o que CADA schema PEDE com o que o contrato
+    EXIGE. É uma função pura, custa microssegundos, e teria pego o defeito nº 1 antes de
+    o primeiro artigo ser pago. Provada: arrancando `titulo` do schema, ela reprova.
 
-C) EXTRATOR PROPRIO DA META-ANALISE (ordem do Dr. Eduardo, 04/Ago 03h)
+  · teste_schema_do_google — a lista de schemas era ESCRITA À MÃO e não incluía o
+    SCHEMA_FATOS_META. Quando ele nasceu, ninguém o acrescentou, e a bateria seguiu
+    dando APROVADO: teste que não olha para o schema novo não tem como reprovar. A
+    meta rodou em produção com a conversão para o Google nunca testada. Trocado por
+    descoberta automática — schema novo entra sozinho nos dois testes.
 
-O achado, medido: o motor META le `a["qualidade_meta"]` desde que foi escrito,
-e o extrator NUNCA produziu esse bloco. Nao existia no schema. Resultado:
+    É o mesmo defeito dos 10 artigos com outra roupa: lista escrita à mão que não cresce
+    quando o sistema cresce. A cura é DESCOBRIR, não LISTAR.
 
-   dominio            peso    antes   depois
-   PICO                15%      10      10
-   busca               20%       8      10
-   vies dos estudos    15%   6 TRAVADO  10
-   heterogeneidade     15%       9      10
-   vies de publicacao  10%       9       9
-   CONCLUSOES          25%   6 TRAVADO  10
-                          ponderacao 8  →  10
+═══ O QUE ESTE COMMIT NÃO RESOLVE ═══
 
-Os dois travados somavam 40% do peso. Uma meta PERFEITA nao passava de 8 na
-ponderacao, por construcao. Junto com o buraco do estudo negativo, e a
-explicacao do 4/10 da meta de betabloqueador do NEJM.
+  · 3 pacotes do STAGING seguem retidos: falta áudio (Prasugrel) e ACRI (JAMA Alcohol).
+    A Chave 2 completa sozinha — reaproveita o que existe e gera só o que falta.
+  · a Chave 2 ainda escreve "✔ Publicado em blocos" mesmo com ZERO publicado.
+  · 14 meta-análises seguem na fila, agora com o extrator corrigido.
 
-  · analise_meta_prompt.md (novo) — PRISMA 2020 + Cochrane v6.5 + AMSTAR-2 + GRADE
-  · SCHEMA_FATOS_META em analise.py, com `qualidade_meta` completo
-  · analise.py: despachante ganha o ramo `tipo == "meta"`
-  · _CHAVE_DO_TIPO ganha "meta": "qualidade_meta" em analisador.py E em
-    rodar_em_blocos.py (LEI 9: a mesma regra em dois blocos)
-
-O que o extrator novo pergunta e ninguem perguntava:
-  · PRISMA 13d — heterogeneidade nao e so I². Pede TAU² e INTERVALO DE PREDICAO
-    ("no meu proximo paciente, que efeito espero?"). E comum o IC agregado
-    excluir o nulo e a predicao INCLUIR — a meta e menos acionavel que o resumo.
-  · Cochrane cap.13 — com k<10 NAO se testa funnel. Antes o sistema punia quem
-    fez certo; agora da 7: nem premio, nem castigo.
-  · AMSTAR-2 criticos — PROSPERO antes, extracao em duplicata, e a lista dos
-    EXCLUIDOS com motivo (o item que quase ninguem cumpre).
-  · GRADE (PRISMA 15) — certeza DA EVIDENCIA e diferente de qualidade DA REVISAO.
-  · DOMINANCIA — um estudo com >=60% do peso: a meta E aquele estudo.
-  · subgrupo vendido como resultado principal -> conclusoes 3.
-  · unidade de analise (cluster/crossover/multi-braco contado 2x).
-
-D) A SOMATORIA E A NOTA — "nao tem muito o que ficar inventando"
-
-O `_TETO_INTERVENCAO["meta"] = 8` era uma regua EXTRA por cima da ponderacao dos
-6 dominios que o proprio Dr. Eduardo desenhou. Uma meta impecavel (6 dominios em
-10) saia 8 de qualquer jeito — os dominios nao mudavam nada de 8 para cima. O
-scorecard existia e nao decidia. O teto generico saiu.
-
-A hierarquia DELE continua, mas dentro do `nota_meta`, onde e especifica:
-   IPD de RCTs / meta de RCTs ..... sem teto  (🟢 "melhor tipo" / "padrao-ouro")
-   meta de OBSERVACIONAIS ......... teto 7    ("nunca equivale a RCT")
-   meta de REDE sem transitividade  teto 8
-   + os tetos classicos: contaminacao 5 · NI mal interpretada 6 · I² alto sem
-     investigar 6
-
-MEDIDO depois:
-   meta de RCTs impecavel (IPD ou agregada) .... somatoria 10 → nota 10
-   mesma meta, de OBSERVACIONAIS ............... somatoria  7 → nota  7
-   meta de REDE sem transitividade ............. somatoria  8 → nota  8
-   meta mediana (so o basico) .................. somatoria  8 → nota  8
-   meta com I² alto e sem investigar ........... somatoria  6 → nota  6
-
-UMA COISA QUE EU QUASE FIZ ERRADO, E NAO FIZ: meu teste cobrava `aplic >= 9` e
-reprovou em 8. O reflexo seria afrouxar a LEI 0 para o teste passar. O codigo
-estava obedecendo o CLAUDE.md; o TESTE e que estava errado. Avisei em vez de
-mexer, e a decisao de tirar o teto veio depois, DELE. A historia das 3 versoes
-do teste ficou escrita no proprio teste, para o proximo que passar por ali.
-
-E) Chave 12 tambem examina modelos FORA das cadeias (--extras), para medir o
-   Gemini sem devolve-lo a producao.
-
-Bateria: APROVADO. Todos os .py compilam.
-
-F) RAMPA DE CONFIANCA nos blocos (ideia do Dr. Eduardo, 04/Ago)
-
-   "vamos rodar de 10 em 10; depois de 30 consecutivos bons, 3 blocos de 20/20;
-    3 blocos bons, 30 em 30"
-
-   RAMPA = [(10, 3), (20, 3), (30, None)]
-
-   BLOCO BOM = zero falhas de analise E zero de publicacao. Artigo RECUSADO por
-   nota baixa NAO e falha — e o sistema funcionando e dizendo nao.
-   BLOCO RUIM = volta ao degrau 1 (10) e o contador zera. Conservador de
-   proposito: subir e opcional, errar 400 de uma vez nao pode repetir.
-
-   Ensaiado a seco em 431 artigos (sem LLM):
-     tudo certo ....... 18 blocos  (10,10,10 → 20,20,20 → 30,30,30...)
-     falha no bloco 5 . cai de 20 para 10, reconquista os 3, volta a subir
-
-   Chave 2 passa a chamar com --rampa. O tamanho fixo continua disponivel
-   (`rodar_em_blocos.py <pasta> 20`) para quem quiser.
-
-Bateria: APROVADO. Todos os .py compilam.
-
-═══════════════════════════════════════════════════════════════════════════
-
-G) O BETABLOQUEADOR: 5 → 7 → 9. E o que cada degrau ensinou.
-
-   O Dr. Eduardo abriu a meta de betabloqueador pos-IAM do NEJM (IPD PRE-PLANEJADA,
-   5 RCTs, 17.801 pacientes, desfecho duro — o trabalho que tirou o "B" do
-   MONABICHA que ele ensina aos residentes) e ela saiu 5/10: RETIDA, jogada fora.
-
-   G1 · A LINHA FORA DE ORDEM (analisador.py)
-        `fatos["tipo_documento"] = ...` era gravado 20 linhas DEPOIS do json.dump.
-        Nunca entrava no arquivo. E e o campo que a `_staging_serve` procura para
-        decidir reuso. Medido nos 6 artigos em disco: TODOS seriam re-analisados na
-        proxima Chave 2. Ele pagaria duas vezes por 24 metas e por 431 artigos.
-
-   G2 · OS DELATORES CAPAVAM O TOTAL (notas_prototipo.py)
-        `contaminacao_incluidos` capava a NOTA INTEIRA em 5, por fora da ponderacao.
-        Um defeito de metodo anulava os outros cinco dominios. Agora cada delator vai
-        para o DOMINIO a que pertence:
-           contaminacao      -> vies_estudos (15%)
-           NI mal interpretada -> conclusoes (25%)
-           I2 alto sem investigar -> heterogeneidade (15%), onde ja estava
-        A soma volta a ser a soma.  5 → 7
-
-   G3 · A SOMATORIA E A NOTA, INTEIRA
-        Em 03/Ago o Dr. Eduardo mandou: "a nota da meta tem que ser SOMATORIA".
-        Eu tirei UM teto (desenho) e deixei TRES (NHLBI, validade externa, MCID) —
-        e ainda avisei que estava deixando, como se fosse prudencia. Nao era.
-        O MCID e justamente o teto que pune ESTUDO NEGATIVO, e nao tem lugar numa
-        regua de METODO: os 6 dominios medem como o trabalho foi FEITO, e metodo
-        nao tem sinal. Agora, na meta: aplic = somatoria. Ponto.
-
-   G4 · O INSTRUMENTO NAO SERVIA PARA O OBJETO — a IPD  (7 → 9)
-        "voce deu 7 para um artigo que e praticamente 10 - nao comemore - resolva"
-        Certo. A regua de 6 dominios foi desenhada para meta de dados AGREGADOS,
-        que nasce de busca na literatura. Uma IPD PRE-PLANEJADA nao busca base
-        nenhuma: os ensaios combinam juntar os dados ANTES de o resultado existir.
-        O sistema cobrava dela bases pesquisadas, funnel plot e heterogeneidade
-        clinica — tres coisas que numa IPD ou nao se aplicam ou sao a razao de ela
-        existir. Era o MESMO erro do dia (perguntar randomizacao a uma meta), um
-        degrau mais fundo.
-          busca            5 → 10   colaboracao prospectiva: "achar todos" e por desenho
-          vies_publicacao  7 → 10   ELIMINADO por construcao, nenhum funnel prova tanto
-          heterogeneidade  5 → 10   com dado de paciente da para testar interacao
-          vies_estudos     4 → 4    NAO muda: crossover em ensaio aberto e limitacao real
-        E o motor passou a ler `rob_ferramenta` do bloco da meta — antes so olhava o
-        qualidade_nhlbi e achava que ninguem tinha avaliado vies, com "RoB 2" escrito.
-
-   G5 · PERGUNTAS HIERARQUICAS (ordem do Dr. Eduardo, 05h)
-        "se e IPD > automaticamente pula para o proximo topico - porque ja bateu a
-         meta da qualidade neste topico - faca as perguntas hierarquicas"
-        Raiz do problema, e ele viu antes de mim: PERGUNTA QUE NAO SE APLICA PRODUZ
-        RESPOSTA QUE VIRA DEFEITO. Perguntaram a IPD "quantas bases?"; ela respondeu
-        "uma", honestamente; e o sistema leu como busca ruim.
-        O analise_meta_prompt.md virou ARVORE: cada topico comeca por uma
-        PERGUNTA-PORTEIRA, e se ela resolve, o topico e encerrado ali.
-           T1 busca ......... IPD/prospectiva? -> RESOLVIDO, pule
-           T2 vies public. .. IPD? -> nota maxima, pule · k<10? -> pule (Cochrane 13)
-           T3 heterogen. .... IPD? -> clinica nao e defeito, e o que ela examina
-           T4 vies estudos .. tem ferramenta formal? -> se nao, encerra mal
-        Economiza token E impede o modelo de inventar resposta para pergunta que
-        nao cabe.
-
-   MEDIDO, nos 9 fatos.json em disco, sem gastar 1 centavo:
-        betabloqueador ........ 5 → 9   (retido → publica com audio e visual)
-        JAMA Aspirin VTE ...... 7 → 9
-        EHJ Oral anticoag ..... 7 → 9
-        JAMA DAPT duration .... 7 → 8
-        J Card Fail MAP ....... 7 → 8
-        os outros 4 ........... sem mudanca
-        NENHUM desandou.
-
-   Travas novas no teste_motor: teste_ipd_nao_e_punida (12 checagens) —
-   inclusive que os dominios que NAO deviam mudar (pico, vies_estudos, conclusoes)
-   continuam iguais entre IPD e agregada: e instrumento certo, nao privilegio.
-
-Bateria: APROVADO. Todos os .py compilam.
-
-H) `python -u` NAS 12 CHAVES — o silencio que fez o Dr. Eduardo achar que travou
-
-   Quando o Python ve que a saida vai para um CANO (o tee do diario) e nao para a
-   tela, ele troca "linha por linha" por "acumula 4-8 KB e solta de uma vez". A
-   janela ficou PARADA enquanto 4 meta-analises eram processadas normalmente, e o
-   diario ficou com 0 bytes.
-
-   O agravante: eu JA tinha resolvido isso na Chave 11 com flush=True, vi o problema
-   com meus olhos, e nao varri as outras. Duas horas depois a Chave 2 repetiu.
-   E a LEI 9 — "a regra mora em varios blocos, varra todos" — que eu escrevi para o
-   codigo e nao apliquei a mim mesmo. Terceira vez no mesmo dia (flush, awk, buffer).
-
-   Varredura completa: -u em TODAS as 12 chaves que chamam python. Conferido: nao
-   sobrou nenhuma.
-
-Bateria: APROVADO. Todos os .py compilam. Sintaxe das 12 chaves ok.
-
-I) CARIMBO DE PROMPT + TERRA ARRASADA (04/Ago, 05h30)
-
-   Pergunta do Dr. Eduardo: "ele esta aproveitando um monte de coisas que ja
-   tinham sido feitas — POR QUAL PROMPT?"
-
-   Resposta medida: NINGUEM SABIA. Existiam TRES niveis de reaproveitamento
-     1. o pacote inteiro  (rodar_em_blocos: "reusado (staging pronto)")
-     2. os FATOS          (analisador: "fatos reaproveitados — nao re-extrai")
-     3. cada PECA         (ACRI, pericia, PDF, visual, audio, gancho)
-   e NENHUM registrava a versao do prompt. Nos 37 campos do fatos.json nao havia
-   um unico campo de versao.
-
-   O estrago possivel, medido: o prompt da meta mudou TRES vezes nesta madrugada
-   (arvore de porteiras, regra do nulo, tipo_meta obrigatorio). Um staging feito
-   as 03h seria reaproveitado as 05h como se fosse novo, e o conserto nao pegaria
-   — em silencio. Mesma classe do _OK de 27/Jul e do reuso que ignorava a pasta
-   em 03/Ago.
-
-   ORDEM DELE, e e mais simples e mais segura do que o que eu estava fazendo
-   (refazer peca por peca):
-     "se nao tem certeza que foi com ESTE prompt, tem que apagar TUDO - tudo,
-      tudo - que tiver deste artigo no sistema e comecar do zero"
-
-   REAPROVEITAMENTO PARCIAL FOI O QUE SANGROU ESTE PROJETO A NOITE INTEIRA:
-   sobra uma peca velha, ela e internamente coerente, ninguem percebe.
-
-   · analisador.hash_prompt()   sha1[:12] do CONTEUDO de cada prompt
-   · analisador.versoes_atuais() carimbo dos 5 prompts que servem aquele tipo
-   · cada pacote grava `_versoes.json` junto do _OK
-   · processar(): TERRA ARRASADA no topo — carimbo diferente (ou ausente) apaga a
-     pasta INTEIRA antes de ler qualquer cache
-   · _staging_serve(): o carimbo virou o PRIMEIRO portao, antes do tipo e do schema
-   · analise.PROMPT_ARQ_POR_TIPO: o mapa tipo→arquivo, para o hash saber o que ler
-
-   MEDIDO agora: os 11 pacotes no STAGING → TODOS "🔥 APAGA e refaz",
-   com o motivo "sem carimbo de prompt (staging anterior a 04/Ago)".
-   Custa uma re-analise, uma vez so, e e de proposito.
-
-Bateria: APROVADO. Todos os .py compilam. Sintaxe das 12 chaves ok.
+Bateria: APROVADO · 37 travas · Contrato: passa 23 · retido 3

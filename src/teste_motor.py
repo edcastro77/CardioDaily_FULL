@@ -288,7 +288,16 @@ def teste_schema_do_google():
                 ruins += varre(v, f"{caminho}[{i}]")
         return ruins
 
-    for nome in ("SCHEMA_FATOS", "SCHEMA_FATOS_DIRETRIZ", "SCHEMA_FATOS_REVISAO"):
+    # ⚠️ 04/Ago — ESTA LISTA ERA CHUMBADA e dizia
+    #      ("SCHEMA_FATOS", "SCHEMA_FATOS_DIRETRIZ", "SCHEMA_FATOS_REVISAO")
+    # Quando o SCHEMA_FATOS_META nasceu (03/Ago), ninguém o acrescentou aqui — e a bateria
+    # continuou dando APROVADO, porque um teste que não olha para o schema novo não tem como
+    # reprovar. A meta-análise rodou em produção com a conversão para o Google NUNCA testada.
+    #
+    # É o mesmo defeito que custou os 10 artigos, com outra roupa: uma lista escrita à mão que
+    # não cresce quando o sistema cresce. A cura é a mesma — DESCOBRIR em vez de LISTAR.
+    for nome in sorted(n for n in dir(A)
+                       if n.startswith("SCHEMA_FATOS") and isinstance(getattr(A, n), dict)):
         original = getattr(A, nome)
         ruins = varre(conv(original))
         checa(f"google: {nome} sem `type` em lista após conversão", not ruins,
@@ -1140,6 +1149,44 @@ def teste_contrato_de_saida():
             checa(f"{d}: chave '{chave}' presente", chave in r)
 
 
+
+def teste_todo_schema_tem_a_capa():
+    """Todo extrator PEDE título, revista e ano — senão o contrato recusa lá na frente.
+
+    ═══ O QUE ESTA TRAVA TERIA EVITADO (03→04/Ago/2026) ═══
+
+    O `SCHEMA_FATOS_META` foi escrito do zero, com os blocos de método da meta-análise: PRISMA,
+    Cochrane, AMSTAR-2, GRADE. Ficou bom no que se propunha e não tinha a CAPA — titulo, revista,
+    ano — que o extrator do artigo original já pedia desde sempre.
+
+    Ninguém percebeu, porque nada a montante quebra: o LLM responde, o JSON valida, o motor
+    pontua, o redator escreve, o áudio é gerado, o visual é renderizado. Dez meta-análises
+    saíram com nota 6 a 9, pacote completo. **O defeito só aparece no PORTÃO DE PUBLICAÇÃO**,
+    depois de tudo pago:
+
+        "data_publicacao: ausente · titulo vazio · revista vazia"   × 10
+
+    O portão estava certo. Faltava alguém comparar duas listas — o que o schema PEDE e o que o
+    contrato EXIGE — e isso é uma função pura, custa microssegundos, e não precisa de LLM,
+    de rede, nem do Dr. Eduardo rodando nada.
+
+    É a LEI 9 em forma de teste: a regra "todo artigo tem capa" mora no schema, no prompt, no
+    ficha_site e no pdf_analise. Aqui a gente prova que o PRIMEIRO bloco da corrente não a perdeu.
+    """
+    import analise as A
+    exigidos = {"titulo", "revista", "ano"}
+    schemas = {n: getattr(A, n) for n in dir(A)
+               if n.startswith("SCHEMA_FATOS") and isinstance(getattr(A, n), dict)}
+    assert schemas, "nenhum SCHEMA_FATOS* encontrado em analise.py — a varredura ficou cega"
+    for nome, esq in sorted(schemas.items()):
+        tem = set(esq.get("properties", {}))
+        falta = exigidos - tem
+        assert not falta, (
+            f"{nome} não pede {sorted(falta)}. O contrato de publicação EXIGE esses campos: "
+            f"artigo nenhum deste tipo vai conseguir subir, e você só descobre isso DEPOIS de "
+            f"pagar a análise inteira (foi o que aconteceu com 10 metas em 03/Ago).")
+    return f"{len(schemas)} schema(s) com a capa completa"
+
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,
               teste_tetos_da_lei_0, teste_teto_estatistico, teste_rigor_conhece_o_desenho,
@@ -1156,7 +1203,8 @@ if __name__ == "__main__":
               teste_a_pasta_manda, teste_reuso_de_staging, teste_pdf_sem_pasta_nao_entra,
               teste_schema_do_google, teste_nulo_informativo, teste_extrator_da_meta,
               teste_ipd_nao_e_punida,
-              teste_gabarito_dos_artigos, teste_contrato_de_saida]
+              teste_gabarito_dos_artigos, teste_contrato_de_saida,
+              teste_todo_schema_tem_a_capa]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:
         antes = len(falhas)

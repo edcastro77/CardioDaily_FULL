@@ -109,7 +109,16 @@ if [ "$N_MINI" -gt 0 ] && [ -z "$PASTA" ]; then   # só na opção TUDO
 fi
 
 echo
-echo "✔ Publicado em blocos, como rascunho. Sobrou algo na fila (queda de rede)? Clique a Chave 2 de novo."
+# ⚠️ 04/Ago — ESTA LINHA MENTIA. Dizia "✔ Publicado em blocos" SEMPRE, mesmo quando o placar
+# real da rodada era `publicados 0 · recusados 10`. O Dr. Eduardo leu o ✔ verde numa rodada em
+# que NADA subiu ao Supabase — e só descobriu quando mandou eu conferir o banco.
+# Um ✔ que aparece independentemente do resultado não é informação: é decoração que engana.
+# Agora quem fala é o placar do próprio analisador (impresso acima, e no diário).
+echo "── FIM DA RODADA ──"
+echo "  O placar verdadeiro está logo acima e no diário: publicados · retidos · falharam."
+echo "  RETIDO não é erro: é o portão recusando linha incompleta (o site não recebe buraco)."
+echo "  O motivo de cada retenção está no _REVISAR_publicacao.txt dentro da pasta do artigo."
+echo "  Sobrou algo na fila (queda de rede)? Clique a Chave 2 de novo — ela reaproveita o pronto."
 echo "  Minirevisões: condutas + fluxograma em outputs/MINIRREVISOES/ (não vão pro site)."
 echo "  Curadoria (ver · ouvir · aprovar) → Chave 3 · Administrador."
 echo "  Diário desta rodada: $DIARIO"
