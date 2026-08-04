@@ -422,6 +422,69 @@ def teste_extrator_da_meta():
     checa("subgrupo vendido como resultado principal → conclusões 3", sub["conclusoes"] == 3)
 
 
+# ══════════════ N+5 · A IPD PRÉ-PLANEJADA NÃO PODE SER PUNIDA POR SER IPD (04/Ago) ══════════════
+def teste_ipd_nao_e_punida():
+    """*"Você deu 7 para um artigo que é praticamente 10 — não comemore, resolva, está errado."*
+
+    A meta de betabloqueador pós-IAM (NEJM 2026 — IPD PRÉ-PLANEJADA, 5 RCTs, 17.801 pacientes,
+    desfecho duro, tirou uma droga da prática) saía 7. O motivo era o de sempre, uma camada abaixo:
+    o INSTRUMENTO NÃO SERVIA PARA O OBJETO. A régua de 6 domínios foi desenhada para meta de dados
+    AGREGADOS, que nasce de busca na literatura. Uma IPD pré-planejada não busca base nenhuma —
+    os ensaios combinam juntar os dados ANTES de o resultado existir.
+
+    O sistema cobrava dela: bases pesquisadas, funnel plot, heterogeneidade clínica. Três coisas que
+    numa IPD ou não se aplicam ou são a razão dela existir."""
+
+    NHLBI = {"pergunta_focada": True, "elegibilidade_predefinida": True, "i2_valor": 20.0,
+             "heterogeneidade_avaliada": True, "qualidade_estudos_avaliada": True}
+    QM = dict(k_estudos=5, n_total=17801, n_bases=1, protocolo_registrado=True,
+              busca_sistematica_abrangente=False, heterogeneidade_investigada=True,
+              tau2_reportado=True, heterogeneidade_clinica_relevante=True,
+              teste_funnel_indicado=False, rob_ferramenta="RoB 2",
+              limitacoes_reconhecidas=True, conclusao_alem_da_evidencia=False,
+              modelo_estatistico="fixo")
+
+    def meta(tipo):
+        return _bom(pergunta="intervencao", desenho="meta", tipo_documento="meta",
+                    desfecho_duro=True, qualidade_nhlbi=dict(NHLBI),
+                    qualidade_meta=dict(QM, tipo_meta=tipo))
+
+    ipd, agr = meta("ipd"), meta("dados_agregados")
+    d_ipd, d_agr = N.dominios_meta(ipd), N.dominios_meta(agr)
+
+    # ── 1) os três domínios que mudam, e SÓ eles ──
+    checa("IPD: busca não é punida por ter 1 base", d_ipd["busca"] >= 9,
+          f"veio {d_ipd['busca']} (agregada dá {d_agr['busca']})")
+    checa("IPD: viés de publicação é 10 (eliminado por desenho)", d_ipd["vies_publicacao"] == 10,
+          f"veio {d_ipd['vies_publicacao']}")
+    checa("IPD: heterogeneidade clínica não capa (é o que a IPD examina)",
+          d_ipd["heterogeneidade"] > d_agr["heterogeneidade"],
+          f"ipd={d_ipd['heterogeneidade']} agregada={d_agr['heterogeneidade']}")
+    for k in ("pico", "vies_estudos", "conclusoes"):
+        checa(f"IPD: '{k}' NÃO muda (não é privilégio, é instrumento certo)",
+              d_ipd[k] == d_agr[k], f"ipd={d_ipd[k]} agregada={d_agr[k]}")
+
+    # ── 2) o caso REAL: o artigo do MONABICHA precisa publicar com áudio ──
+    s_ipd, _, _ = N.nota_meta(ipd)
+    checa("betabloqueador pós-IAM (IPD do NEJM): nota ≥ 8", s_ipd >= 8,
+          f"veio {s_ipd} — era 5 em 03/Ago e 7 na 1ª tentativa de 04/Ago")
+    checa("betabloqueador: a nota é a SOMATÓRIA, sem teto por cima",
+          N.score(ipd)["aplic"] == s_ipd, "voltou algum teto sobre a meta")
+
+    # ── 3) e a meta AGREGADA continua sendo cobrada do que é dela ──
+    checa("agregada com 1 base ainda é punida na busca", d_agr["busca"] <= 7,
+          f"veio {d_agr['busca']} — a régua da agregada não pode afrouxar junto")
+    checa("agregada com heterogeneidade clínica ainda capa", d_agr["heterogeneidade"] <= 5)
+
+    # ── 4) a ferramenta de RoB vive no bloco da META, e o motor tem de ler de lá ──
+    sem_nhlbi = _bom(pergunta="intervencao", desenho="meta", tipo_documento="meta",
+                     qualidade_nhlbi={"i2_valor": 20.0},
+                     qualidade_meta=dict(QM, tipo_meta="ipd"))
+    checa("RoB 2 declarado em qualidade_meta conta como viés avaliado",
+          N.dominios_meta(sem_nhlbi)["vies_estudos"] > 3,
+          "o motor só olhava o qualidade_nhlbi e achava que ninguém avaliou")
+
+
 # ══════════════ 3 · FALHAS FATAIS REPROVAM (não descontam) ══════════════
 def teste_falhas_fatais():
     for f in N.FALHAS_FATAIS:
@@ -1070,6 +1133,7 @@ if __name__ == "__main__":
               teste_os_quatro_motores_nao_se_misturam, teste_veredito_aberto, teste_mapa_pubmed,
               teste_a_pasta_manda, teste_reuso_de_staging, teste_pdf_sem_pasta_nao_entra,
               teste_schema_do_google, teste_nulo_informativo, teste_extrator_da_meta,
+              teste_ipd_nao_e_punida,
               teste_gabarito_dos_artigos, teste_contrato_de_saida]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:

@@ -251,6 +251,13 @@ def processar(pdf, staging):
     reextraiu = False
     if fatos is None:
         fatos = A.extrair_fatos(pdf, tipo=tipo_do_documento(pdf))
+        # 04/Ago 04h30 — A LINHA FORA DE ORDEM QUE JOGAVA A RODADA INTEIRA FORA.
+        # O `tipo_documento` era gravado 20 linhas ABAIXO, depois deste json.dump. Ou seja: NUNCA
+        # entrava no arquivo. E é justamente o campo que a `_staging_serve` procura para decidir se
+        # um staging pode ser reaproveitado. Resultado medido nos 6 artigos em disco: TODOS davam
+        # "staging é de 'antes de 03/Ago'" e seriam RE-ANALISADOS na próxima Chave 2.
+        # O Dr. Eduardo teria pago duas vezes por 24 metas, e depois duas vezes por 431.
+        fatos["tipo_documento"] = tipo_do_documento(pdf)
         json.dump(fatos, open(fatos_cache, "w", encoding="utf-8"), ensure_ascii=False)
         reextraiu = True
     if reextraiu:

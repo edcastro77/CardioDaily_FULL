@@ -192,3 +192,80 @@ F) RAMPA DE CONFIANCA nos blocos (ideia do Dr. Eduardo, 04/Ago)
    (`rodar_em_blocos.py <pasta> 20`) para quem quiser.
 
 Bateria: APROVADO. Todos os .py compilam.
+
+═══════════════════════════════════════════════════════════════════════════
+
+G) O BETABLOQUEADOR: 5 → 7 → 9. E o que cada degrau ensinou.
+
+   O Dr. Eduardo abriu a meta de betabloqueador pos-IAM do NEJM (IPD PRE-PLANEJADA,
+   5 RCTs, 17.801 pacientes, desfecho duro — o trabalho que tirou o "B" do
+   MONABICHA que ele ensina aos residentes) e ela saiu 5/10: RETIDA, jogada fora.
+
+   G1 · A LINHA FORA DE ORDEM (analisador.py)
+        `fatos["tipo_documento"] = ...` era gravado 20 linhas DEPOIS do json.dump.
+        Nunca entrava no arquivo. E e o campo que a `_staging_serve` procura para
+        decidir reuso. Medido nos 6 artigos em disco: TODOS seriam re-analisados na
+        proxima Chave 2. Ele pagaria duas vezes por 24 metas e por 431 artigos.
+
+   G2 · OS DELATORES CAPAVAM O TOTAL (notas_prototipo.py)
+        `contaminacao_incluidos` capava a NOTA INTEIRA em 5, por fora da ponderacao.
+        Um defeito de metodo anulava os outros cinco dominios. Agora cada delator vai
+        para o DOMINIO a que pertence:
+           contaminacao      -> vies_estudos (15%)
+           NI mal interpretada -> conclusoes (25%)
+           I2 alto sem investigar -> heterogeneidade (15%), onde ja estava
+        A soma volta a ser a soma.  5 → 7
+
+   G3 · A SOMATORIA E A NOTA, INTEIRA
+        Em 03/Ago o Dr. Eduardo mandou: "a nota da meta tem que ser SOMATORIA".
+        Eu tirei UM teto (desenho) e deixei TRES (NHLBI, validade externa, MCID) —
+        e ainda avisei que estava deixando, como se fosse prudencia. Nao era.
+        O MCID e justamente o teto que pune ESTUDO NEGATIVO, e nao tem lugar numa
+        regua de METODO: os 6 dominios medem como o trabalho foi FEITO, e metodo
+        nao tem sinal. Agora, na meta: aplic = somatoria. Ponto.
+
+   G4 · O INSTRUMENTO NAO SERVIA PARA O OBJETO — a IPD  (7 → 9)
+        "voce deu 7 para um artigo que e praticamente 10 - nao comemore - resolva"
+        Certo. A regua de 6 dominios foi desenhada para meta de dados AGREGADOS,
+        que nasce de busca na literatura. Uma IPD PRE-PLANEJADA nao busca base
+        nenhuma: os ensaios combinam juntar os dados ANTES de o resultado existir.
+        O sistema cobrava dela bases pesquisadas, funnel plot e heterogeneidade
+        clinica — tres coisas que numa IPD ou nao se aplicam ou sao a razao de ela
+        existir. Era o MESMO erro do dia (perguntar randomizacao a uma meta), um
+        degrau mais fundo.
+          busca            5 → 10   colaboracao prospectiva: "achar todos" e por desenho
+          vies_publicacao  7 → 10   ELIMINADO por construcao, nenhum funnel prova tanto
+          heterogeneidade  5 → 10   com dado de paciente da para testar interacao
+          vies_estudos     4 → 4    NAO muda: crossover em ensaio aberto e limitacao real
+        E o motor passou a ler `rob_ferramenta` do bloco da meta — antes so olhava o
+        qualidade_nhlbi e achava que ninguem tinha avaliado vies, com "RoB 2" escrito.
+
+   G5 · PERGUNTAS HIERARQUICAS (ordem do Dr. Eduardo, 05h)
+        "se e IPD > automaticamente pula para o proximo topico - porque ja bateu a
+         meta da qualidade neste topico - faca as perguntas hierarquicas"
+        Raiz do problema, e ele viu antes de mim: PERGUNTA QUE NAO SE APLICA PRODUZ
+        RESPOSTA QUE VIRA DEFEITO. Perguntaram a IPD "quantas bases?"; ela respondeu
+        "uma", honestamente; e o sistema leu como busca ruim.
+        O analise_meta_prompt.md virou ARVORE: cada topico comeca por uma
+        PERGUNTA-PORTEIRA, e se ela resolve, o topico e encerrado ali.
+           T1 busca ......... IPD/prospectiva? -> RESOLVIDO, pule
+           T2 vies public. .. IPD? -> nota maxima, pule · k<10? -> pule (Cochrane 13)
+           T3 heterogen. .... IPD? -> clinica nao e defeito, e o que ela examina
+           T4 vies estudos .. tem ferramenta formal? -> se nao, encerra mal
+        Economiza token E impede o modelo de inventar resposta para pergunta que
+        nao cabe.
+
+   MEDIDO, nos 9 fatos.json em disco, sem gastar 1 centavo:
+        betabloqueador ........ 5 → 9   (retido → publica com audio e visual)
+        JAMA Aspirin VTE ...... 7 → 9
+        EHJ Oral anticoag ..... 7 → 9
+        JAMA DAPT duration .... 7 → 8
+        J Card Fail MAP ....... 7 → 8
+        os outros 4 ........... sem mudanca
+        NENHUM desandou.
+
+   Travas novas no teste_motor: teste_ipd_nao_e_punida (12 checagens) —
+   inclusive que os dominios que NAO deviam mudar (pico, vies_estudos, conclusoes)
+   continuam iguais entre IPD e agregada: e instrumento certo, nao privilegio.
+
+Bateria: APROVADO. Todos os .py compilam.

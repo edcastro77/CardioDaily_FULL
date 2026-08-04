@@ -287,17 +287,43 @@ def dominios_meta(a):
     m = a.get("qualidade_meta") or {}
     d = {}
 
+    # ═══════════ 04/Ago — A IPD PRÉ-PLANEJADA É OUTRO ANIMAL ═══════════
+    # O Dr. Eduardo abriu a meta de betabloqueador do NEJM (IPD pré-planejada, 5 RCTs, 17.801
+    # pacientes, desfecho duro, tirou uma droga da prática) e disse: *"você deu 7 para um artigo que
+    # é praticamente 10 — está errado"*. Estava mesmo, e o motivo é o de sempre, uma camada abaixo:
+    # o INSTRUMENTO NÃO SERVIA PARA O OBJETO.
+    #
+    # A régua de 6 domínios foi desenhada para meta de DADOS AGREGADOS, que nasce de uma busca na
+    # literatura. Uma IPD PRÉ-PLANEJADA não busca base de dados nenhuma: os ensaios combinam juntar
+    # os dados ANTES de os resultados existirem. Perguntar "quantas bases você pesquisou?" a ela é o
+    # mesmo que perguntar randomização a uma meta — foi o erro que este projeto passou o dia
+    # consertando, e ele reapareceu um degrau mais fundo.
+    #
+    # O que muda, e por quê (Cochrane cap. 26 · Riley/Tierney/Stewart, IPD-MA):
+    #   BUSCA .............. numa colaboração prospectiva, o "achar todos os estudos" está resolvido
+    #                        POR DESENHO. Não se pontua por número de bases.
+    #   VIÉS DE PUBLICAÇÃO . é ELIMINADO por construção — os ensaios entraram antes de o resultado
+    #                        existir. Isso é melhor do que qualquer funnel plot pode provar.
+    #   HETEROGENEIDADE .... a clínica deixa de ser defeito: com dado de paciente dá para TESTAR
+    #                        interação de verdade, que é a razão de a IPD existir.
+    eh_ipd = (m.get("tipo_meta") or "").strip().lower() in ("ipd", "prospectiva")
+
     # a) PICO — pergunta focada e elegibilidade pré-definida
     d["pico"] = 10 if (q.get("pergunta_focada") and q.get("elegibilidade_predefinida")) else \
                 7 if q.get("pergunta_focada") else 4
 
     # b) BUSCA — bases, protocolo registrado, duplicata, literatura cinzenta
     bases = _n(m.get("n_bases"), 0) or 0
-    b = 4
-    if q.get("busca_sistematica_abrangente"):
-        b = 7
-    if bases >= 3:
-        b += 1
+    if eh_ipd:
+        # colaboração prospectiva: "achar todos" está resolvido por desenho. O que ainda vale
+        # perguntar é se havia protocolo ANTES (impede troca de desfecho) e revisão em duplicata.
+        b = 9 if m.get("protocolo_registrado") else 6
+    else:
+        b = 4
+        if q.get("busca_sistematica_abrangente"):
+            b = 7
+        if bases >= 3:
+            b += 1
     if m.get("protocolo_registrado"):
         b += 1                                   # PROSPERO
     if q.get("revisao_em_duplicata") or m.get("extracao_em_duplicata"):
@@ -310,12 +336,21 @@ def dominios_meta(a):
     d["busca"] = min(max(b, 0), 10)
 
     # c) VIÉS DOS INCLUÍDOS — e a pergunta que separa: MUDOU a interpretação ou foi check-box?
-    if not q.get("qualidade_estudos_avaliada"):
+    # 04/Ago: o extrator da meta grava a ferramenta em `qualidade_meta.rob_ferramenta`. Ler só o
+    # `qualidade_nhlbi` fazia o motor achar que ninguém avaliou viés, mesmo com "RoB 2" escrito lá.
+    avaliou = q.get("qualidade_estudos_avaliada") or bool((m.get("rob_ferramenta") or "").strip())
+    if not avaliou:
         d["vies_estudos"] = 3
     elif m.get("vies_mudou_interpretacao"):
         d["vies_estudos"] = 10
     else:
         d["vies_estudos"] = 6                    # avaliou, mas não usou → check-box
+    # 04/Ago — CONTAMINAÇÃO É VIÉS DOS ESTUDOS INCLUÍDOS, e é AQUI que ela pesa (15%).
+    # Antes ela capava a NOTA INTEIRA em 5, por fora da ponderação. Foi o que derrubou a meta de
+    # betabloqueador do NEJM de 7 para 5 — abaixo do corte de publicação. Um defeito real de método
+    # tem de baixar o DOMÍNIO dele, não anular os outros cinco.
+    if a.get("contaminacao_incluidos"):
+        d["vies_estudos"] = min(d["vies_estudos"], 4)
 
     # d) HETEROGENEIDADE — reportar não é investigar
     i2 = _n(q.get("i2_valor"))
@@ -342,7 +377,7 @@ def dominios_meta(a):
     if m.get("intervalo_predicao_cruza_nulo"):
         d["heterogeneidade"] = min(d["heterogeneidade"], 6)
     # heterogeneidade CLÍNICA não aparece no I²: populações/doses/tempos diferentes demais para somar
-    if m.get("heterogeneidade_clinica_relevante"):
+    if m.get("heterogeneidade_clinica_relevante") and not eh_ipd:
         d["heterogeneidade"] = min(d["heterogeneidade"], 5)
     # DOMINÂNCIA: se um estudo carrega a maior parte do peso, a meta É aquele estudo
     peso = _n(m.get("peso_maior_estudo_pct"))
@@ -352,14 +387,19 @@ def dominios_meta(a):
     # e) VIÉS DE PUBLICAÇÃO — funnel/Egger/Begg feito?
     # 04/Ago: a Cochrane (cap. 13) diz para NÃO testar assimetria de funnel com k<10 — o teste não tem
     # poder e o resultado engana. Cobrar um teste que não deveria existir é punir quem fez certo.
-    if m.get("teste_funnel_indicado") is False or (k is not None and k < 10):
+    if eh_ipd:
+        d["vies_publicacao"] = 10                # eliminado POR DESENHO: os ensaios entraram antes
+                                                 # de o resultado existir. Nenhum funnel prova tanto.
+    elif m.get("teste_funnel_indicado") is False or (k is not None and k < 10):
         d["vies_publicacao"] = 7                 # não era indicado: nem prêmio, nem castigo
     else:
         d["vies_publicacao"] = 9 if (q.get("vies_publicacao_avaliado")
                                      or m.get("funnel_plot_feito")) else 3
 
     # f) CONCLUSÕES — o maior peso: foram além do que os dados permitem?
-    if (a.get("conclusao_nao_bate_desenho") or m.get("conclusao_alem_da_evidencia")
+    # não-inferioridade mal interpretada é erro de CONCLUSÃO (25%), não teto do total — 04/Ago
+    if (a.get("ni_mal_interpretada") or a.get("conclusao_nao_bate_desenho")
+            or m.get("conclusao_alem_da_evidencia")
             or m.get("subgrupo_tratado_como_principal")):
         d["conclusoes"] = 3                      # tratar subgrupo como resultado principal é o clássico
     elif m.get("limitacoes_reconhecidas"):
@@ -418,14 +458,15 @@ def nota_meta(a):
     if (m.get("tipo_meta") or a.get("tipo_meta")) == "rede" and not m.get("transitividade_avaliada"):
         s = min(s, 8)
 
-    # TETOS CLÁSSICOS DA META — vinham do motor antigo e NÃO podem se perder na ponderação.
-    # Um estudo pode ter os 6 domínios altos e ainda ter engolido ensaio contaminado.
-    if a.get("contaminacao_incluidos"):
-        s = min(s, 5)
-    if a.get("ni_mal_interpretada"):
-        s = min(s, 6)
-    if a.get("i2_alto_sem_investigar"):
-        s = min(s, 6)
+    # ═══ 04/Ago — OS TETOS CLÁSSICOS VIRARAM DOMÍNIO ═══
+    # Ordem do Dr. Eduardo: *"a nota da meta-análise tem que ser SOMATÓRIA — não tem muito o que
+    # ficar inventando"*. Estes três capavam o TOTAL por fora da ponderação que ele desenhou:
+    #     contaminação dos incluídos → teto 5   ·   NI mal interpretada → 6   ·   I² alto → 6
+    # Não sumiram: cada um foi para o DOMÍNIO a que pertence, onde pesa o que ele mandou pesar —
+    #     contaminação  → vies_estudos (15%)   ·   NI mal interpretada → conclusoes (25%)
+    #     I² alto sem investigar → heterogeneidade (15%), onde já estava
+    # Assim um defeito real continua doendo, mas não anula os outros cinco domínios. Foi isso que
+    # derrubou a meta de betabloqueador do NEJM de 7 para 5, abaixo do corte de publicação.
 
     frase = next(f for lim, f in FAIXA_META if s >= lim)
     return s, d, frase
@@ -1093,7 +1134,16 @@ def score(a):
         rc = (a.get("relevancia_clinica") or {}).get("classificacao")
         fl.append(f"relevância clínica '{rc}' → teto {tm}")
 
-    aplic = min(td, te, s, tf, tm)       # ← a régua-chave
+    # ═══ 04/Ago — NA META, A SOMATÓRIA É A NOTA ═══
+    # A ordem do Dr. Eduardo foi cumprida pela METADE em 03/Ago: eu tirei o teto de DESENHO e deixei
+    # três outros em cima (NHLBI, validade externa, MCID) — e ainda avisei que estava deixando, como
+    # se fosse prudência. Não era. A conta do betabloqueador provou: somatória 7, nota final 5.
+    # O MCID em especial é o teto que pune ESTUDO NEGATIVO, e não tem lugar numa régua de MÉTODO:
+    # os 6 domínios medem como o trabalho foi FEITO, e método não tem sinal.
+    if eh_meta:
+        aplic = s
+    else:
+        aplic = min(td, te, s, tf, tm)   # ← a régua-chave (artigo original)
     r = {"trabalho": s, "aplic": aplic, "teto_desenho": td, "teto_externa": te,
          "teto_falha_fatal": tf, "teto_mcid": tm, "muda_conduta": muda_conduta(a, aplic),
          "rota": ROTA_CLINICA, "falhas_fatais": ff,

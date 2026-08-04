@@ -28,61 +28,124 @@ Referências deste instrumento: **PRISMA 2020** (BMJ 2021;372:n71 e n160), **Coc
 
 ---
 
-## O QUE PROCURAR, BLOCO A BLOCO
+## COMO PERGUNTAR: EM ÁRVORE, NÃO EM LISTA (04/Ago/2026)
 
-### 1 · QUE TIPO DE META É ESTA
-A hierarquia de confiança muda tudo. Meta de **dados individuais (IPD)** de RCTs é o topo; meta de
-observacionais heterogêneos é o chão. Diga qual é, sem suavizar.
+Ordem do Dr. Eduardo: *"se é IPD, automaticamente pula para o próximo tópico — porque já bateu a
+meta da qualidade neste tópico. Faça as perguntas hierárquicas."*
 
-### 2 · A BUSCA (PRISMA itens 6, 7, 8, 9)
-Quantas bases. Data em que a busca foi feita. Protocolo registrado ANTES (PROSPERO/registro) — é o que
-impede troca de desfecho depois de ver os dados. Seleção e extração feitas por DOIS revisores
-independentes. Restrição de idioma ou de tipo de publicação. Literatura cinzenta procurada.
-E o item que quase ninguém cumpre: **a lista dos estudos EXCLUÍDOS, com o motivo de cada um**.
+Ele está certo, e o motivo é mais forte do que economia de tempo: **pergunta que não se aplica
+PRODUZ resposta que vira defeito.** Foi exatamente o que aconteceu com a meta de betabloqueador do
+NEJM. Perguntaram a ela "quantas bases você pesquisou?"; ela respondeu "uma", honestamente — porque
+IPD pré-planejada não pesquisa base nenhuma, os ensaios combinam ANTES de o resultado existir. E o
+sistema leu aquele "uma" como busca ruim e cortou a nota de um trabalho que mudou a prática.
 
-### 3 · A ESTATÍSTICA (PRISMA 13, Cochrane cap. 10)
-Modelo fixo ou aleatório — e se a escolha combina com a heterogeneidade encontrada (modelo fixo com
-I² alto é erro). Medida de efeito (RR, OR, HR, MD, SMD): OR superestima quando o evento é comum.
+Então, em CADA tópico: faça a PERGUNTA-PORTEIRA primeiro. Se ela já resolve o tópico, PARE ALI e vá
+para o próximo. Só desça na árvore quando a porteira não resolver.
 
-**Heterogeneidade — o PRISMA 2020 pede TRÊS coisas, não uma:**
-- **I²** — é a PROPORÇÃO da variabilidade devida à heterogeneidade, não a QUANTIDADE dela. Com estudos
-  grandes o I² pode ser 90% e a diferença clínica ser irrelevante; com estudos pequenos pode ser 0% só
-  por falta de poder do teste.
-- **τ² (tau²)** — a variância entre estudos. É a quantidade de verdade.
-- **INTERVALO DE PREDIÇÃO** — responde a pergunta do clínico: "no meu próximo centro/paciente, que
-  efeito eu posso esperar?". É comum o IC 95% do efeito agregado excluir o nulo e o intervalo de
-  predição INCLUIR. Quando isso acontece, a meta é bem menos acionável do que o resumo sugere.
-  Se ele foi reportado, registre; e registre se cruza o nulo.
+---
 
-**Dominância:** se um único estudo carrega grande parte do peso, a meta É aquele estudo com um
-intervalo de confiança em volta. Registre o peso do maior estudo, se estiver reportado.
+## TÓPICO 0 · A PORTEIRA DE TUDO — QUE TIPO DE META É ESTA?
 
-**Unidade de análise:** ensaios em cluster, crossover ou de múltiplos braços contados duas vezes
-inflam o N e estreitam falsamente o IC.
+`tipo_meta` é OBRIGATÓRIO. Ele muda a régua inteira, não é etiqueta.
 
-### 4 · VIÉS DE PUBLICAÇÃO (Cochrane cap. 13)
-Funnel plot? Teste de Egger/Begg, com o p? **ATENÇÃO — a Cochrane diz para NÃO testar assimetria de
-funnel com menos de 10 estudos**: o teste não tem poder e o resultado engana. Se k < 10, registre que
-o teste não era indicado, em vez de cobrar um teste que não deveria existir.
+  `ipd` ......... dados INDIVIDUAIS de pacientes. Sinais: "individual patient/participant data",
+                  "IPD", "dados individuais", "patient-level", "pré-planejada", "prospectively
+                  planned", "collaborative meta-analysis", nome de consórcio de ensaios.
+  `prospectiva`.. colaboração prospectiva de ensaios, sem dado individual completo.
+  `rede` ........ network meta-analysis / comparações indiretas.
+  `dados_agregados` a meta clássica, a partir do que os artigos publicaram (o caso comum).
 
-### 5 · VIÉS DOS ESTUDOS INCLUÍDOS (AMSTAR-2, itens críticos)
-Qual ferramenta (RoB 2, ROBINS-I, Newcastle-Ottawa, Jadad). E a pergunta que separa a revisão séria da
-burocrática: **o risco de viés MUDOU a interpretação** (análise de sensibilidade só com estudos de
-baixo risco, rebaixamento da conclusão) ou foi preenchido e esquecido?
+Preencha também `desenhos_incluidos` (rcts | observacionais | mistos).
 
-### 6 · CERTEZA DA EVIDÊNCIA (PRISMA 15)
-GRADE foi usado? Qual a certeza para o desfecho PRIMÁRIO (alta/moderada/baixa/muito baixa)? Isto é
-diferente da qualidade da revisão: uma revisão impecável de evidência fraca continua sendo evidência
-fraca.
+---
 
-### 7 · AS CONCLUSÕES (o maior peso, 25%)
-Os autores foram além do que os dados permitem? Recomendaram conduta a partir de evidência frágil?
-Trataram um achado de subgrupo como se fosse o resultado principal? Reconheceram as limitações
-próprias, ou só as "dos estudos incluídos"?
+## TÓPICO 1 · BUSCA — "todos os estudos elegíveis entraram?"
 
-### 8 · HETEROGENEIDADE CLÍNICA (não é a estatística)
-Populações, doses, tempos de seguimento e definições de desfecho muito diferentes entre os estudos.
-Pode haver I² baixo e mesmo assim ser errado somar — "garbage in, garbage out" não aparece no I².
+**PORTEIRA:** `tipo_meta` é `ipd` ou `prospectiva`?
+
+  ▸ SIM → **TÓPICO RESOLVIDO. PULE.** Numa colaboração pré-planejada os ensaios entram ANTES de o
+    resultado existir: "achar todos" está garantido por desenho, e não há literatura escondida.
+    Responda apenas `protocolo_registrado` (havia protocolo antes?) e siga para o Tópico 2.
+    NÃO invente busca, NÃO force `n_bases`, NÃO cobre literatura cinzenta. Se o artigo disser que
+    não houve busca sistemática, registre honestamente — o motor sabe o que fazer com isso.
+
+  ▸ NÃO → desça a árvore da busca clássica (PRISMA 6–9):
+      quantas bases · data da busca · protocolo registrado ANTES (PROSPERO)
+      seleção e extração por DOIS revisores · restrição de idioma · literatura cinzenta
+      e o item que quase ninguém cumpre: **lista dos EXCLUÍDOS com o motivo de cada um**
+
+---
+
+## TÓPICO 2 · VIÉS DE PUBLICAÇÃO — "faltou estudo que existia?"
+
+**PORTEIRA 1:** `tipo_meta` é `ipd` ou `prospectiva`?
+  ▸ SIM → **RESOLVIDO, NOTA MÁXIMA. PULE.** O viés de publicação é eliminado POR CONSTRUÇÃO:
+    os ensaios entraram antes de o resultado ser conhecido. Nenhum funnel plot prova tanto.
+
+**PORTEIRA 2:** k < 10 estudos?
+  ▸ SIM → **PULE.** A Cochrane (cap. 13) diz para NÃO testar assimetria de funnel com menos de 10:
+    o teste não tem poder e o resultado engana. Marque `teste_funnel_indicado = false`.
+    Cobrar um teste que não deveria existir é punir quem fez certo.
+
+  ▸ NENHUMA das duas → funnel plot? Egger/Begg com o p? estudos negativos procurados?
+
+---
+
+## TÓPICO 3 · HETEROGENEIDADE — "faz sentido somar estes estudos?"
+
+**PORTEIRA:** `tipo_meta` é `ipd`?
+  ▸ SIM → a heterogeneidade clínica deixa de ser defeito: com dado de PACIENTE dá para testar
+    interação de verdade, e é para isso que a IPD existe. Registre I² e τ² se houver, e se testaram
+    interação. NÃO trate diferença de população/dose entre ensaios como falha.
+
+  ▸ NÃO → o PRISMA 2020 (item 13d) pede TRÊS coisas, não uma:
+      **I²** — é a PROPORÇÃO da variabilidade, não a QUANTIDADE. Com estudos grandes pode dar 90%
+              com diferença clínica irrelevante; com estudos pequenos pode dar 0% por falta de poder.
+      **τ²** — a variância entre estudos. É a quantidade de verdade.
+      **INTERVALO DE PREDIÇÃO** — "no meu próximo paciente, que efeito eu espero?". É comum o IC 95%
+              do agregado excluir o nulo e a predição INCLUIR. Aí a meta é bem menos acionável do
+              que o resumo sugere. Registre se foi reportado e se cruza o nulo.
+      **HETEROGENEIDADE CLÍNICA** — populações, doses, tempos e definições de desfecho diferentes
+              demais para somar. Não aparece no I²: "garbage in, garbage out" é invisível ali.
+
+**Em qualquer caso:** `peso_maior_estudo_pct`. Se um ensaio carrega grande parte do peso, a meta É
+aquele ensaio com um IC em volta. E `unidade_analise_problema`: cluster, crossover ou braço múltiplo
+contado duas vezes infla o N e estreita o IC falsamente.
+
+---
+
+## TÓPICO 4 · VIÉS DOS ESTUDOS INCLUÍDOS — "o lixo que entrou foi visto?"
+
+**PORTEIRA:** avaliaram risco de viés com ferramenta formal (RoB 2, ROBINS-I, Newcastle-Ottawa)?
+  ▸ NÃO → tópico encerrado, e mal: ninguém olhou o que entrou.
+  ▸ SIM → registre a ferramenta em `rob_ferramenta` e faça a pergunta que separa a revisão séria da
+    burocrática: **o risco de viés MUDOU a interpretação?** (análise de sensibilidade só com estudos
+    de baixo risco, conclusão rebaixada) — ou foi preenchido e esquecido?
+
+E sempre: `contaminacao_incluidos` — os ensaios incluídos tiveram crossover entre os braços
+(típico de ensaio aberto)? Isso dilui o efeito e é limitação real dos estudos, não da revisão.
+
+---
+
+## TÓPICO 5 · ESTATÍSTICA
+
+Modelo fixo ou aleatório — e **combina com a heterogeneidade encontrada?** (fixo com I² alto é erro).
+Medida de efeito (RR, OR, HR, MD, SMD): OR superestima quando o evento é comum.
+
+---
+
+## TÓPICO 6 · CERTEZA DA EVIDÊNCIA (PRISMA 15)
+
+GRADE foi usado? Qual a certeza do desfecho PRIMÁRIO? Isto é diferente da qualidade da revisão:
+uma revisão impecável de evidência fraca continua sendo evidência fraca.
+
+---
+
+## TÓPICO 7 · AS CONCLUSÕES (o maior peso, 25%)
+
+Foram além do que os dados permitem? Recomendaram conduta a partir de evidência frágil? Trataram
+achado de subgrupo como se fosse o resultado principal? Reconheceram as limitações PRÓPRIAS, ou só
+as "dos estudos incluídos"?
 
 ---
 
@@ -94,13 +157,38 @@ nunca têm o mesmo risco basal, e um NNT único aplicado a todos é uma média q
 nenhum. Só use se o próprio artigo o derivar de um risco basal declarado — e diga de qual.
 Se o IC 95% do efeito cruza o nulo, o NNT NÃO SE APLICA.
 
-## O RESULTADO NULO
+## O RESULTADO NULO — LEIA ISTO ANTES DE PREENCHER A RELEVÂNCIA CLÍNICA
 
-"Não achou efeito" e "achou efeito irrelevante" são OPOSTOS. Uma meta grande, com poder, cujo IC 95%
-EXCLUI um benefício clinicamente relevante, é uma RESPOSTA — e das mais valiosas que existem. Use
-`ausencia_de_efeito_demonstrada` nesse caso. Se o poder era insuficiente ou o IC ainda comporta
-benefício relevante, use `incerto`. Na dúvida, `incerto`: o motor confere as duas provas e rebaixa
-sozinho se elas não estiverem lá.
+Esta é a regra mais importante deste bloco, e é a que o CardioDaily errou até 04/Ago/2026.
+
+"O estudo não achou efeito" e "o estudo achou um efeito irrelevante" são coisas **OPOSTAS**.
+Uma meta-análise grande, com poder, cujo IC 95% **EXCLUI** um benefício clinicamente relevante, é uma
+RESPOSTA — e das mais valiosas que existem em medicina. Foi assim que a morfina de rotina, o oxigênio
+sem hipoxemia e o betabloqueador pós-IAM sem disfunção de VE saíram da prática clínica.
+
+SEPARE OS TRÊS CASOS, e preencha os campos que provam qual é:
+
+  `ausencia_de_efeito_demonstrada`
+      O estudo tinha PODER (declarado ou evidente pelo N e nº de eventos) E o IC 95% **exclui** um
+      benefício clinicamente relevante — mesmo no melhor cenário compatível com os dados, o efeito é
+      pequeno demais para importar.
+      → preencha `poder_ok = true`
+      → preencha `ic_exclui_beneficio_relevante = true`
+      EXEMPLO REAL: HR 0,97 (IC95% 0,87–1,07) · 17.801 pacientes randomizados · 5 RCTs · desfecho duro
+      composto · seguimento 3,6 anos. O IC é estreito e o limite mais favorável (0,87) já é modesto:
+      não cabe ali um benefício que mude conduta. Isto é `ausencia_de_efeito_demonstrada`.
+
+  `incerto`
+      Não achou efeito, MAS o poder era insuficiente OU o IC ainda comporta benefício relevante.
+      → `ic_exclui_beneficio_relevante = false`
+      EXEMPLO: HR 0,85 (IC95% 0,60–1,20) · 300 pacientes. Aqui a resposta honesta é "não sabemos".
+
+  `significativo_mas_abaixo_do_mcid` / `nao_relevante`
+      ACHOU efeito, e ele é pequeno demais para mudar a vida de alguém.
+
+NUNCA deixe `ic_exclui_beneficio_relevante` em branco quando o resultado for nulo — é justamente o
+campo que separa "provamos que não funciona" de "não conseguimos mostrar". Se o artigo não permitir
+decidir, aí sim `null`, e use `incerto`.
 
 ---
 
