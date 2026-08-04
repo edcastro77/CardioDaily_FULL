@@ -32,7 +32,7 @@ read -r -p "   Começar? [s/N]: " OK
 case "$OK" in s|S|sim|SIM) ;; *) echo "   Cancelado. Nada foi gasto e nada foi movido."; read -p "Enter. "; exit 0 ;; esac
 echo
 
-python "$CD_FULL/src/classificador_ouro.py" "$CD_INBOX"
+python -u "$CD_FULL/src/classificador_ouro.py" "$CD_INBOX"
 echo
 echo "✔ Classificados em: $CD_CLASSIFICADOS"
 echo "  Diário desta rodada: o _CLASSIFICACAO_*.csv em ARTIGOS/ — confira ANTES de rodar a Chave 2."

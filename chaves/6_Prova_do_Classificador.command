@@ -26,14 +26,14 @@ read -p "  Escolha [1/2/3/4]: " ESCOLHA
 echo
 
 case "$ESCOLHA" in
-  1) python3 src/prova_classificador.py --modelos gpt-5.6-luna --rodadas 1 ;;
-  2) python3 src/prova_classificador.py --max 12 --rodadas 3 ;;
-  3) python3 src/prova_classificador.py --rodadas 3 ;;
+  1) python3 -u src/prova_classificador.py --modelos gpt-5.6-luna --rodadas 1 ;;
+  2) python3 -u src/prova_classificador.py --max 12 --rodadas 3 ;;
+  3) python3 -u src/prova_classificador.py --rodadas 3 ;;
   4) echo "(pulando a rodada — só o placar)" ;;
   *) echo "Opção inválida. Nada foi feito."; read -p "Enter para fechar. "; exit 1 ;;
 esac
 
 echo
-python3 src/placar.py
+python3 -u src/placar.py
 echo
 read -p "Enter para fechar. "

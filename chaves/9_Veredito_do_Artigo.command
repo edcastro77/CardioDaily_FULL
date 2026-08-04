@@ -79,6 +79,6 @@ case "$PASTA_ALVO" in
 esac
 
 echo
-python3 src/veredito.py "$ALVO" --fatos $TIPO_ARG
+python3 -u src/veredito.py "$ALVO" --fatos $TIPO_ARG
 echo
 read -p "Enter para fechar. "

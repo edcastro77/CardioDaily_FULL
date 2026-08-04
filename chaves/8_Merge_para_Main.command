@@ -67,7 +67,7 @@ fi
 
 echo
 echo "PASSO 2/4 · PORTÃO — a prova do motor e a compilação de tudo"
-if ! python3 src/teste_motor.py; then
+if ! python3 -u src/teste_motor.py; then
   echo; echo "⛔ O MOTOR REPROVOU. A main NÃO vai receber nada."
   echo "   A lab ficou com o merge feito — conserte e rode a Chave 8 de novo."
   read -p "Enter para fechar. "; exit 1

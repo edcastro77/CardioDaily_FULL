@@ -72,7 +72,7 @@ read -r -p "  Rodar? [s/N]: " OK
 case "$OK" in s|S|sim|SIM) ;; *) echo "  Cancelado. Nada foi gasto."; read -p "Enter. "; exit 0 ;; esac
 echo
 
-eval "python3 src/prova_extracao.py $ALVOS"
+eval "python3 -u src/prova_extracao.py $ALVOS"
 
 echo
 echo "  O relatório em outputs/PROVA/ tem uma coluna vazia — 'quem acertou?'."

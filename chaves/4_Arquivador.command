@@ -5,9 +5,9 @@ echo "════════════════════════�
 echo " CHAVE 4 · ARQUIVADOR"
 echo " Staging: $CD_STAGING"
 echo "═══════════════════════════════════════"
-python "$CD_FULL/src/arquivador.py" "$CD_STAGING"            # dry-run: mostra o que arquivaria
+python -u "$CD_FULL/src/arquivador.py" "$CD_STAGING"            # dry-run: mostra o que arquivaria
 echo
 read -p "Enter para ARQUIVAR de verdade · Ctrl+C para cancelar. "
-python "$CD_FULL/src/arquivador.py" "$CD_STAGING" --arquivar
+python -u "$CD_FULL/src/arquivador.py" "$CD_STAGING" --arquivar
 echo
 read -p "✔ Arquivado. Enter para fechar. "

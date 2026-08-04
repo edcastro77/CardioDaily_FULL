@@ -269,3 +269,20 @@ G) O BETABLOQUEADOR: 5 → 7 → 9. E o que cada degrau ensinou.
    continuam iguais entre IPD e agregada: e instrumento certo, nao privilegio.
 
 Bateria: APROVADO. Todos os .py compilam.
+
+H) `python -u` NAS 12 CHAVES — o silencio que fez o Dr. Eduardo achar que travou
+
+   Quando o Python ve que a saida vai para um CANO (o tee do diario) e nao para a
+   tela, ele troca "linha por linha" por "acumula 4-8 KB e solta de uma vez". A
+   janela ficou PARADA enquanto 4 meta-analises eram processadas normalmente, e o
+   diario ficou com 0 bytes.
+
+   O agravante: eu JA tinha resolvido isso na Chave 11 com flush=True, vi o problema
+   com meus olhos, e nao varri as outras. Duas horas depois a Chave 2 repetiu.
+   E a LEI 9 — "a regra mora em varios blocos, varra todos" — que eu escrevi para o
+   codigo e nao apliquei a mim mesmo. Terceira vez no mesmo dia (flush, awk, buffer).
+
+   Varredura completa: -u em TODAS as 12 chaves que chamam python. Conferido: nao
+   sobrou nenhuma.
+
+Bateria: APROVADO. Todos os .py compilam. Sintaxe das 12 chaves ok.

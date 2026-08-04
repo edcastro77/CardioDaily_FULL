@@ -71,7 +71,13 @@ echo
 
 # ── 1) o analisador, com o diário ligado ──
 set -o pipefail
-python "$CD_FULL/src/rodar_em_blocos.py" "$CD_CLASSIFICADOS" --rampa $PASTA 2>&1 | tee -a "$DIARIO"
+# ⚠️ `python -u` (SEM BUFFER) — 04/Ago/2026, e a razão está escrita porque eu errei três vezes:
+#    Quando o Python vê que a saída vai para um CANO (o `tee` do diário) e não para a tela, ele muda
+#    de "solta linha por linha" para "acumula 4–8 KB e solta de uma vez". O Dr. Eduardo ficou olhando
+#    uma janela PARADA enquanto o sistema analisava meta-análises normalmente, e o diário ficou com
+#    0 bytes. Na Chave 11 eu já tinha resolvido isso com flush=True e NÃO varri as outras — o mesmo
+#    erro da LEI 9, cometido por mim, contra mim. O `-u` resolve para todas de uma vez.
+python -u "$CD_FULL/src/rodar_em_blocos.py" "$CD_CLASSIFICADOS" --rampa $PASTA 2>&1 | tee -a "$DIARIO"
 RC=${PIPESTATUS[0]}
 
 # ── TRAVA DE SAÍDA: só continua se o analisador terminou bem ──
@@ -99,7 +105,7 @@ if [ "$N_MINI" -gt 0 ] && [ -z "$PASTA" ]; then   # só na opção TUDO
   echo " Condutas práticas + fluxograma. NÃO sobe no Supabase (é standalone, como o Pesquisador)." | tee -a "$DIARIO"
   echo " Saída em: $CD_FULL/outputs/MINIRREVISOES/  ·  faixa 0 (vaselina) fica retida." | tee -a "$DIARIO"
   echo "═══════════════════════════════════════" | tee -a "$DIARIO"
-  python "$CD_FULL/src/minirevisao.py" "$CD_CLASSIFICADOS/MINIRREVISOES" 2>&1 | tee -a "$DIARIO"
+  python -u "$CD_FULL/src/minirevisao.py" "$CD_CLASSIFICADOS/MINIRREVISOES" 2>&1 | tee -a "$DIARIO"
 fi
 
 echo

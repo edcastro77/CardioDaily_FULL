@@ -13,6 +13,6 @@
 # ═══════════════════════════════════════════════════════════════════════════
 cd "$(dirname "$0")" && source ./config.sh && source "$CD_VENV/bin/activate"
 cd "$CD_FULL" || exit 1
-python3 src/checar_modelos.py
+python3 -u src/checar_modelos.py
 echo
 read -p "Enter para fechar. "
