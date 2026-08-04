@@ -16,6 +16,7 @@ import os
 import modelos as M
 
 _ULTIMO_MODELO = [None]   # observabilidade: quem respondeu por último
+_ULTIMO_USO = {}          # observabilidade: tokens/stop_reason da última chamada (o lab lê daqui)
 _USO_CTX = {"etapa": "?", "artigo": "?"}   # quem chamou seta isto antes de gerar (p/ o log saber a etapa/artigo)
 
 
@@ -57,6 +58,7 @@ def _registrar_uso(r, modelo):
             "thinking": getattr(d, "thinking_tokens", None) if d else None,
             "stop_reason": stop,                              # "max_tokens" (Anthropic) / "length" (OpenAI) = truncou
         }
+        _ULTIMO_USO.clear(); _ULTIMO_USO.update(linha)   # o lab de prova lê os tokens daqui
         caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "outputs", "uso.jsonl")
         with open(caminho, "a", encoding="utf-8") as f:
             f.write(json.dumps(linha, ensure_ascii=False) + "\n")
@@ -97,44 +99,148 @@ def _transitorio(e):
                                 "rate limit", "429", "500", "502", "503", "504", "temporarily"))
 
 
-def gerar_json(chain, instrucao, schema, contexto=None, max_tokens=8000, nome="extrair"):
-    """Devolve DICT — não texto. Usa TOOL USE (saída estruturada): a API OBRIGA o modelo a entregar
-    o objeto no formato do schema. JSON malformado (vírgula sobrando, caractere de controle, preâmbulo,
-    comentário) deixa de ser POSSÍVEL — não é reparo, é impossibilidade. Mata a classe inteira de falha.
+_ULTIMO_MODO = [None]   # observabilidade: COMO o último JSON foi obtido (tool_use / function / responseSchema)
 
-    Fallback: se um provedor não suportar tool use, cai no caminho de texto + parsing tolerante.
+
+def _schema_para_gemini(s):
+    """O `responseSchema` do Google é OpenAPI, não JSON Schema puro: ele NÃO aceita `type` como lista.
+    Nossos schemas usam `{"type": ["number", "null"]}` para distinguir os TRÊS estados do NHLBI
+    (true=fez · false=não fez · null=NÃO REPORTA) — e essa distinção é o coração do rigor, não pode
+    ser perdida na conversão. Aqui a lista vira `type` + `nullable`, recursivamente."""
+    if isinstance(s, list):
+        return [_schema_para_gemini(x) for x in s]
+    if not isinstance(s, dict):
+        return s
+    out = {}
+    for k, v in s.items():
+        if k == "type" and isinstance(v, list):
+            reais = [t for t in v if t != "null"]
+            out["type"] = reais[0] if reais else "string"
+            if "null" in v:
+                out["nullable"] = True
+        elif k in ("properties", "items"):
+            out[k] = _schema_para_gemini(v)
+        elif k == "additionalProperties":
+            continue                                   # o Google rejeita
+        else:
+            out[k] = _schema_para_gemini(v) if isinstance(v, (dict, list)) else v
+    return out
+
+
+def _json_anthropic(mod, instrucao, schema, contexto, max_tokens, nome):
+    import anthropic
+    cli = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    if contexto:
+        content = [{"type": "text", "text": contexto, "cache_control": {"type": "ephemeral"}},
+                   {"type": "text", "text": instrucao}]
+    else:
+        content = instrucao
+    r = cli.messages.create(
+        model=mod, max_tokens=max_tokens,
+        tools=[{"name": nome, "description": "Devolve os dados estruturados pedidos.",
+                "input_schema": schema}],
+        tool_choice={"type": "tool", "name": nome},   # OBRIGA o uso da ferramenta
+        messages=[{"role": "user", "content": content}])
+    _registrar_uso(r, mod)
+    for b in r.content:
+        if getattr(b, "type", "") == "tool_use":
+            _ULTIMO_MODO[0] = "tool_use"
+            return b.input                            # já é dict validado pelo schema
+    raise RuntimeError("modelo não devolveu tool_use")
+
+
+def _json_openai(mod, instrucao, schema, contexto, max_tokens, nome):
+    """OpenAI chama de FUNCTION CALLING — é a mesma coisa que o tool use da Anthropic, com outro nome.
+    Escolhido em vez do `response_format: json_schema` porque o modo `strict` exige que TODA propriedade
+    esteja em `required` e `additionalProperties: false` em todo objeto; nossos schemas de FATOS não são
+    assim (campo que o artigo não reporta fica de fora de propósito), e o strict recusaria o schema."""
+    import json
+    from openai import OpenAI
+    cli = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
+    texto = (contexto + "\n\n" + instrucao) if contexto else instrucao
+    r = cli.chat.completions.create(
+        model=mod, max_completion_tokens=max_tokens,
+        messages=[{"role": "user", "content": texto}],
+        tools=[{"type": "function",
+                "function": {"name": nome, "description": "Devolve os dados estruturados pedidos.",
+                             "parameters": schema}}],
+        tool_choice={"type": "function", "function": {"name": nome}})   # OBRIGA
+    _registrar_uso(r, mod)
+    for tc in (r.choices[0].message.tool_calls or []):
+        _ULTIMO_MODO[0] = "function_calling"
+        return json.loads(tc.function.arguments)
+    raise RuntimeError("modelo não devolveu function_call")
+
+
+def _json_gemini(mod, instrucao, schema, contexto, max_tokens, nome):
+    """Google chama de responseSchema + response_mime_type. Se o schema for recusado (o dialeto é mais
+    estreito), cai para JSON MODE sem schema — que ainda garante JSON sintaticamente válido, e é
+    incomparavelmente melhor que pedir JSON em prosa e torcer."""
+    import json
+    from google import genai
+    from google.genai import types
+    cli = genai.Client(api_key=os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", ""))
+    texto = (contexto + "\n\n" + instrucao) if contexto else instrucao
+    for cfg, modo in ((types.GenerateContentConfig(max_output_tokens=max_tokens,
+                                                   response_mime_type="application/json",
+                                                   response_schema=_schema_para_gemini(schema)),
+                       "responseSchema"),
+                      (types.GenerateContentConfig(max_output_tokens=max_tokens,
+                                                   response_mime_type="application/json"),
+                       "json_mode(sem schema)")):
+        try:
+            r = cli.models.generate_content(model=mod, contents=texto, config=cfg)
+            _registrar_uso(r, mod)
+            _ULTIMO_MODO[0] = modo
+            return json.loads(r.text)
+        except Exception as e:
+            if modo.startswith("responseSchema") and not _transitorio(e):
+                continue                               # schema recusado → tenta json mode puro
+            raise
+
+
+_JSON_POR_PROVEDOR = {"anthropic": _json_anthropic, "openai": _json_openai, "google": _json_gemini}
+
+
+def gerar_json(chain, instrucao, schema, contexto=None, max_tokens=8000, nome="extrair"):
+    """Devolve DICT — não texto. SAÍDA ESTRUTURADA: a API OBRIGA o modelo a entregar o objeto no
+    formato do schema. JSON malformado (vírgula sobrando, caractere de controle, preâmbulo, comentário)
+    deixa de ser POSSÍVEL — não é reparo, é impossibilidade. Mata a classe inteira de falha.
+
+    ═══ 03/Ago/2026 — O FALLBACK ERA MAIS FRACO QUE O PRIMÁRIO, E ISSO NÃO ESTAVA ESCRITO ═══
+
+    Até hoje esta função tinha `if M.provedor(mod) != "anthropic": continue`. O terra e o gemini eram
+    PULADOS. Na prática: quando a Anthropic caía, a extração desabava para o modo texto — pedir JSON
+    em prosa e torcer, que é EXATAMENTE o mecanismo que derrubou 74% da rodada de 25/07 e que a saída
+    estruturada veio matar. A cadeia dizia ter fallback cross-provider; para a extração, não tinha.
+
+    E impedia a medição: comparar o sonnet (com schema imposto pela API) contra o terra (sem) é uma
+    luta arranjada — o sonnet ganharia por construção, e o número pareceria medição sendo armadilha.
+
+    As três casas fazem a mesma coisa com nome diferente:
+        Anthropic → tool use          (input_schema + tool_choice forçado)
+        OpenAI    → function calling  (parameters + tool_choice forçado)
+        Google    → responseSchema    (+ response_mime_type=application/json)
+
+    Agora os três têm saída estruturada de verdade, e `_ULTIMO_MODO` registra qual caminho foi usado —
+    porque "o gemini caiu para json mode sem schema" é um fato que o instrumento tem de contar.
     """
     erros = []
     for mod in chain:
-        if M.provedor(mod) != "anthropic":          # tool use implementado p/ Anthropic; outros → texto
+        fn = _JSON_POR_PROVEDOR.get(M.provedor(mod))
+        if fn is None:
+            erros.append(f"{mod}: provedor desconhecido")
             continue
         for tentativa in (1, 2, 3):                  # retry com espera crescente (rede/429/sobrecarga)
             try:
-                import anthropic
-                cli = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-                if contexto:
-                    content = [{"type": "text", "text": contexto, "cache_control": {"type": "ephemeral"}},
-                               {"type": "text", "text": instrucao}]
-                else:
-                    content = instrucao
-                r = cli.messages.create(
-                    model=mod, max_tokens=max_tokens,
-                    tools=[{"name": nome, "description": "Devolve os dados estruturados pedidos.",
-                            "input_schema": schema}],
-                    tool_choice={"type": "tool", "name": nome},   # OBRIGA o uso da ferramenta
-                    messages=[{"role": "user", "content": content}])
-                _registrar_uso(r, mod)
-                for b in r.content:
-                    if getattr(b, "type", "") == "tool_use":
-                        _ULTIMO_MODELO[0] = mod
-                        return b.input                            # já é dict validado pelo schema
-                raise RuntimeError("modelo não devolveu tool_use")
+                _ULTIMO_MODELO[0] = mod
+                return fn(mod, instrucao, schema, contexto, max_tokens, nome)
             except Exception as e:
                 if _transitorio(e) and tentativa < 3:
                     import time; time.sleep(5 * tentativa); continue
                 erros.append(f"{mod}: {type(e).__name__}: {str(e)[:120]}")
                 break
-    raise RuntimeError("gerar_json falhou em toda a cadeia:\n  " + "\n  ".join(erros or ["sem modelo Anthropic na cadeia"]))
+    raise RuntimeError("gerar_json falhou em toda a cadeia:\n  " + "\n  ".join(erros or ["cadeia vazia"]))
 
 
 def _anthropic(mod, instrucao, contexto, max_tokens, temperatura):

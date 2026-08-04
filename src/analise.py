@@ -255,7 +255,7 @@ def _parse_json_tolerante(raw):
     return None
 
 
-def extrair_fatos(pdf_path, tipo=None):
+def extrair_fatos(pdf_path, tipo=None, cadeia=None):
     """FATOS do artigo via SAÍDA ESTRUTURADA (tool use): a API obriga o modelo a devolver o objeto
     no formato do SCHEMA_FATOS. JSON malformado / campo faltando deixa de ser possível — é a correção
     ESTRUTURAL da causa que derrubou 74% do run de 25/07 (antes: pedia JSON em texto e torcia).
@@ -291,14 +291,19 @@ def extrair_fatos(pdf_path, tipo=None):
     else:
         modelo, esquema = PROMPT, SCHEMA_FATOS
     prompt = modelo.replace("{article_text}", texto)
+    # `cadeia` — 03/Ago: só a PROVA usa (prova_extracao.py força UM modelo por vez para medir).
+    # Em produção fica None e vale a M.EXTRACAO. O lab não pode ter caminho próprio: se ele medisse
+    # um código diferente do que roda, mediria outra coisa — foi o buraco do `prova_classificador`,
+    # que media só o LLM enquanto a produção decidia nas camadas de cima.
+    cad = cadeia or M.EXTRACAO
     try:
-        return llm_client.gerar_json(M.EXTRACAO, prompt, esquema,
+        return llm_client.gerar_json(cad, prompt, esquema,
                                      max_tokens=8000, nome="extrair_fatos")
     except Exception as e:
         print(f"       ↻ saída estruturada indisponível ({type(e).__name__}); tentando modo texto…")
     ultimo = ""
     for tentativa in (1, 2):
-        raw = llm_client.gerar(M.EXTRACAO, prompt, max_tokens=8000, temperatura=0).strip()
+        raw = llm_client.gerar(cad, prompt, max_tokens=8000, temperatura=0).strip()
         dados = _parse_json_tolerante(raw)
         if dados is not None:
             return dados

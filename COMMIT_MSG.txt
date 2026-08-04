@@ -1,36 +1,56 @@
-Auditoria das chaves: o erro fatidico do reuso + 4 buracos operacionais
+Saida estruturada nos 3 provedores + PROVA DA EXTRACAO (a etapa nunca medida)
 
-O #34 (a pasta manda) estava certo e mesmo assim o erro voltou. A causa nao
-estava no analisador — estava no laco de blocos:
+O Dr. Eduardo mandou parar e repensar a analise. Mapeando a corrente, apareceu
+que cada artigo dispara 6 chamadas de LLM e SO UMA delas foi medida (o redator,
+01/Ago). A etapa que JULGA — a extracao — nunca foi comparada com ninguem.
 
-    if os.path.exists(pasta + "/_OK"): reusa; continue   # nunca chama processar()
+    PDF --[extracao]--> FATOS --[motor]--> NOTA --> publica? visual? audio?
+                                            +----> entra DENTRO do prompt do redator
 
-A pasta do staging e indexada pelo NOME DO ARQUIVO, nao pela pasta de origem.
-Mover o PDF de META_ANALISES para REVISOES nao mudava nada: o _OK continuava
-la e a analise VELHA era republicada. A correcao manual do Dr. Eduardo ia para
-o lixo num `continue` — que tambem pulava as tres travas que moram DENTRO de
-processar(): a checagem de tipo no cache, o apagamento dos derivados e a LEI 8.
+Se a extracao le errado, artigo bom leva 5 e some. Ultima rodada: 122 analisados,
+75 recusados. Pode ser o sistema funcionando. Ninguem sabe, porque ninguem mediu.
 
-Segunda camada do mesmo buraco: _staging_atual(), escrita em 27/Jul contra
-exatamente isto ("254 de 268 _OK eram de schema velho e furavam os consertos
-por reuso"), estava DEFINIDA E NUNCA ERA CHAMADA. Codigo morto.
+1. BURACO ACHADO ANTES DE MEDIR — o gerar_json tinha:
+       if M.provedor(mod) != "anthropic": continue
+   O terra e o gemini eram PULADOS. Quando a Anthropic caia, a extracao desabava
+   para "peca JSON em prosa e torca" — o mesmo mecanismo que derrubou 74% da
+   rodada de 25/07 e que a saida estruturada veio matar. A cadeia dizia ter
+   fallback cross-provider; para a extracao, nao tinha. E impedia a medicao:
+   comparar sonnet (com schema imposto) contra terra (sem) e luta arranjada.
 
-  1. rodar_em_blocos: _staging_serve() — so reusa se o tipo gravado nos fatos
-     bater com a pasta de HOJE e o schema daquele tipo estiver presente.
-     Staging sem `tipo_documento` = feito antes de 03/Ago = nao serve.
-     Quando recusa, diz na tela POR QUE.
-  2. rodar_em_blocos: PDF fora de pasta de tipo NAO ENTRA na fila (LEI 8) —
-     antes virava 'original' calado, com motor e prompt no chute.
-  3. rodar_em_blocos: codigo de saida passa a valer (1 se houve falha, 130 no
-     Ctrl+C) + lista das falhas no fim, que antes rolavam a tela e sumiam.
-  4. Chave 2: TRAVA DE SAIDA — o minirevisao.py so roda se o analisador
-     terminar bem. Antes um Ctrl+C caia direto em mais 81 artigos pagos.
-     Era o "eu interrompi e ele nao para".
-  5. Chaves 1 e 2: mostram fila + custo estimado e pedem [s/N] antes de gastar.
-     Eram as duas unicas que gastavam dinheiro sem perguntar nada.
-  6. Chave 2: DIARIO em outputs/LOGS/chave2_*.log. So imprimia na janela, e
-     quando a janela fechava a prova ia junto.
-  7. teste_motor: teste_reuso_de_staging (16 combinacoes de pasta cruzada) e
-     teste_pdf_sem_pasta_nao_entra — travas puras, sem LLM e sem rede.
+   As tres casas fazem a mesma coisa com nome diferente. Implementados os tres:
+     Anthropic -> tool use         (ja existia)
+     OpenAI    -> function calling (parameters + tool_choice forcado)
+     Google    -> responseSchema   (+ response_mime_type=application/json)
+   _ULTIMO_MODO registra qual caminho cada chamada usou — "o gemini caiu para
+   json mode sem schema" e um fato que o instrumento tem de contar.
+
+   _schema_para_gemini: o dialeto do Google nao aceita `type` em lista. Nossos
+   FATOS usam ["boolean","null"] para os TRES estados do NHLBI (fez / nao fez /
+   NAO REPORTA). A conversao vira type+nullable e PRESERVA o null — perder isso
+   apagaria a diferenca entre "nao cegou" e "nao conta se cegou": meia nota.
+
+2. prova_extracao.py — o lab. Mesmo PDF, 3 modelos, e cada extracao passa pelo
+   MESMO motor deterministico. O motor e a REGUA COMUM: nao se compara JSON
+   campo a campo (chato e nao responde nada), compara-se a DECISAO que cada
+   leitura produz. Depois mostra SO os campos que divergiram, com coluna vazia
+   para o Dr. Eduardo marcar quem leu certo — o unico gabarito possivel.
+   Nao move arquivo, nao publica, nao fala com o Supabase.
+
+3. analise.extrair_fatos ganha `cadeia=` (so a prova usa). O lab roda o MESMO
+   codigo da producao — se medisse caminho proprio, mediria outra coisa: foi o
+   buraco do prova_classificador, que media so o LLM enquanto a producao decidia
+   nas camadas de cima.
+
+4. Chave 11 · Prova da Extracao — mostra custo e pede [s/N] antes de gastar.
+
+5. teste_motor: teste_schema_do_google — trava pura sobre os 3 schemas reais,
+   garantindo que nenhum `type` sobra em lista e que nenhuma propriedade se perde.
+
+CORRECAO DE ERRO MEU, registrada: eu disse que as diretrizes seriam truncadas
+porque o GUIDELINE_LONGO nao e chamado. ERRADO. O corte de 40k caiu em 01/Ago;
+hoje o redator tem teto de 1.200.000 chars e a diretriz da SBC (246.528 tokens
+~ 985k chars) cabe inteira — o proprio comparativo do Dr. Eduardo prova. O que
+sobra e menor: a EXTRACAO corta em 600.000 chars, com aviso na tela.
 
 Bateria: APROVADO. Todos os .py compilam.

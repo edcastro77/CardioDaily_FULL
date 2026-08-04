@@ -228,6 +228,54 @@ def teste_pdf_sem_pasta_nao_entra():
               any("PASTA_INVENTADA" in f for f in fora))
 
 
+# ══════════════ N+2 · O NULL DO NHLBI SOBREVIVE À CONVERSÃO P/ O GOOGLE (03/Ago) ══════════════
+def teste_schema_do_google():
+    """O `responseSchema` do Google é OpenAPI, não JSON Schema: não aceita `type` como lista.
+    Nossos FATOS usam `["boolean","null"]` para separar os TRÊS estados do NHLBI —
+    true=fez · false=NÃO fez · null=NÃO REPORTA. Perder o null na conversão apagaria a diferença
+    entre "o estudo não cegou" e "o estudo não conta se cegou", que é meia nota de rigor.
+    Função pura: sem rede, sem LLM."""
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import llm_client as L
+    import analise as A
+
+    conv = L._schema_para_gemini
+    checa("google: [boolean,null] vira nullable",
+          conv({"type": ["boolean", "null"]}) == {"type": "boolean", "nullable": True})
+    checa("google: [number,null] vira nullable",
+          conv({"type": ["number", "null"]}) == {"type": "number", "nullable": True})
+    checa("google: [integer,null] vira nullable",
+          conv({"type": ["integer", "null"]}) == {"type": "integer", "nullable": True})
+    checa("google: tipo simples não é mexido", conv({"type": "string"}) == {"type": "string"})
+    checa("google: additionalProperties é removido",
+          "additionalProperties" not in conv({"type": "object", "additionalProperties": False}))
+    checa("google: enum sobrevive",
+          conv({"type": "string", "enum": ["a", "b"]}).get("enum") == ["a", "b"])
+
+    # e agora nos SCHEMAS DE VERDADE: nenhum `type` pode continuar sendo lista em lugar nenhum
+    def varre(s, caminho=""):
+        ruins = []
+        if isinstance(s, dict):
+            if isinstance(s.get("type"), list):
+                ruins.append(caminho or "<raiz>")
+            for k, v in s.items():
+                ruins += varre(v, f"{caminho}.{k}" if caminho else k)
+        elif isinstance(s, list):
+            for i, v in enumerate(s):
+                ruins += varre(v, f"{caminho}[{i}]")
+        return ruins
+
+    for nome in ("SCHEMA_FATOS", "SCHEMA_FATOS_DIRETRIZ", "SCHEMA_FATOS_REVISAO"):
+        original = getattr(A, nome)
+        ruins = varre(conv(original))
+        checa(f"google: {nome} sem `type` em lista após conversão", not ruins,
+              f"sobrou em {ruins[:4]}")
+        # e a conversão NÃO pode perder campo: mesmo número de propriedades no topo
+        checa(f"google: {nome} não perde propriedades",
+              len(conv(original).get("properties", {})) == len(original.get("properties", {})))
+
+
 # ══════════════ 3 · FALHAS FATAIS REPROVAM (não descontam) ══════════════
 def teste_falhas_fatais():
     for f in N.FALHAS_FATAIS:
@@ -875,6 +923,7 @@ if __name__ == "__main__":
               teste_revisao_atualidade, teste_revisao_contrato_e_silencio,
               teste_os_quatro_motores_nao_se_misturam, teste_veredito_aberto, teste_mapa_pubmed,
               teste_a_pasta_manda, teste_reuso_de_staging, teste_pdf_sem_pasta_nao_entra,
+              teste_schema_do_google,
               teste_gabarito_dos_artigos, teste_contrato_de_saida]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:
