@@ -286,3 +286,43 @@ H) `python -u` NAS 12 CHAVES — o silencio que fez o Dr. Eduardo achar que trav
    sobrou nenhuma.
 
 Bateria: APROVADO. Todos os .py compilam. Sintaxe das 12 chaves ok.
+
+I) CARIMBO DE PROMPT + TERRA ARRASADA (04/Ago, 05h30)
+
+   Pergunta do Dr. Eduardo: "ele esta aproveitando um monte de coisas que ja
+   tinham sido feitas — POR QUAL PROMPT?"
+
+   Resposta medida: NINGUEM SABIA. Existiam TRES niveis de reaproveitamento
+     1. o pacote inteiro  (rodar_em_blocos: "reusado (staging pronto)")
+     2. os FATOS          (analisador: "fatos reaproveitados — nao re-extrai")
+     3. cada PECA         (ACRI, pericia, PDF, visual, audio, gancho)
+   e NENHUM registrava a versao do prompt. Nos 37 campos do fatos.json nao havia
+   um unico campo de versao.
+
+   O estrago possivel, medido: o prompt da meta mudou TRES vezes nesta madrugada
+   (arvore de porteiras, regra do nulo, tipo_meta obrigatorio). Um staging feito
+   as 03h seria reaproveitado as 05h como se fosse novo, e o conserto nao pegaria
+   — em silencio. Mesma classe do _OK de 27/Jul e do reuso que ignorava a pasta
+   em 03/Ago.
+
+   ORDEM DELE, e e mais simples e mais segura do que o que eu estava fazendo
+   (refazer peca por peca):
+     "se nao tem certeza que foi com ESTE prompt, tem que apagar TUDO - tudo,
+      tudo - que tiver deste artigo no sistema e comecar do zero"
+
+   REAPROVEITAMENTO PARCIAL FOI O QUE SANGROU ESTE PROJETO A NOITE INTEIRA:
+   sobra uma peca velha, ela e internamente coerente, ninguem percebe.
+
+   · analisador.hash_prompt()   sha1[:12] do CONTEUDO de cada prompt
+   · analisador.versoes_atuais() carimbo dos 5 prompts que servem aquele tipo
+   · cada pacote grava `_versoes.json` junto do _OK
+   · processar(): TERRA ARRASADA no topo — carimbo diferente (ou ausente) apaga a
+     pasta INTEIRA antes de ler qualquer cache
+   · _staging_serve(): o carimbo virou o PRIMEIRO portao, antes do tipo e do schema
+   · analise.PROMPT_ARQ_POR_TIPO: o mapa tipo→arquivo, para o hash saber o que ler
+
+   MEDIDO agora: os 11 pacotes no STAGING → TODOS "🔥 APAGA e refaz",
+   com o motivo "sem carimbo de prompt (staging anterior a 04/Ago)".
+   Custa uma re-analise, uma vez so, e e de proposito.
+
+Bateria: APROVADO. Todos os .py compilam. Sintaxe das 12 chaves ok.

@@ -164,8 +164,10 @@ def teste_reuso_de_staging():
              "diretriz": "GUIDELINES", "revisao_narrativa": "REVISOES"}
 
     with tempfile.TemporaryDirectory() as tmp:
-        def montar(tipo_gravado, com_ok=True, com_schema=True):
-            d = os.path.join(tmp, f"art_{tipo_gravado}_{com_ok}_{com_schema}")
+        import analisador as AN
+
+        def montar(tipo_gravado, com_ok=True, com_schema=True, com_carimbo=True, pasta_do_pdf=None):
+            d = os.path.join(tmp, f"art_{tipo_gravado}_{com_ok}_{com_schema}_{com_carimbo}")
             os.makedirs(d, exist_ok=True)
             f = {}
             if tipo_gravado is not None:
@@ -175,13 +177,20 @@ def teste_reuso_de_staging():
             json.dump(f, open(os.path.join(d, "art_fatos.json"), "w"))
             if com_ok:
                 open(os.path.join(d, "_OK"), "w").write("")
+            # 04/Ago — o CARIMBO DO PROMPT virou o primeiro portão do reuso. Um staging de mentira
+            # sem `_versoes.json` é, com razão, recusado: é exatamente o caso "staging anterior a
+            # 04/Ago, prompt desconhecido". Este teste mede a regra do TIPO, então carimba certo.
+            if com_carimbo:
+                alvo = pasta_do_pdf or (pdf(tipo_gravado) if tipo_gravado else pdf("original"))
+                json.dump(AN.versoes_atuais(alvo),
+                          open(os.path.join(d, "_versoes.json"), "w", encoding="utf-8"))
             return d
 
         pdf = lambda tipo: f"/x/CLASSIFICADOS/{PASTA[tipo]}/art.pdf"
 
         # 1) MESMO tipo + schema presente → reusa (senão a retomada morre e tudo vira dinheiro queimado)
         for t in SCHEMA:
-            serve, _ = R._staging_serve(montar(t), pdf(t))
+            serve, _ = R._staging_serve(montar(t, pasta_do_pdf=pdf(t)), pdf(t))
             checa(f"reuso: staging '{t}' na pasta '{PASTA[t]}' PODE ser reusado", serve)
 
         # 2) o Dr. Eduardo MOVEU o artigo: toda combinação cruzada tem de RECUSAR o reuso
@@ -189,20 +198,33 @@ def teste_reuso_de_staging():
             for agora in SCHEMA:
                 if gravado == agora:
                     continue
-                serve, _ = R._staging_serve(montar(gravado), pdf(agora))
+                serve, _ = R._staging_serve(montar(gravado, pasta_do_pdf=pdf(agora)), pdf(agora))
                 checa(f"reuso: staging '{gravado}' NÃO pode ser reusado na pasta '{PASTA[agora]}'",
                       not serve, "é o erro fatídico de 03/Ago voltando")
 
         # 3) staging ANTIGO (sem o campo tipo_documento) = feito pela corrente quebrada → nunca reusa
         for agora in SCHEMA:
-            serve, _ = R._staging_serve(montar(None), pdf(agora))
+            serve, _ = R._staging_serve(montar(None, pasta_do_pdf=pdf(agora)), pdf(agora))
             checa(f"reuso: staging pré-03/Ago não serve para '{PASTA[agora]}'", not serve)
+
+        # 4b) O CARIMBO DO PROMPT (04/Ago) — *"se não tem certeza que foi com ESTE prompt, apaga
+        #     TUDO e começa do zero"*. Sem `_versoes.json` = staging anterior a 04/Ago = não serve.
+        for t2 in SCHEMA:
+            serve, pq = R._staging_serve(montar(t2, com_carimbo=False, pasta_do_pdf=pdf(t2)), pdf(t2))
+            checa(f"reuso: staging SEM carimbo de prompt não serve ({t2})", not serve, pq)
+        # carimbo de OUTRO prompt (simulado trocando um hash) também não serve
+        d_falso = montar("meta", pasta_do_pdf=pdf("meta"))
+        v = json.load(open(os.path.join(d_falso, "_versoes.json")))
+        v["redator"] = "redator_meta_prompt.md@0000deadbeef"
+        json.dump(v, open(os.path.join(d_falso, "_versoes.json"), "w"))
+        serve, pq = R._staging_serve(d_falso, pdf("meta"))
+        checa("reuso: carimbo com hash DIFERENTE não serve", not serve, pq)
 
         # 4) sem _OK nunca reusa · sem o schema do tipo nunca reusa (a _staging_atual de 27/Jul, viva)
         for t in SCHEMA:
-            serve, _ = R._staging_serve(montar(t, com_ok=False), pdf(t))
+            serve, _ = R._staging_serve(montar(t, com_ok=False, pasta_do_pdf=pdf(t)), pdf(t))
             checa(f"reuso: sem _OK não reusa ({t})", not serve)
-            serve, _ = R._staging_serve(montar(t, com_schema=False), pdf(t))
+            serve, _ = R._staging_serve(montar(t, com_schema=False, pasta_do_pdf=pdf(t)), pdf(t))
             checa(f"reuso: sem o schema de '{t}' não reusa", not serve)
 
 

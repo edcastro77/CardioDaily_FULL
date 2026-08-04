@@ -81,6 +81,49 @@ _TIPO_POR_PASTA = {
 }
 
 
+# ═══════════ CARIMBO DE VERSÃO DO PROMPT — 04/Ago/2026 ═══════════
+# Pergunta do Dr. Eduardo: *"ele está aproveitando um monte de coisas que já tinham sido feitas —
+# por qual prompt?"*. A resposta era: NINGUÉM SABIA. Existem TRÊS níveis de reaproveitamento
+# (o pacote inteiro no rodar_em_blocos, os FATOS aqui, e cada PEÇA no `_peca`) e nenhum registrava
+# a versão do prompt que gerou o conteúdo.
+#
+# O estrago possível: em 04/Ago o prompt da meta mudou TRÊS vezes numa madrugada (árvore de
+# porteiras, regra do nulo, tipo_meta obrigatório). Um staging feito às 03h seria reaproveitado às
+# 05h como se fosse novo — e o conserto não pegaria, em silêncio. É a MESMA classe de buraco do
+# `_OK` de 27/Jul e do reuso que ignorava a pasta em 03/Ago: reaproveitamento que preserva o erro.
+#
+# Agora cada pacote leva um `_versoes.json` com o hash do conteúdo de CADA prompt que o produziu.
+# Se o prompt mudou, a peça correspondente é refeita. Não é preciso lembrar de nada: o arquivo conta.
+def hash_prompt(nome):
+    """12 dígitos do sha1 do CONTEÚDO do prompt. Muda uma vírgula, muda o hash."""
+    import hashlib
+    try:
+        return hashlib.sha1(open(os.path.join(_HERE, nome), "rb").read()).hexdigest()[:12]
+    except OSError:
+        return "?"
+
+
+def versoes_atuais(pdf_path=""):
+    """O carimbo de TODOS os prompts que participam deste tipo de documento."""
+    from analise import PROMPT_ARQ_POR_TIPO
+    tipo = tipo_do_documento(pdf_path)
+    return {
+        "extrator": f"{PROMPT_ARQ_POR_TIPO[tipo]}@{hash_prompt(PROMPT_ARQ_POR_TIPO[tipo])}",
+        "redator":  f"{_PROMPT_POR_TIPO_DOC[tipo]}@{hash_prompt(_PROMPT_POR_TIPO_DOC[tipo])}",
+        "acri":     f"acri_prompt.md@{hash_prompt('acri_prompt.md')}",
+        "audio":    f"script_audio_prompt.md@{hash_prompt('script_audio_prompt.md')}",
+        "gancho":   f"gancho_abertura_prompt.md@{hash_prompt('gancho_abertura_prompt.md')}",
+    }
+
+
+def versoes_gravadas(dst):
+    import json as _j
+    try:
+        return _j.load(open(os.path.join(dst, "_versoes.json"), encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 _PROMPT_POR_TIPO_DOC = {
     "original": "redator_original_prompt.md",
     "meta": "redator_meta_prompt.md",
@@ -209,6 +252,11 @@ def _peca(dst, nome, minimo, gerar):
     Mesma régua de tamanho do _conferir_entregaveis."""
     caminho = os.path.join(dst, nome)
     if os.path.exists(caminho) and os.path.getsize(caminho) >= minimo:
+        # 04/Ago — O CARIMBO MANDA. Antes bastava o arquivo existir para ser reaproveitado, e o
+        # prompt que o gerou podia ser de duas horas atrás. Pergunta do Dr. Eduardo: *"ele está
+        # aproveitando um monte de coisas que já tinham sido feitas — POR QUAL PROMPT?"*. Ninguém
+        # sabia. Agora sabe: se o prompt desta peça mudou, ela é REFEITA.
+        # (o carimbo já foi conferido lá em cima: se o prompt mudou, este arquivo nem existe mais)
         print(f"       ↻ {nome.split('_')[-1]} já pronto — reaproveitado (não regera)")
         return open(caminho, encoding="utf-8").read()
     txt = gerar()
@@ -224,6 +272,31 @@ def processar(pdf, staging):
     base = os.path.splitext(os.path.basename(pdf))[0]
     llm_client.contexto_uso(artigo=base)                       # p/ o log de uso (uso.jsonl) saber o artigo
     dst = os.path.join(staging, base); os.makedirs(dst, exist_ok=True)
+
+    # ═══════════ TERRA ARRASADA — 04/Ago/2026 ═══════════
+    # Ordem do Dr. Eduardo, depois de perguntar "por qual prompt?" e descobrir que ninguém sabia:
+    #     *"se não tem certeza que foi com ESTE prompt, tem que apagar TUDO — tudo, tudo — que tiver
+    #      deste artigo no sistema e começar do zero."*
+    #
+    # Ele está certo, e é mais simples do que o que eu estava construindo (refazer peça por peça).
+    # Reaproveitamento PARCIAL é o que sangrou este projeto a noite inteira: sobra uma peça velha,
+    # ela é internamente coerente, ninguém percebe, e o conserto não pega. Aqui não tem meio-termo:
+    # se o carimbo não bater EXATAMENTE, o pacote inteiro vai embora e o artigo recomeça.
+    #
+    # Sem carimbo (`_versoes.json` ausente) = staging anterior a 04/Ago = feito por prompt
+    # desconhecido = APAGA. Custa uma re-análise, uma vez só, e é de propósito.
+    _vnow = versoes_atuais(pdf)
+    _vold = versoes_gravadas(dst)
+    _tem_coisa = bool(glob.glob(os.path.join(dst, "*")))
+    if _tem_coisa and _vold != _vnow:
+        _difs = ([f"{k}: {_vold.get(k,'—')} → {v}" for k, v in _vnow.items() if _vold.get(k) != v]
+                 if _vold else ["sem carimbo: staging anterior a 04/Ago, prompt desconhecido"])
+        print(f"       🔥 TERRA ARRASADA — {len(_difs)} prompt(s) mudaram; apagando o pacote inteiro:")
+        for d in _difs[:5]:
+            print(f"          · {d}")
+        for _p in glob.glob(os.path.join(dst, "*")):
+            shutil.rmtree(_p, ignore_errors=True) if os.path.isdir(_p) else os.remove(_p)
+
     # FATOS cacheados no staging → retoma a extração (a etapa de maior input). Só extrai se não houver cache.
     fatos_cache = os.path.join(dst, base + "_fatos.json")
     fatos = None
@@ -352,6 +425,8 @@ def processar(pdf, staging):
         except Exception as e:
             print(f"       ⚠️  gancho de abertura não gerado ({type(e).__name__}: {e})")
     _conferir_entregaveis(dst, base, r["aplic"])              # BURACO ZERO: faltou algo → erro, volta pra fila
+    json.dump(_vnow, open(os.path.join(dst, "_versoes.json"), "w", encoding="utf-8"),
+              ensure_ascii=False, indent=1)                   # QUAL prompt fez cada peça deste pacote
     open(os.path.join(dst, "_OK"), "w").write("")             # só aqui: artigo COMPLETO de verdade
     return base, r["aplic"], r["muda_conduta"], ents, sobe
 

@@ -85,6 +85,19 @@ def _staging_serve(pasta, pdf):
     except Exception:
         return False, "fatos.json ilegível"
 
+    # ═══ TERRA ARRASADA (04/Ago) — o carimbo do prompt é o PRIMEIRO portão ═══
+    # *"se não tem certeza que foi com ESTE prompt, tem que apagar TUDO deste artigo e começar do
+    #   zero"* — Dr. Eduardo. Sem `_versoes.json`, ou com um hash diferente, o pacote NÃO serve.
+    # O `processar()` apaga a pasta inteira quando pega o caso; aqui a gente só recusa o reuso.
+    try:
+        vnow, vold = A.versoes_atuais(pdf), A.versoes_gravadas(pasta)
+    except Exception:
+        vnow, vold = {}, {}
+    if vnow and vold != vnow:
+        difs = [k for k, x in vnow.items() if vold.get(k) != x]
+        return False, ("sem carimbo de prompt (staging anterior a 04/Ago)" if not vold
+                       else f"prompt mudou: {', '.join(difs)}")
+
     tipo_hoje = A.tipo_do_documento(pdf)                    # ← a PASTA de agora
     tipo_staging = fatos.get("tipo_documento")
     if tipo_staging != tipo_hoje:

@@ -24,6 +24,15 @@ PROMPT_DIRETRIZ = open(os.path.join(_HERE, "analise_diretriz_prompt.md")).read()
 PROMPT_META = open(os.path.join(_HERE, "analise_meta_prompt.md")).read()   # 04/Ago: extrator próprio
 PROMPT_REVISAO = open(os.path.join(_HERE, "analise_revisao_prompt.md")).read()
 
+# 04/Ago — qual ARQUIVO de extrator serve cada tipo. Serve ao carimbo de versão do analisador:
+# sem saber o nome do arquivo, não dá para calcular o hash e o reuso fica cego.
+PROMPT_ARQ_POR_TIPO = {
+    "original":          "analise_prompt.md",
+    "meta":              "analise_meta_prompt.md",
+    "diretriz":          "analise_diretriz_prompt.md",
+    "revisao_narrativa": "analise_revisao_prompt.md",
+}
+
 _B = {"type": "boolean"}
 _S = {"type": "string"}
 _NUM = {"type": ["number", "null"]}
