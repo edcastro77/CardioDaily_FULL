@@ -240,7 +240,8 @@ def processar(pdf, staging):
         # como bom, o extrator da diretriz NUNCA rodaria, e o motor AGREE receberia zero fatos.
         # Resultado: rigor 5 por prudência em TODA diretriz e TODA revisão do lote, sem nenhum aviso.
         tipo_doc = tipo_do_documento(pdf)
-        _CHAVE_DO_TIPO = {"diretriz": "agree", "revisao_narrativa": "qualidade_revisao"}
+        _CHAVE_DO_TIPO = {"diretriz": "agree", "revisao_narrativa": "qualidade_revisao",
+                  "meta": "qualidade_meta"}   # 04/Ago: a meta ganhou schema próprio
         chave = _CHAVE_DO_TIPO.get(tipo_doc, "fracao_ejecao")
         if chave in cache:
             fatos = cache

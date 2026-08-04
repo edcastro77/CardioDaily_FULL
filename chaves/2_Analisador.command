@@ -37,9 +37,32 @@ if [ "$N_TOT" -eq 0 ] && [ "$N_MINI" -eq 0 ]; then
   echo "   Fila vazia — nada a fazer. Rode a Chave 1 primeiro."
   read -p "Enter para fechar. "; exit 0
 fi
-CENT=$((N_TOT * 30 + N_MINI * 15))   # sem awk — ver o comentário na Chave 11 (travou o Terminal em 04/Ago)
-printf "   Custo aproximado: US\$ %d.%02d\n" $((CENT/100)) $((CENT%100))
-echo "   (blocos de 20: cada bloco vai pro Supabase antes do próximo — se a net cair, só o bloco refaz)"
+# ── QUAL PASTA (04/Ago) ──
+# Pergunta do Dr. Eduardo: "não combinamos que ia ler pasta por pasta?". Ia, e vai — cada PDF carrega
+# o caminho dele e é a pasta que decide prompt e motor (LEI 8). Mas rodar TUDO de uma vez significa
+# gastar ~US$ 77 nos 256 artigos originais ANTES de o código mais novo (o da meta, escrito hoje) ser
+# tocado uma única vez. O risco novo tem de ser testado primeiro, e ele é o mais barato de testar.
+echo "   ── POR ONDE COMEÇAR ──"
+echo "     1) META_ANALISES   ($(ls "$CD_CLASSIFICADOS/META_ANALISES"/*.pdf 2>/dev/null|wc -l|tr -d ' ')) ← extrator NOVO de hoje, nunca rodou. O mais barato de provar."
+echo "     2) GUIDELINES      ($(ls "$CD_CLASSIFICADOS/GUIDELINES"/*.pdf 2>/dev/null|wc -l|tr -d ' ')) motor AGREE"
+echo "     3) REVISOES        ($(ls "$CD_CLASSIFICADOS/REVISOES"/*.pdf 2>/dev/null|wc -l|tr -d ' ')) motor da revisão narrativa"
+echo "     4) ARTIGOS_ORIGINAIS ($(ls "$CD_CLASSIFICADOS/ARTIGOS_ORIGINAIS"/*.pdf 2>/dev/null|wc -l|tr -d ' ')) o mais rodado, e o mais caro"
+echo "     5) TUDO            ($N_TOT) na ordem acima"
+echo
+read -r -p "   Escolha [1-5]: " ESCOLHA
+case "$ESCOLHA" in
+  1) PASTA="--pasta=META_ANALISES";     NP=$(ls "$CD_CLASSIFICADOS/META_ANALISES"/*.pdf 2>/dev/null|wc -l|tr -d ' ') ;;
+  2) PASTA="--pasta=GUIDELINES";        NP=$(ls "$CD_CLASSIFICADOS/GUIDELINES"/*.pdf 2>/dev/null|wc -l|tr -d ' ') ;;
+  3) PASTA="--pasta=REVISOES";          NP=$(ls "$CD_CLASSIFICADOS/REVISOES"/*.pdf 2>/dev/null|wc -l|tr -d ' ') ;;
+  4) PASTA="--pasta=ARTIGOS_ORIGINAIS"; NP=$(ls "$CD_CLASSIFICADOS/ARTIGOS_ORIGINAIS"/*.pdf 2>/dev/null|wc -l|tr -d ' ') ;;
+  5) PASTA="";                          NP=$N_TOT ;;
+  *) echo "   Opção inválida. Nada foi feito."; read -p "Enter. "; exit 1 ;;
+esac
+echo
+CENT=$((NP * 30))
+printf "   %s artigo(s) · custo aproximado US\$ %d.%02d\n" "$NP" $((CENT/100)) $((CENT%100))
+echo "   RAMPA DE CONFIANÇA: começa em blocos de 10 · 3 blocos sem falha → 20 · mais 3 → 30"
+echo "   (qualquer falha volta para 10 e o contador zera · o bloco nunca atravessa a divisa entre pastas)"
 echo "   Diário desta rodada: ${DIARIO/#$HOME/~}"
 echo
 read -r -p "   Começar? [s/N]: " OK
@@ -48,7 +71,7 @@ echo
 
 # ── 1) o analisador, com o diário ligado ──
 set -o pipefail
-python "$CD_FULL/src/rodar_em_blocos.py" "$CD_CLASSIFICADOS" 20 2>&1 | tee -a "$DIARIO"
+python "$CD_FULL/src/rodar_em_blocos.py" "$CD_CLASSIFICADOS" --rampa $PASTA 2>&1 | tee -a "$DIARIO"
 RC=${PIPESTATUS[0]}
 
 # ── TRAVA DE SAÍDA: só continua se o analisador terminou bem ──
@@ -69,7 +92,7 @@ if [ "$RC" -ne 0 ]; then
 fi
 
 # ── 2) trilha da minirevisão (só se a de cima passou) ──
-if [ "$N_MINI" -gt 0 ]; then
+if [ "$N_MINI" -gt 0 ] && [ -z "$PASTA" ]; then   # só na opção TUDO
   echo | tee -a "$DIARIO"
   echo "═══════════════════════════════════════" | tee -a "$DIARIO"
   echo " TRILHA MINIRREVISÃO / OPINIÃO DE ESPECIALISTA" | tee -a "$DIARIO"

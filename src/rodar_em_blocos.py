@@ -21,11 +21,27 @@ import analisador as A          # carrega o .env no import
 import publicador as P
 P._carregar_env()
 
+# ═══════════ RAMPA DE CONFIANÇA — 04/Ago/2026 ═══════════
+# Ideia do Dr. Eduardo: *"vamos rodar com blocos de 10 em 10; depois de 30 consecutivos bons,
+# passamos para 3 blocos de 20/20; 3 blocos bons, passamos para 30 em 30"*.
+#
+# POR QUE É BOM: bloco pequeno = pouca coisa refeita quando cai, e o erro aparece cedo, quando ainda
+# custa 10 artigos em vez de 400. Mas bloco pequeno também é mais lento (mais idas ao Supabase).
+# A rampa resolve os dois: começa cauteloso e ACELERA à medida que o sistema prova que está bom.
+#
+# O QUE É "BLOCO BOM": ZERO falhas de análise E ZERO falhas de publicação.
+# Artigo RECUSADO por nota baixa NÃO é falha — é o sistema funcionando e dizendo não.
+#
+# E O QUE ACONTECE SE UM BLOCO FALHA: volta ao degrau 1 (10) e o contador zera. Conservador de
+# propósito: subir é opcional, mas voltar a errar 400 de uma vez não pode acontecer duas vezes.
+RAMPA = [(10, 3), (20, 3), (30, None)]   # (tamanho do bloco, blocos bons para subir; None = topo)
+
 FILA_FORA = ("_PUBLICADOS", "_RECUSADOS", "MINIRREVISOES")   # NÃO são fila do publicador
 # (MINIRREVISOES é a trilha da minirevisão/opinião: condutas+fluxograma via minirevisao.py, não sobe no Supabase)
 
 
-_CHAVE_DO_TIPO = {"diretriz": "agree", "revisao_narrativa": "qualidade_revisao"}
+_CHAVE_DO_TIPO = {"diretriz": "agree", "revisao_narrativa": "qualidade_revisao",
+                  "meta": "qualidade_meta"}   # 04/Ago: a meta ganhou schema próprio
 
 
 def _staging_serve(pasta, pdf):
@@ -129,10 +145,18 @@ def _tirar_da_fila(pdf, classificados, subpasta):
         print(f"      (aviso: não moveu {os.path.basename(pdf)}: {e})")
 
 
-def main(classificados, tam_bloco=20, maximo=0):
+def main(classificados, tam_bloco=20, maximo=0, rampa=False, so_pasta=""):
     staging = os.path.abspath(os.path.join(_HERE, "..", "outputs", "STAGING"))
     os.makedirs(staging, exist_ok=True)
     fila, sem_pasta = _pdfs_na_fila(classificados)
+    if so_pasta:
+        antes = len(fila)
+        fila = [p for p in fila if os.path.basename(os.path.dirname(p)) == so_pasta]
+        print(f"SÓ A PASTA {so_pasta}: {len(fila)} de {antes} artigos "
+              f"(as outras pastas ficam intactas na fila)\n")
+        if not fila:
+            print(f"Nenhum PDF em {so_pasta}. Pastas disponíveis: "
+                  + ", ".join(sorted(A._TIPO_POR_PASTA))); return 1
     if sem_pasta:
         print(f"⛔ {len(sem_pasta)} PDF FORA de pasta de tipo — NÃO entram (LEI 8: sem pasta, sem tipo):")
         for p in sem_pasta[:10]:
@@ -146,15 +170,39 @@ def main(classificados, tam_bloco=20, maximo=0):
     if total == 0:
         print("Fila vazia — nada a fazer (tudo já concluído, ou pasta sem PDF).")
         return
-    n_blocos = (total + tam_bloco - 1) // tam_bloco
-    print(f"EM BLOCOS DE {tam_bloco}  ·  {total} artigo(s) na fila  ·  {n_blocos} bloco(s)  →  {staging}\n")
     pub_ok = pub_rec = 0
     falhou = []                      # 03/Ago: as falhas rolavam a tela e sumiam. Agora viram lista no fim.
-    for i in range(0, total, tam_bloco):
-        bloco = fila[i:i + tam_bloco]
-        nb = i // tam_bloco + 1
-        print(f"═══ BLOCO {nb}/{n_blocos} · artigos {i+1}–{i+len(bloco)} de {total} ═══")
-        # 1) analisa o bloco (local, no staging). RETOMÁVEL: staging com _OK é reaproveitado (não re-analisa).
+
+    # ── a fila é consumida em blocos de tamanho VARIÁVEL (a rampa) ──
+    degrau = 0 if rampa else None
+    bons_seguidos = 0
+    i, nb = 0, 0
+    if rampa:
+        print(f"RAMPA DE CONFIANÇA: {' → '.join(str(t) for t, _ in RAMPA)} "
+              f"(sobe após {RAMPA[0][1]} blocos sem falha; qualquer falha volta ao {RAMPA[0][0]})\n")
+    while i < total:
+        tam = RAMPA[degrau][0] if rampa else tam_bloco
+        # ═══ 04/Ago — O BLOCO NÃO ATRAVESSA A DIVISA ENTRE PASTAS ═══
+        # Pergunta do Dr. Eduardo: *"não combinamos que o sistema ia ler pasta por pasta, para
+        # aplicar o prompt aos artigos daquela pasta?"* — e ia, e vai: cada PDF carrega o caminho
+        # dele, e é a pasta que decide prompt e motor (LEI 8). Mas 3 dos 18 blocos CAÍAM em cima da
+        # divisa, misturando ARTIGOS_ORIGINAIS com GUIDELINES no mesmo bloco. Não quebrava nada —
+        # estragava o DIAGNÓSTICO: um problema no prompt de diretriz aparecia num bloco que era
+        # metade artigo original, e a rampa não sabia de quem era a culpa.
+        pasta_do_bloco = os.path.basename(os.path.dirname(fila[i]))
+        bloco = []
+        for p in fila[i:i + tam]:
+            if os.path.basename(os.path.dirname(p)) != pasta_do_bloco:
+                break                                   # fecha o bloco na divisa
+            bloco.append(p)
+        nb += 1
+        etiqueta = (f" · degrau {degrau+1}/{len(RAMPA)} (até {tam}) · "
+                    f"{bons_seguidos} bom(ns) seguido(s)" if rampa else "")
+        print(f"═══ BLOCO {nb} · {pasta_do_bloco} · artigos {i+1}–{i+len(bloco)} de {total}"
+              f"{etiqueta} ═══")
+        falhas_no_bloco = 0
+
+        # 1) analisa o bloco (local, no staging). RETOMÁVEL: staging que SERVE é reaproveitado.
         analisados = []
         for pdf in bloco:
             base = os.path.splitext(os.path.basename(pdf))[0]
@@ -165,7 +213,6 @@ def main(classificados, tam_bloco=20, maximo=0):
                 print(f"   reusado    {base[:42]:42} (staging pronto)")
                 continue
             if os.path.exists(os.path.join(pasta, "_OK")):
-                # tinha _OK mas NÃO serve — é o caso que queimou o Dr. Eduardo. Diz por quê, alto.
                 print(f"   ↻ REANALISA {base[:42]:42} — {porque}")
             try:
                 base, nota, mc, ents, sobe = A.processar(pdf, staging)
@@ -175,6 +222,8 @@ def main(classificados, tam_bloco=20, maximo=0):
                 print(f"   ⚠️  análise falhou (fica na fila p/ refazer): "
                       f"{os.path.basename(pdf)[:42]} — {type(e).__name__}: {e}")
                 falhou.append((os.path.basename(pdf), f"análise · {type(e).__name__}: {str(e)[:50]}"))
+                falhas_no_bloco += 1
+
         # 2) publica o bloco no Supabase; só o que SUBIU sai da fila
         for pdf, pasta in analisados:
             try:
@@ -188,8 +237,25 @@ def main(classificados, tam_bloco=20, maximo=0):
                 print(f"   ⚠️  publicação falhou (fica na fila p/ refazer): "
                       f"{os.path.basename(pasta)[:40]} — {type(e).__name__}: {e}")
                 falhou.append((os.path.basename(pasta), f"publicação · {type(e).__name__}: {str(e)[:50]}"))
-        print(f"═══ BLOCO {nb}/{n_blocos} fechado · publicados até agora {pub_ok} · recusados {pub_rec} · "
-              f"se cair agora, só este bloco refaz ═══\n")
+                falhas_no_bloco += 1
+
+        # ── a rampa decide o tamanho do PRÓXIMO bloco ──
+        if rampa:
+            if falhas_no_bloco == 0:
+                bons_seguidos += 1
+                alvo = RAMPA[degrau][1]
+                if alvo is not None and bons_seguidos >= alvo and degrau + 1 < len(RAMPA):
+                    degrau += 1; bons_seguidos = 0
+                    print(f"   ⬆️  {alvo} blocos sem falha — SUBINDO para blocos de {RAMPA[degrau][0]}")
+            else:
+                if degrau != 0:
+                    print(f"   ⬇️  {falhas_no_bloco} falha(s) neste bloco — VOLTANDO para blocos de "
+                          f"{RAMPA[0][0]} (o contador zera)")
+                degrau = 0; bons_seguidos = 0
+        print(f"═══ BLOCO {nb} fechado · publicados {pub_ok} · recusados {pub_rec} · "
+              f"falhas neste bloco {falhas_no_bloco} ═══\n")
+        i += len(bloco)
+
     print(f"FIM · {pub_ok} publicado(s) no Supabase (rascunho) · {pub_rec} recusado(s) (em _RECUSADOS).")
     if falhou:
         print(f"\n⚠️  {len(falhou)} artigo(s) FALHARAM e ficaram na fila para refazer:")
@@ -204,15 +270,18 @@ def main(classificados, tam_bloco=20, maximo=0):
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--max")]
     mx = next((int(a.split("=")[1]) for a in sys.argv[1:] if a.startswith("--max=")), 0)
+    rampa = "--rampa" in sys.argv[1:]
+    so_pasta = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--pasta=")), "")
+    args = [a for a in args if a != "--rampa" and not a.startswith("--pasta=")]
     cl = os.path.expanduser(args[0]) if args else ""
     tb = int(args[1]) if len(args) > 1 else 20
     if not cl or not os.path.isdir(cl):
-        print("uso: python rodar_em_blocos.py <pasta_CLASSIFICADOS> [tam_bloco=20] [--max=N]"); sys.exit(1)
+        print("uso: python rodar_em_blocos.py <pasta_CLASSIFICADOS> [tam_bloco=20] [--max=N] [--rampa] [--pasta=META_ANALISES]"); sys.exit(1)
     # 03/Ago — o código de saída passa a VALER: a Chave 2 lê ele e só chama o minirevisao se for 0.
     # Antes, um Ctrl+C aqui caía direto na trilha da minirevisão (mais 81 artigos pagos): o
     # "eu interrompi e ele não para" do Dr. Eduardo.
     try:
-        sys.exit(main(cl, tb, mx) or 0)
+        sys.exit(main(cl, tb, mx, rampa, so_pasta) or 0)
     except KeyboardInterrupt:
         print("\n\n⛔ INTERROMPIDO POR VOCÊ (Ctrl+C). O que já publicou está salvo no Supabase;"
               "\n   o resto continua na fila. Clique a Chave 2 de novo quando quiser continuar.")

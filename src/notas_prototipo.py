@@ -300,9 +300,14 @@ def dominios_meta(a):
         b += 1
     if m.get("protocolo_registrado"):
         b += 1                                   # PROSPERO
-    if q.get("revisao_em_duplicata"):
+    if q.get("revisao_em_duplicata") or m.get("extracao_em_duplicata"):
         b += 1
-    d["busca"] = min(b, 10)
+    # 04/Ago — itens CRÍTICOS do AMSTAR-2 que não entravam em lugar nenhum:
+    if m.get("excluidos_listados_com_motivo"):
+        b += 1                                   # quase ninguém cumpre; quem cumpre merece
+    if m.get("restricao_idioma"):
+        b -= 1                                   # restringir idioma é fonte conhecida de viés
+    d["busca"] = min(max(b, 0), 10)
 
     # c) VIÉS DOS INCLUÍDOS — e a pergunta que separa: MUDOU a interpretação ou foi check-box?
     if not q.get("qualidade_estudos_avaliada"):
@@ -326,17 +331,53 @@ def dominios_meta(a):
     k = _n(m.get("k_estudos"), 99)
     if i2 is not None and i2 < 25 and k is not None and k < 5:
         d["heterogeneidade"] = min(d["heterogeneidade"], 6)
+    # ═══ 04/Ago — O PRISMA 2020 (item 13d) PEDE TRÊS COISAS, NÃO UMA ═══
+    # I² é a PROPORÇÃO da variabilidade, não a QUANTIDADE. Quem responde "no meu próximo paciente,
+    # que efeito espero?" é o INTERVALO DE PREDIÇÃO — e é comum o IC agregado excluir o nulo e a
+    # predição incluir. Quando isso acontece, a meta é muito menos acionável do que o resumo diz.
+    if m.get("intervalo_predicao_reportado"):
+        d["heterogeneidade"] = min(d["heterogeneidade"] + 1, 10)
+    if m.get("tau2_reportado"):
+        d["heterogeneidade"] = min(d["heterogeneidade"] + 1, 10)
+    if m.get("intervalo_predicao_cruza_nulo"):
+        d["heterogeneidade"] = min(d["heterogeneidade"], 6)
+    # heterogeneidade CLÍNICA não aparece no I²: populações/doses/tempos diferentes demais para somar
+    if m.get("heterogeneidade_clinica_relevante"):
+        d["heterogeneidade"] = min(d["heterogeneidade"], 5)
+    # DOMINÂNCIA: se um estudo carrega a maior parte do peso, a meta É aquele estudo
+    peso = _n(m.get("peso_maior_estudo_pct"))
+    if peso is not None and peso >= 60:
+        d["heterogeneidade"] = min(d["heterogeneidade"], 6)
 
     # e) VIÉS DE PUBLICAÇÃO — funnel/Egger/Begg feito?
-    d["vies_publicacao"] = 9 if q.get("vies_publicacao_avaliado") else 3
+    # 04/Ago: a Cochrane (cap. 13) diz para NÃO testar assimetria de funnel com k<10 — o teste não tem
+    # poder e o resultado engana. Cobrar um teste que não deveria existir é punir quem fez certo.
+    if m.get("teste_funnel_indicado") is False or (k is not None and k < 10):
+        d["vies_publicacao"] = 7                 # não era indicado: nem prêmio, nem castigo
+    else:
+        d["vies_publicacao"] = 9 if (q.get("vies_publicacao_avaliado")
+                                     or m.get("funnel_plot_feito")) else 3
 
     # f) CONCLUSÕES — o maior peso: foram além do que os dados permitem?
-    if a.get("conclusao_nao_bate_desenho") or m.get("conclusao_alem_da_evidencia"):
-        d["conclusoes"] = 3
+    if (a.get("conclusao_nao_bate_desenho") or m.get("conclusao_alem_da_evidencia")
+            or m.get("subgrupo_tratado_como_principal")):
+        d["conclusoes"] = 3                      # tratar subgrupo como resultado principal é o clássico
     elif m.get("limitacoes_reconhecidas"):
         d["conclusoes"] = 9
     else:
         d["conclusoes"] = 6
+    # 04/Ago — o GRADE (PRISMA 15) é a certeza DA EVIDÊNCIA, diferente da qualidade DA REVISÃO.
+    # Uma revisão impecável de evidência fraca continua sendo evidência fraca — e o leitor tem de saber.
+    if m.get("grade_usado"):
+        d["conclusoes"] = min(d["conclusoes"] + 1, 10)
+    if (m.get("certeza_desfecho_primario") or "") in ("baixa", "muito_baixa"):
+        d["conclusoes"] = min(d["conclusoes"], 6)
+    # modelo fixo com heterogeneidade alta é erro estatístico, não escolha
+    if m.get("modelo_apropriado_p_heterogeneidade") is False:
+        d["conclusoes"] = min(d["conclusoes"], 5)
+    # contar o mesmo paciente duas vezes (cluster/crossover/multi-braço) estreita o IC falsamente
+    if m.get("unidade_analise_problema"):
+        d["conclusoes"] = min(d["conclusoes"], 5)
     return d
 
 
@@ -366,6 +407,16 @@ def nota_meta(a):
     d = dominios_meta(a)
     bruta = sum(d[k] * p for k, p in PESOS_META.items())
     s = int(round(bruta))
+
+    # 04/Ago — A HIERARQUIA DA PRÓPRIA TABELA DO DR. EDUARDO, aplicada em código:
+    #   IPD de RCTs .............. o melhor tipo, quando bem feita → sem teto
+    #   meta de RCTs ............. padrão-ouro                     → sem teto
+    #   meta de OBSERVACIONAIS ... "nunca equivale a RCT"          → teto 7
+    #   meta de rede ............. depende da transitividade       → teto 8 se não avaliada
+    if (m.get("desenhos_incluidos") or a.get("desenhos_incluidos")) == "observacionais":
+        s = min(s, 7)
+    if (m.get("tipo_meta") or a.get("tipo_meta")) == "rede" and not m.get("transitividade_avaliada"):
+        s = min(s, 8)
 
     # TETOS CLÁSSICOS DA META — vinham do motor antigo e NÃO podem se perder na ponderação.
     # Um estudo pode ter os 6 domínios altos e ainda ter engolido ensaio contaminado.
@@ -1006,6 +1057,22 @@ def score(a):
     else:
         s, fl = nota_estatistica(a)
     td, te = teto_desenho(a), teto_externa(a)
+    # ═══════════ 04/Ago — NA META, A SOMATÓRIA É A NOTA ═══════════
+    # Palavras do Dr. Eduardo: *"a nota da meta-análise tem que ser somatória — não tem muito o que
+    # ficar inventando"*. E ele está certo: o `_TETO_INTERVENCAO["meta"] = 8` era uma régua EXTRA,
+    # colocada POR CIMA da ponderação dos 6 domínios que ele próprio desenhou. O resultado era que
+    # uma meta impecável — os 6 domínios em 10 — saía com 8 de qualquer jeito, e os domínios não
+    # mudavam nada de 8 para cima. O scorecard existia e não decidia.
+    #
+    # A hierarquia da tabela DELE continua valendo, mas ela vive DENTRO do `nota_meta`, onde é
+    # específica em vez de genérica:
+    #     IPD de RCTs / meta de RCTs .... sem teto  (🟢 "melhor tipo" / "padrão-ouro")
+    #     meta de OBSERVACIONAIS ........ teto 7    ("nunca equivale a RCT")
+    #     meta de REDE sem transitividade teto 8
+    # mais os tetos clássicos que já estavam lá: contaminação (5), NI mal interpretada (6),
+    # I² alto sem investigar (6).
+    if eh_meta:
+        td = 10
 
     # PASSO 1 — CONTAGEM NHLBI: o rigor vira auditável e SÓ PODE BAIXAR (nunca inflar).
     cum, falh, sil, tn, criterios_falhos = contagem_nhlbi(a)

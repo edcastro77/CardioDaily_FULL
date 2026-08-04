@@ -158,7 +158,7 @@ def teste_reuso_de_staging():
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import rodar_em_blocos as R
 
-    SCHEMA = {"original": "fracao_ejecao", "meta": "fracao_ejecao",
+    SCHEMA = {"original": "fracao_ejecao", "meta": "qualidade_meta",   # 04/Ago: meta ganhou schema
               "diretriz": "agree", "revisao_narrativa": "qualidade_revisao"}
     PASTA = {"original": "ARTIGOS_ORIGINAIS", "meta": "META_ANALISES",
              "diretriz": "GUIDELINES", "revisao_narrativa": "REVISOES"}
@@ -333,6 +333,93 @@ def teste_nulo_informativo():
         r = N.score(_bom(pergunta="intervencao", desenho="rct", efeito_grande=True,
                          relevancia_clinica=rc(classe)))
         checa(f"teto antigo intacto: {classe} ≤ {teto}", r["teto_mcid"] == teto, f"veio {r['teto_mcid']}")
+
+
+# ══════════════ N+4 · O EXTRATOR DA META E OS 6 DOMÍNIOS (04/Ago) ══════════════
+def teste_extrator_da_meta():
+    """O motor META lia `a["qualidade_meta"]` desde que foi escrito — e o extrator NUNCA produziu
+    esse bloco. Medido em 04/Ago: `conclusoes` (25% do peso) ficava travado em 6 para sempre,
+    `vies_estudos` (15%) idem. Uma meta PERFEITA não passava de ~7,7 por construção.
+
+    Função pura: sem LLM, sem rede."""
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import analise as A
+
+    # ── o schema existe e cobre o que o motor procura ──
+    campos = set(A.SCHEMA_FATOS_META["properties"]["qualidade_meta"]["properties"])
+    for c in ("k_estudos", "n_bases", "protocolo_registrado", "vies_mudou_interpretacao",
+              "heterogeneidade_investigada", "conclusao_alem_da_evidencia", "limitacoes_reconhecidas"):
+        checa(f"meta: o extrator produz '{c}' (o motor já lia)", c in campos)
+    for c in ("intervalo_predicao_reportado", "tau2_reportado", "peso_maior_estudo_pct",
+              "excluidos_listados_com_motivo", "extracao_em_duplicata", "grade_usado",
+              "teste_funnel_indicado", "modelo_apropriado_p_heterogeneidade"):
+        checa(f"meta: campo novo do PRISMA/AMSTAR-2 '{c}' está no schema", c in campos)
+
+    def meta(**qm):
+        return _bom(pergunta="intervencao", desenho="meta", tipo_documento="meta",
+                    qualidade_nhlbi={"pergunta_focada": True, "elegibilidade_predefinida": True,
+                                     "busca_sistematica_abrangente": True, "revisao_em_duplicata": True,
+                                     "qualidade_estudos_avaliada": True, "vies_publicacao_avaliado": True,
+                                     "heterogeneidade_avaliada": True, "i2_valor": 20.0},
+                    qualidade_meta=dict(k_estudos=12, n_bases=4, **qm))
+
+    # ── o teto sumiu: uma meta impecável agora ALCANÇA o topo ──
+    perfeita = meta(protocolo_registrado=True, extracao_em_duplicata=True,
+                    excluidos_listados_com_motivo=True, vies_mudou_interpretacao=True,
+                    heterogeneidade_investigada=True, tau2_reportado=True,
+                    intervalo_predicao_reportado=True, funnel_plot_feito=True,
+                    grade_usado=True, limitacoes_reconhecidas=True)
+    # ⚠️ A HISTÓRIA DESTE TESTE, porque ela ensina (04/Ago):
+    # 1ª versão: cobrei `aplic >= 9`. Reprovou em 8, porque `_TETO_INTERVENCAO["meta"] = 8` capava
+    #   por cima. O reflexo errado seria afrouxar a LEI 0 para o teste passar — não fiz, avisei.
+    # 2ª versão: passei a medir a ponderação (`nota_meta`) e travei `aplic == 8`.
+    # 3ª e atual: o Dr. Eduardo decidiu — *"a nota da meta tem que ser SOMATÓRIA, não tem muito o
+    #   que ficar inventando"*. O teto genérico de 8 saiu; a hierarquia dele vive DENTRO do
+    #   `nota_meta` (observacionais 7, rede sem transitividade 8), onde é específica.
+    s_perf, dom_perf, _ = N.nota_meta(perfeita)
+    checa("meta impecável: a somatória dos 6 domínios chega a 9+", s_perf >= 9,
+          f"veio {s_perf} — o bloco qualidade_meta não está sendo lido")
+    checa("meta impecável: os 6 domínios foram medidos, não chutados", dom_perf is not None)
+    checa("SOMATÓRIA É A NOTA: nada capa a meta por cima da ponderação",
+          N.score(perfeita)["aplic"] == s_perf,
+          f"somatória={s_perf} nota={N.score(perfeita)['aplic']} — voltou algum teto genérico")
+    checa("meta de RCTs impecável PODE chegar a 10 (IPD é o melhor tipo)",
+          N.score(perfeita)["aplic"] == 10, f"veio {N.score(perfeita)['aplic']}")
+
+    # ── e o vazio continua sendo punido (o conserto não pode virar régua frouxa) ──
+    s_vazia, _, _ = N.nota_meta(meta())
+    checa("meta sem nenhum dos fatos novos vale MENOS que a impecável",
+          s_vazia < s_perf, f"impecável={s_perf} vazia={s_vazia}")
+
+    # ── PRISMA 13d: o intervalo de predição que cruza o nulo derruba a heterogeneidade ──
+    d1 = N.dominios_meta(perfeita)
+    d2 = N.dominios_meta(meta(heterogeneidade_investigada=True, intervalo_predicao_reportado=True,
+                              intervalo_predicao_cruza_nulo=True))
+    checa("PRISMA: predição que cruza o nulo baixa a heterogeneidade",
+          d2["heterogeneidade"] < d1["heterogeneidade"])
+
+    # ── Cochrane cap.13: com k<10 NÃO se testa funnel — nem prêmio, nem castigo ──
+    poucos = _bom(pergunta="intervencao", desenho="meta", tipo_documento="meta",
+                  qualidade_nhlbi={"i2_valor": 20.0, "vies_publicacao_avaliado": False},
+                  qualidade_meta={"k_estudos": 6, "modelo_estatistico": "aleatorio"})
+    checa("Cochrane: k<10 não é punido por não ter funnel",
+          N.dominios_meta(poucos)["vies_publicacao"] == 7,
+          f"veio {N.dominios_meta(poucos)['vies_publicacao']}")
+
+    # ── a hierarquia da tabela do Dr. Eduardo: observacional NUNCA equivale a RCT ──
+    obs = dict(perfeita); obs["desenhos_incluidos"] = "observacionais"
+    checa("meta de OBSERVACIONAIS tem teto 7 ('nunca equivale a RCT')",
+          N.nota_meta(obs)[0] <= 7 and N.score(obs)["aplic"] <= 7,
+          f"ponderação={N.nota_meta(obs)[0]} aplic={N.score(obs)['aplic']}")
+
+    # ── dominância: se um estudo carrega o peso, a meta É aquele estudo ──
+    dom = N.dominios_meta(meta(heterogeneidade_investigada=True, peso_maior_estudo_pct=72.0))
+    checa("dominância ≥60% do peso derruba a heterogeneidade", dom["heterogeneidade"] <= 6)
+
+    # ── subgrupo tratado como principal é o clássico: reprova as conclusões ──
+    sub = N.dominios_meta(meta(limitacoes_reconhecidas=True, subgrupo_tratado_como_principal=True))
+    checa("subgrupo vendido como resultado principal → conclusões 3", sub["conclusoes"] == 3)
 
 
 # ══════════════ 3 · FALHAS FATAIS REPROVAM (não descontam) ══════════════
@@ -982,7 +1069,7 @@ if __name__ == "__main__":
               teste_revisao_atualidade, teste_revisao_contrato_e_silencio,
               teste_os_quatro_motores_nao_se_misturam, teste_veredito_aberto, teste_mapa_pubmed,
               teste_a_pasta_manda, teste_reuso_de_staging, teste_pdf_sem_pasta_nao_entra,
-              teste_schema_do_google, teste_nulo_informativo,
+              teste_schema_do_google, teste_nulo_informativo, teste_extrator_da_meta,
               teste_gabarito_dos_artigos, teste_contrato_de_saida]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:

@@ -100,3 +100,95 @@ B) GEMINI FORA DAS CADEIAS — "ele e bom mas sempre da problema, limites doidos
    PERDA DECLARADA: o gemini era a unica outra janela de ~1M. O 2o degrau do
    GUIDELINE_LONGO passa a ter ~400k. Como essa cadeia nao e chamada por ninguem
    ainda, a perda e teorica — mas fica escrita para nao virar surpresa.
+
+═══════════════════════════════════════════════════════════════════════════
+
+C) EXTRATOR PROPRIO DA META-ANALISE (ordem do Dr. Eduardo, 04/Ago 03h)
+
+O achado, medido: o motor META le `a["qualidade_meta"]` desde que foi escrito,
+e o extrator NUNCA produziu esse bloco. Nao existia no schema. Resultado:
+
+   dominio            peso    antes   depois
+   PICO                15%      10      10
+   busca               20%       8      10
+   vies dos estudos    15%   6 TRAVADO  10
+   heterogeneidade     15%       9      10
+   vies de publicacao  10%       9       9
+   CONCLUSOES          25%   6 TRAVADO  10
+                          ponderacao 8  →  10
+
+Os dois travados somavam 40% do peso. Uma meta PERFEITA nao passava de 8 na
+ponderacao, por construcao. Junto com o buraco do estudo negativo, e a
+explicacao do 4/10 da meta de betabloqueador do NEJM.
+
+  · analise_meta_prompt.md (novo) — PRISMA 2020 + Cochrane v6.5 + AMSTAR-2 + GRADE
+  · SCHEMA_FATOS_META em analise.py, com `qualidade_meta` completo
+  · analise.py: despachante ganha o ramo `tipo == "meta"`
+  · _CHAVE_DO_TIPO ganha "meta": "qualidade_meta" em analisador.py E em
+    rodar_em_blocos.py (LEI 9: a mesma regra em dois blocos)
+
+O que o extrator novo pergunta e ninguem perguntava:
+  · PRISMA 13d — heterogeneidade nao e so I². Pede TAU² e INTERVALO DE PREDICAO
+    ("no meu proximo paciente, que efeito espero?"). E comum o IC agregado
+    excluir o nulo e a predicao INCLUIR — a meta e menos acionavel que o resumo.
+  · Cochrane cap.13 — com k<10 NAO se testa funnel. Antes o sistema punia quem
+    fez certo; agora da 7: nem premio, nem castigo.
+  · AMSTAR-2 criticos — PROSPERO antes, extracao em duplicata, e a lista dos
+    EXCLUIDOS com motivo (o item que quase ninguem cumpre).
+  · GRADE (PRISMA 15) — certeza DA EVIDENCIA e diferente de qualidade DA REVISAO.
+  · DOMINANCIA — um estudo com >=60% do peso: a meta E aquele estudo.
+  · subgrupo vendido como resultado principal -> conclusoes 3.
+  · unidade de analise (cluster/crossover/multi-braco contado 2x).
+
+D) A SOMATORIA E A NOTA — "nao tem muito o que ficar inventando"
+
+O `_TETO_INTERVENCAO["meta"] = 8` era uma regua EXTRA por cima da ponderacao dos
+6 dominios que o proprio Dr. Eduardo desenhou. Uma meta impecavel (6 dominios em
+10) saia 8 de qualquer jeito — os dominios nao mudavam nada de 8 para cima. O
+scorecard existia e nao decidia. O teto generico saiu.
+
+A hierarquia DELE continua, mas dentro do `nota_meta`, onde e especifica:
+   IPD de RCTs / meta de RCTs ..... sem teto  (🟢 "melhor tipo" / "padrao-ouro")
+   meta de OBSERVACIONAIS ......... teto 7    ("nunca equivale a RCT")
+   meta de REDE sem transitividade  teto 8
+   + os tetos classicos: contaminacao 5 · NI mal interpretada 6 · I² alto sem
+     investigar 6
+
+MEDIDO depois:
+   meta de RCTs impecavel (IPD ou agregada) .... somatoria 10 → nota 10
+   mesma meta, de OBSERVACIONAIS ............... somatoria  7 → nota  7
+   meta de REDE sem transitividade ............. somatoria  8 → nota  8
+   meta mediana (so o basico) .................. somatoria  8 → nota  8
+   meta com I² alto e sem investigar ........... somatoria  6 → nota  6
+
+UMA COISA QUE EU QUASE FIZ ERRADO, E NAO FIZ: meu teste cobrava `aplic >= 9` e
+reprovou em 8. O reflexo seria afrouxar a LEI 0 para o teste passar. O codigo
+estava obedecendo o CLAUDE.md; o TESTE e que estava errado. Avisei em vez de
+mexer, e a decisao de tirar o teto veio depois, DELE. A historia das 3 versoes
+do teste ficou escrita no proprio teste, para o proximo que passar por ali.
+
+E) Chave 12 tambem examina modelos FORA das cadeias (--extras), para medir o
+   Gemini sem devolve-lo a producao.
+
+Bateria: APROVADO. Todos os .py compilam.
+
+F) RAMPA DE CONFIANCA nos blocos (ideia do Dr. Eduardo, 04/Ago)
+
+   "vamos rodar de 10 em 10; depois de 30 consecutivos bons, 3 blocos de 20/20;
+    3 blocos bons, 30 em 30"
+
+   RAMPA = [(10, 3), (20, 3), (30, None)]
+
+   BLOCO BOM = zero falhas de analise E zero de publicacao. Artigo RECUSADO por
+   nota baixa NAO e falha — e o sistema funcionando e dizendo nao.
+   BLOCO RUIM = volta ao degrau 1 (10) e o contador zera. Conservador de
+   proposito: subir e opcional, errar 400 de uma vez nao pode repetir.
+
+   Ensaiado a seco em 431 artigos (sem LLM):
+     tudo certo ....... 18 blocos  (10,10,10 → 20,20,20 → 30,30,30...)
+     falha no bloco 5 . cai de 20 para 10, reconquista os 3, volta a subir
+
+   Chave 2 passa a chamar com --rampa. O tamanho fixo continua disponivel
+   (`rodar_em_blocos.py <pasta> 20`) para quem quiser.
+
+Bateria: APROVADO. Todos os .py compilam.

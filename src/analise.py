@@ -21,6 +21,7 @@ import anthropic
 
 PROMPT = open(os.path.join(_HERE, "analise_prompt.md")).read()
 PROMPT_DIRETRIZ = open(os.path.join(_HERE, "analise_diretriz_prompt.md")).read()
+PROMPT_META = open(os.path.join(_HERE, "analise_meta_prompt.md")).read()   # 04/Ago: extrator próprio
 PROMPT_REVISAO = open(os.path.join(_HERE, "analise_revisao_prompt.md")).read()
 
 _B = {"type": "boolean"}
@@ -133,6 +134,115 @@ SCHEMA_FATOS = {
                  "desfecho_duro", "extrapolavel", "conclusao_nao_bate_desenho", "itt_falso",
                  "qualidade_entrada", "achados_principais", "keywords", "relevancia_clinica",
                  "aplicabilidade", "qualidade_nhlbi", "falhas_fatais"],
+}
+
+
+# ═══════════ SCHEMA DOS FATOS DA META-ANÁLISE — 04/Ago/2026 ═══════════
+# CONSTRUÍDO PORQUE O MOTOR PROCURAVA UM BLOCO QUE NÃO EXISTIA.
+# O `nota_meta` lê `a["qualidade_meta"]` desde que foi escrito — e o extrator NUNCA produziu esse
+# bloco. Resultado medido: os 6 domínios do Dr. Eduardo rodavam com metade dos dados em branco.
+# `conclusoes` (25% do peso) ficava travado em 6 para sempre; `vies_estudos` (15%) idem. O teto
+# prático de uma meta PERFEITA era ~7,7 — nenhuma conseguia nota alta, por construção.
+# Junto com o buraco do estudo negativo, é a explicação do 4/10 da meta de betabloqueador do NEJM.
+#
+# Instrumentos: PRISMA 2020 (BMJ 2021;372:n71/n160) · Cochrane Handbook v6.5 · AMSTAR-2 · GRADE.
+SCHEMA_FATOS_META = {
+    "type": "object",
+    "properties": {
+        # ── identificação e desenho ──
+        "desenho": {"type": "string", "enum": ["meta"]},
+        "pergunta": {"type": "string", "enum": ["intervencao", "etiologia", "prognostico", "diagnostico"]},
+        "tipo_meta": {"type": "string",
+                      "enum": ["ipd", "dados_agregados", "rede", "prospectiva", "nao_reportado"]},
+        "desenhos_incluidos": {"type": "string",
+                               "enum": ["rcts", "observacionais", "mistos", "nao_reportado"]},
+        "achados_principais": _S, "aplicabilidade": _S, "keywords": {"type": "array", "items": _S},
+
+        # ── o bloco que o motor procurava e nunca recebeu ──
+        "qualidade_meta": {
+            "type": "object",
+            "properties": {
+                # tamanho
+                "k_estudos": _INT, "n_total": _INT,
+                # BUSCA (PRISMA 6-9 · AMSTAR-2 críticos)
+                "n_bases": _INT, "data_busca": _S,
+                "protocolo_registrado": _B3,           # PROSPERO/registro ANTES da revisão
+                "extracao_em_duplicata": _B3,          # dois revisores independentes
+                "literatura_cinzenta": _B3,
+                "restricao_idioma": _B3,
+                "excluidos_listados_com_motivo": _B3,  # o item que quase ninguém cumpre
+                # ESTATÍSTICA (PRISMA 13 · Cochrane cap.10)
+                "modelo_estatistico": {"type": "string",
+                                       "enum": ["fixo", "aleatorio", "ambos", "nao_reportado"]},
+                "modelo_apropriado_p_heterogeneidade": _B3,
+                "medida_efeito": _S,
+                "tau2_reportado": _B3,
+                "intervalo_predicao_reportado": _B3,
+                "intervalo_predicao_cruza_nulo": _B3,  # o IC agregado exclui o nulo e a predição não?
+                "peso_maior_estudo_pct": _NUM,         # dominância: a meta É aquele estudo?
+                "unidade_analise_problema": _B3,       # cluster/crossover/multi-braço contado 2×
+                "heterogeneidade_investigada": _B3,
+                "heterogeneidade_clinica_relevante": _B3,   # populações/doses/tempos diferentes
+                # VIÉS DE PUBLICAÇÃO (Cochrane cap.13)
+                "funnel_plot_feito": _B3, "egger_p": _NUM,
+                "teste_funnel_indicado": _B3,          # false se k<10 (Cochrane: não testar)
+                # VIÉS DOS INCLUÍDOS (AMSTAR-2)
+                "rob_ferramenta": _S,
+                "vies_mudou_interpretacao": _B3,       # usou o RoB ao concluir, ou foi check-box?
+                # CERTEZA (PRISMA 15 · GRADE)
+                "grade_usado": _B3,
+                "certeza_desfecho_primario": {"type": "string",
+                                              "enum": ["alta", "moderada", "baixa", "muito_baixa",
+                                                       "nao_reportado"]},
+                # CONCLUSÕES (25% do peso)
+                "conclusao_alem_da_evidencia": _B3,
+                "subgrupo_tratado_como_principal": _B3,
+                "limitacoes_reconhecidas": _B3,
+                # só para meta de rede / umbrella
+                "transitividade_avaliada": _B3,
+                "sobreposicao_estudos_relevante": _B3,
+            },
+            "required": ["k_estudos", "modelo_estatistico"],
+        },
+
+        # ── o checklist NHLBI de revisão sistemática (o motor também lê daqui) ──
+        "qualidade_nhlbi": {
+            "type": "object",
+            "properties": {
+                "pergunta_focada": _B3, "elegibilidade_predefinida": _B3,
+                "busca_sistematica_abrangente": _B3, "revisao_em_duplicata": _B3,
+                "qualidade_estudos_avaliada": _B3, "estudos_listados_com_caracteristicas": _B3,
+                "vies_publicacao_avaliado": _B3, "heterogeneidade_avaliada": _B3,
+                "i2_valor": _NUM,
+            },
+        },
+
+        # ── relevância clínica: MESMO bloco do artigo original (a régua é comum) ──
+        "relevancia_clinica": {
+            "type": "object",
+            "properties": {
+                "desfecho_primario": _S, "tipo_desfecho": _S, "efeito_observado": _S,
+                "mcid_reportado": _B, "mcid_valor": _S,
+                "efeito_excede_limiar": _B3,
+                "ic_exclui_beneficio_relevante": _B3,
+                "classificacao": {"type": "string",
+                                  "enum": ["robusto", "provavel", "incerto",
+                                           "ausencia_de_efeito_demonstrada",
+                                           "significativo_mas_abaixo_do_mcid", "nao_relevante",
+                                           "nao_avaliavel"]},
+                "frase_chave": _S,
+            },
+            "required": ["desfecho_primario", "efeito_observado", "classificacao", "frase_chave"],
+        },
+
+        # ── delatores que o motor já usa (tetos clássicos da meta) ──
+        "extrapolavel": _B3, "poder_ok": _B3, "desfecho_duro": _B3,
+        "i2_alto_sem_investigar": _B3, "contaminacao_incluidos": _B3, "ni_mal_interpretada": _B3,
+        "conclusao_nao_bate_desenho": _B3,
+        "falhas_fatais": {"type": "array", "items": _S},
+    },
+    "required": ["desenho", "pergunta", "qualidade_meta", "relevancia_clinica",
+                 "achados_principais", "aplicabilidade"],
 }
 
 
@@ -297,6 +407,11 @@ def extrair_fatos(pdf_path, tipo=None, cadeia=None):
     elif tipo == "revisao_narrativa":
         modelo, esquema = PROMPT_REVISAO, SCHEMA_FATOS_REVISAO
         print("       extração: REVISÃO NARRATIVA (viés de seleção + utilidade prática)")
+    elif tipo == "meta":
+        # 04/Ago — LEI 8, um degrau mais fundo: perguntar randomização e cegamento a uma meta é o
+        # mesmo "superficializar" que o Dr. Eduardo apontou no prompt único do redator em 26/Jul.
+        modelo, esquema = PROMPT_META, SCHEMA_FATOS_META
+        print("       extração: META-ANÁLISE (PRISMA 2020 + Cochrane + AMSTAR-2 + GRADE)")
     else:
         modelo, esquema = PROMPT, SCHEMA_FATOS
     prompt = modelo.replace("{article_text}", texto)
