@@ -59,8 +59,13 @@ fi
 # conta quantos e estima o custo antes de gastar
 N=$(eval "for f in $ALVOS; do echo \$f; done" | grep -c '\.pdf$')
 echo
-echo "  $N artigo(s) × 3 modelos (sonnet-5 · gpt-5.6-terra · gemini-3.1-pro) = $((N*3)) chamadas"
-echo "  Custo aproximado: US\$ $(awk "BEGIN{printf \"%.2f\", $N*0.30}")"
+echo "  $N artigo(s) × 3 modelos (terra · sonnet-5 · grok-4.5) = $((N*3)) chamadas"
+# 04/Ago 01h42 — SEM `awk`. A linha do custo usava $(awk "BEGIN{...}") e no macOS do Dr. Eduardo o
+# awk ficou LENDO O TECLADO: o "s" que ele digitou foi engolido pelo awk, o prompt nunca apareceu, e
+# ele esperou 30 min achando que era o modelo. Travou ANTES de qualquer chamada de LLM.
+# Aritmética em centavos com printf do próprio bash: builtin, sem processo externo, não tem como pendurar.
+CENT=$((N * 30))
+printf "  Custo aproximado: US\$ %d.%02d\n" $((CENT/100)) $((CENT%100))
 echo "  (só a LEITURA do PDF — não gera perícia, não gera áudio, não gera visual)"
 echo
 read -r -p "  Rodar? [s/N]: " OK

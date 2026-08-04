@@ -76,6 +76,30 @@ ou foi INVESTIGADO (meta-regressão, análise de subgrupo pré-especificada, an�
 ## Principais Achados
 TODOS os números agregados: desfecho primário (estimativa, IC95%, p, k, N), desfechos secundários,
 subgrupos (com teste de interação — e diga se era pré-especificado ou fishing), NNT se calculável.
+
+═══ REGRA DO NNT/NNH — NÃO EXISTE "SEMPRE CALCULE" (04/Ago/2026) ═══
+
+NNT = 1 / ARR. Logo o NNT SÓ EXISTE se as TRÊS coisas estiverem declaradas:
+  1. RISCO BASAL — a taxa de eventos no grupo CONTROLE. De HR, RR ou OR sozinhos NÃO sai NNT.
+  2. HORIZONTE DE TEMPO — "NNT 40" não quer dizer nada; "NNT 40 em 3 anos" quer. O MESMO tratamento
+     tem NNT diferente em 1, 3 e 5 anos. Número sem horizonte é número ERRADO, não incompleto.
+  3. A MESMA ESCALA do desfecho — NNT não se converte entre desfechos nem entre populações.
+
+CASO A CASO:
+  · o artigo REPORTA o NNT ......... copie, com o horizonte e o risco basal que ELE usou.
+  · dá n/N nos dois braços + seguimento ... pode calcular; DECLARE o horizonte junto.
+  · só tem HR/RR/OR sem risco basal ...... "NNT não calculável a partir do reportado".
+  · META-ANÁLISE com risco basal heterogêneo entre os estudos ... um NNT único é FICÇÃO. Só use se o
+    próprio artigo o derivar de um risco basal declarado — e diga de qual risco basal saiu.
+  · o IC 95% do efeito CRUZA O NULO ...... NNT NÃO SE APLICA. O intervalo do NNT vai de um número
+    negativo a infinito, e "trata X para salvar 1" vira frase inventada sobre efeito que não existe.
+    Escreva "não aplicável: o efeito não é distinguível de zero".
+
+Não é permitido escrever um NNT sem o horizonte ao lado.
+
+NUMA META-ANÁLISE ISTO É PARTICULARMENTE GRAVE: os estudos incluídos quase nunca têm o mesmo risco
+basal. Um NNT único aplicado a todos eles é uma média que não descreve paciente nenhum.
+
 **Marque o resultado mais confiável e o mais frágil** (o que depende de 1–2 estudos, o que tem IC
 que cruza o nulo por pouco, o que sumiria se o maior estudo fosse retirado).
 

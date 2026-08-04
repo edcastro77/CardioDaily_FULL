@@ -14,7 +14,13 @@ NÃO é a perícia. É o trailer, não o filme.
 
 ═══ O QUE MANTER (o que fisga) ═══
 - O GANCHO logo no começo: a aposta clínica e o que está em jogo (ex.: "pode ser a diferença entre 6 meses e anos de vida").
-- UM ou dois números que impressionam — o efeito dramático e o "trata X, salva 1" (NNT). Nada além disso.
+- UM ou dois números que impressionam — o efeito dramático e, SE ELE EXISTIR, o "trata X, salva 1".
+  ⚠️ 04/Ago: este item pedia o NNT sempre, e é o pior lugar para um número inventado — o áudio vai
+  direto no ouvido do assinante, sem tabela ao lado para conferir. O "trata X, salva 1" SÓ pode ser
+  dito se o NNT estiver NO ARTIGO (ou for calculável do n/N dos dois braços) E vier com o HORIZONTE:
+  "trata 40 durante 3 anos para evitar 1 evento". Sem horizonte, não fale o número.
+  Se o IC 95% cruza o nulo, NÃO existe "salva 1" — o efeito não é distinguível de zero; nesse caso a
+  notícia é outra e é igualmente boa: o que se pode DEIXAR DE FAZER. Nada além disso.
 - "O trabalho foi bem feito" (por que confiar) e UMA ressalva honesta (leitura crítica leve, sem lista de vieses).
 - Em QUEM aplicar e COMO (o gesto prático: começa baixo, titula devagar, no paciente estável) — a ressalva do Brasil, curta.
 

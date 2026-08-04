@@ -276,6 +276,65 @@ def teste_schema_do_google():
               len(conv(original).get("properties", {})) == len(original.get("properties", {})))
 
 
+# ══════════════ N+3 · O ESTUDO NEGATIVO NÃO PODE SER PUNIDO POR SER NEGATIVO (04/Ago) ══════════════
+def teste_nulo_informativo():
+    """O caso que quase inverteu o produto: a meta de dados individuais de betabloqueador pós-IAM com
+    FE preservada (NEJM 2026 — 5 RCTs, 17.801 pacientes) levou NOTA 4/10, que na escala do CardioDaily
+    é "não serve de base para conduta".
+
+    Palavras do Dr. Eduardo: *"antes eu ensinava o MONABICHA aos residentes. O M caiu, o O caiu, o B
+    deixou de ser mantra. Se o meu programa está na contramão disto, meu programa está totalmente
+    errado."* Metade da cardiologia que ele ensina veio de estudo NEGATIVO.
+
+    A regra: `ausencia_de_efeito_demonstrada` não tem teto — MAS só vale com as DUAS provas
+    (IC exclui benefício relevante + poder declarado). Sem elas, o motor rebaixa para `incerto`."""
+
+    def rc(classe, ic=None):
+        d = {"classificacao": classe}
+        if ic is not None:
+            d["ic_exclui_beneficio_relevante"] = ic
+        return d
+
+    # ── 1) o nulo DEMONSTRADO não tem teto: pode chegar ao topo, como qualquer positivo forte
+    bom = _bom(pergunta="intervencao", desenho="rct", efeito_grande=True,
+               relevancia_clinica=rc("ausencia_de_efeito_demonstrada", ic=True))
+    r = N.score(bom)
+    checa("nulo demonstrado: SEM teto de MCID", r["teto_mcid"] == 10, f"veio {r['teto_mcid']}")
+    checa("nulo demonstrado: pode chegar a 10", r["aplic"] == 10, f"veio {r['aplic']}")
+    checa("nulo demonstrado: NUNCA cai na faixa de descarte (<6)", r["aplic"] >= 6)
+
+    # ── 2) o caso REAL: sem o conserto, este artigo levava teto 6 e era jogado fora
+    reboot = _bom(pergunta="intervencao", desenho="meta", desfecho_duro=True,
+                  relevancia_clinica=rc("ausencia_de_efeito_demonstrada", ic=True))
+    r = N.score(reboot)
+    checa("betabloqueador pós-IAM (nulo, poder ok, IC exclui): publica", r["aplic"] >= 6,
+          f"veio {r['aplic']} — é o bug de 04/Ago voltando")
+
+    # ── 3) DEIXAR DE FAZER também é mudar conduta
+    forte = _bom(pergunta="intervencao", desenho="rct", efeito_grande=True, desfecho_duro=True,
+                 relevancia_clinica=rc("ausencia_de_efeito_demonstrada", ic=True))
+    r = N.score(forte)
+    checa("nulo demonstrado com nota alta: muda_conduta = SIM", r["muda_conduta"] == "SIM",
+          f"veio {r['muda_conduta']} — 'retirar a droga' É conduta")
+
+    # ── 4) o motor NÃO aceita a palavra do modelo sem prova
+    sem_ic = _bom(pergunta="intervencao", desenho="rct", efeito_grande=True,
+                  relevancia_clinica=rc("ausencia_de_efeito_demonstrada", ic=False))
+    checa("nulo SEM 'IC exclui benefício' → rebaixa p/ incerto (teto 7)",
+          N.score(sem_ic)["teto_mcid"] == 7, f"veio {N.score(sem_ic)['teto_mcid']}")
+    sem_poder = _bom(pergunta="intervencao", desenho="rct", efeito_grande=True, poder_ok=False,
+                     relevancia_clinica=rc("ausencia_de_efeito_demonstrada", ic=True))
+    checa("nulo SEM poder declarado → rebaixa p/ incerto (teto 7)",
+          N.score(sem_poder)["teto_mcid"] == 7, f"veio {N.score(sem_poder)['teto_mcid']}")
+    checa("nulo sem prova nenhuma: muda_conduta = NÃO", N.score(sem_poder)["muda_conduta"] == "NÃO")
+
+    # ── 5) e os tetos ANTIGOS continuam valendo — o conserto não pode abrir a porta pro lixo
+    for classe, teto in (("significativo_mas_abaixo_do_mcid", 6), ("nao_relevante", 6), ("incerto", 7)):
+        r = N.score(_bom(pergunta="intervencao", desenho="rct", efeito_grande=True,
+                         relevancia_clinica=rc(classe)))
+        checa(f"teto antigo intacto: {classe} ≤ {teto}", r["teto_mcid"] == teto, f"veio {r['teto_mcid']}")
+
+
 # ══════════════ 3 · FALHAS FATAIS REPROVAM (não descontam) ══════════════
 def teste_falhas_fatais():
     for f in N.FALHAS_FATAIS:
@@ -923,7 +982,7 @@ if __name__ == "__main__":
               teste_revisao_atualidade, teste_revisao_contrato_e_silencio,
               teste_os_quatro_motores_nao_se_misturam, teste_veredito_aberto, teste_mapa_pubmed,
               teste_a_pasta_manda, teste_reuso_de_staging, teste_pdf_sem_pasta_nao_entra,
-              teste_schema_do_google,
+              teste_schema_do_google, teste_nulo_informativo,
               teste_gabarito_dos_artigos, teste_contrato_de_saida]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:

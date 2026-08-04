@@ -60,7 +60,7 @@ import datetime
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
-MODELOS_PADRAO = ["claude-sonnet-5", "gpt-5.6-terra", "gemini-3.1-pro-preview"]
+MODELOS_PADRAO = ["gpt-5.6-terra", "claude-sonnet-5", "grok-4.5"]   # terra na frente desde 04/Ago
 
 # US$ por 1M de tokens (entrada, saída) — para a coluna de custo. Aproximado e declarado como tal.
 _PRECO = {
@@ -71,6 +71,7 @@ _PRECO = {
     "gpt-5.6-sol":            (1.25, 10.00),
     "gpt-5.6-luna":           (0.20, 1.20),
     "gemini-3.1-pro-preview": (1.25, 10.00),
+    "grok-4.5":               (3.00, 15.00),   # estimado — conferir na fatura da xAI
 }
 
 TIPOS = ("original", "meta", "diretriz", "revisao_narrativa")
@@ -106,15 +107,22 @@ def medir_um(pdf, tipo, modelos):
         llm_client._ULTIMO_MODO[0] = None
         llm_client._ULTIMO_USO.clear()
         llm_client.contexto_uso(etapa="prova_extracao", artigo=os.path.basename(pdf))
+        # 03/Ago — SILÊNCIO É INDISTINGUÍVEL DE TRAVADO. A chamada demora 30–120 s e só imprimia
+        # DEPOIS de terminar; o Dr. Eduardo teve de perguntar "está rodando ou está parado?".
+        # Agora avisa ANTES, e o flush força a linha a sair na hora (senão o buffer segura).
+        print(f"      … chamando {mod} (lendo o PDF inteiro — costuma levar 30–120 s)", flush=True)
         t0 = time.time()
         try:
             fatos = A.extrair_fatos(pdf, tipo=tipo, cadeia=[mod])   # UM modelo, sem fallback: é uma prova
             erro = ""
         except Exception as e:
-            linhas.append({"modelo": mod, "erro": f"{type(e).__name__}: {str(e)[:90]}",
+            # 04/Ago: o erro vinha cortado em 60 chars e escondeu POR QUE o terra e o gemini
+            # falharam. Instrumento que esconde o erro é pior que instrumento nenhum.
+            msg = str(e).replace("\n", "\n         ")
+            linhas.append({"modelo": mod, "erro": f"{type(e).__name__}: {msg[:900]}",
                            "aplic": None, "rigor": None, "motor": "—", "modo": "FALHOU",
                            "seg": round(time.time() - t0, 1), "fatos": {}})
-            print(f"      ❌ {mod:24} {type(e).__name__}: {str(e)[:60]}")
+            print(f"      ❌ {mod}\n         {type(e).__name__}: {msg[:700]}", flush=True)
             continue
         seg = round(time.time() - t0, 1)
 
@@ -129,11 +137,20 @@ def medir_um(pdf, tipo, modelos):
             "modo": llm_client._ULTIMO_MODO[0] or "texto",
             "seg": seg, "entrada": ent, "saida": sai, "custo": _custo(mod, ent, sai),
             "stop": uso.get("stop_reason"), "fatos": fatos,
+            # 04/Ago 02h — O INSTRUMENTO NÃO DIZIA POR QUÊ. A meta dos betabloqueadores pós-IAM
+            # (NEJM 2026) levou Nota 4/10 nos dois modelos, e o relatório não tinha como explicar:
+            # ele só guardava os campos DIVERGENTES, e o campo que produziu o 4 os dois leram IGUAL.
+            # Agora vão junto os TETOS e as FLAGS do motor — a conta inteira, não só o resultado.
+            "tetos": {"desenho": r.get("teto_desenho"), "externa": r.get("teto_externa"),
+                      "rigor": r.get("trabalho"), "falha_fatal": r.get("teto_falha_fatal"),
+                      "mcid": r.get("teto_mcid")},
+            "falhas_fatais": r.get("falhas_fatais") or [],
+            "flags": r.get("flags") or [],
         })
         c = _custo(mod, ent, sai)
         print(f"      ✔ {mod:24} Nota {str(r['aplic']):>4}/10 · Rigor {str(r['trabalho']):>4}/10 · "
               f"{r['motor']:8} · {linhas[-1]['modo']:16} {seg:>6.1f}s"
-              + (f" · US$ {c:.3f}" if c else ""))
+              + (f" · US$ {c:.3f}" if c else ""), flush=True)
     return linhas
 
 
@@ -199,8 +216,8 @@ def main():
 
     resultado = []
     for i, (pdf, tipo) in enumerate(tarefas, 1):
-        print(f"\n[{i}/{len(tarefas)}] {os.path.basename(pdf)[:66]}")
-        print(f"      tipo: {tipo}")
+        print(f"\n[{i}/{len(tarefas)}] {os.path.basename(pdf)[:66]}", flush=True)
+        print(f"      tipo: {tipo}", flush=True)
         linhas = medir_um(pdf, tipo, modelos)
         notas = {l["aplic"] for l in linhas if not l["erro"]}
         if len(notas) > 1:
@@ -216,6 +233,33 @@ def main():
     carimbo = datetime.datetime.now().strftime("%Y%m%d-%H%M")
     md = os.path.join(saida, f"prova_extracao_{carimbo}.md")
     _escrever_relatorio(md, resultado, modelos)
+
+    # ═══ OS FATOS CRUS, GRAVADOS — 04/Ago ═══
+    # Na 1ª rodada o relatório mostrava só os campos DIVERGENTES, e quando apareceu uma nota
+    # suspeita (meta de dados individuais, 5 RCTs, 17.801 pacientes, NEJM → 4/10) não deu para
+    # descobrir DE ONDE veio o 4 sem pagar a extração de novo. Com os fatos em disco, o motor pode
+    # ser re-rodado quantas vezes quiser DE GRAÇA — ele é função pura.
+    bruto = os.path.join(saida, f"fatos_{carimbo}.json")
+    json.dump([{"pdf": os.path.basename(r["pdf"]), "tipo": r["tipo"],
+                "por_modelo": {l["modelo"]: {"erro": l["erro"], "aplic": l["aplic"],
+                                             "rigor": l["rigor"], "motor": l["motor"],
+                                             "modo": l.get("modo"), "fatos": l["fatos"]}
+                               for l in r["linhas"]}}
+               for r in resultado],
+              open(bruto, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    print(f"\n🧾 fatos crus (para re-rodar o motor de graça): {bruto}")
+
+    # os FATOS CRUS, por artigo e por modelo. Sem isto não dá para reconstruir a nota depois —
+    # e reconstruir a nota é justamente o que a gente precisou fazer às 2h de 04/Ago e não deu.
+    bruto = os.path.join(saida, f"prova_extracao_{carimbo}_fatos.json")
+    json.dump([{"pdf": os.path.basename(r["pdf"]), "tipo": r["tipo"],
+                "modelos": {l["modelo"]: {"erro": l["erro"], "fatos": l.get("fatos"),
+                                          "tetos": l.get("tetos"), "flags": l.get("flags"),
+                                          "falhas_fatais": l.get("falhas_fatais")}
+                            for l in r["linhas"]}}
+               for r in resultado],
+              open(bruto, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    print(f"🧾 fatos crus (para reconstruir a nota): {bruto}")
 
     # ── o placar ──
     div = sum(1 for r in resultado if len({l["aplic"] for l in r["linhas"] if not l["erro"]}) > 1)
@@ -251,6 +295,51 @@ def _escrever_relatorio(caminho, resultado, modelos):
             L.append(f"| `{l['modelo']}` | **{l['aplic']}/10** | {l['rigor']}/10 | {l['motor']} | "
                      f"{l.get('muda_conduta','')} | {l['modo']} | {l['seg']}s | "
                      f"{l.get('entrada','')} | {l.get('saida','')} | {c} |")
+
+        # POR QUE a nota é a nota — a conta do motor, aberta. `aplic = min(...)`
+        L.append("\n### De onde saiu a nota (a conta do motor)\n")
+        L.append("`nota = min(teto_desenho, teto_externa, rigor, teto_falha_fatal, teto_mcid)`\n")
+        L.append("\n| modelo | desenho | externa | rigor | falha fatal | MCID | **= nota** |")
+        L.append("|---|---|---|---|---|---|---|")
+        for l in r["linhas"]:
+            if l["erro"]:
+                continue
+            t = l.get("tetos") or {}
+            L.append(f"| `{l['modelo']}` | {t.get('desenho')} | {t.get('externa')} | {t.get('rigor')} "
+                     f"| {t.get('falha_fatal')} | {t.get('mcid')} | **{l['aplic']}** |")
+        for l in r["linhas"]:
+            if l["erro"] or not l.get("flags"):
+                continue
+            L.append(f"\n**`{l['modelo']}` — o que o motor registrou:**\n")
+            for fl in l["flags"]:
+                L.append(f"- {fl}")
+            if l.get("falhas_fatais"):
+                L.append(f"\n> 🔴 **FALHA FATAL: {', '.join(l['falhas_fatais'])}** — teto 4, "
+                         f"independente do resto.")
+            L.append("")
+
+        # DE ONDE VEIO A NOTA — a conta do motor, aberta. 04/Ago: sem isto, o Dr. Eduardo viu
+        # "Nota 4/10" numa meta de dados individuais do NEJM e não tinha como saber qual teto mordeu.
+        L.append("\n**De onde veio a nota** — `aplicabilidade = o MENOR entre os tetos`:\n")
+        L.append("| modelo | teto desenho | teto externa | rigor | falha fatal | teto MCID | **= nota** |")
+        L.append("|---|---|---|---|---|---|---|")
+        for l in r["linhas"]:
+            if l["erro"]:
+                continue
+            t = l.get("tetos") or {}
+            def mordeu(v):
+                return f"**{v}** ⟵" if v is not None and v == l["aplic"] else str(v)
+            L.append(f"| `{l['modelo']}` | {mordeu(t.get('desenho'))} | {mordeu(t.get('externa'))} | "
+                     f"{mordeu(t.get('rigor'))} | {mordeu(t.get('falha_fatal'))} | "
+                     f"{mordeu(t.get('mcid'))} | **{l['aplic']}/10** |")
+        L.append("\n_⟵ marca o teto que MORDEU: é ele que está segurando a nota._\n")
+        for l in r["linhas"]:
+            if l["erro"] or not l.get("flags"):
+                continue
+            L.append(f"\n<details><summary>por que — {l['modelo']}</summary>\n")
+            for f in l["flags"]:
+                L.append(f"- {f}")
+            L.append("\n</details>\n")
 
         notas = {l["aplic"] for l in r["linhas"] if not l["erro"]}
         if len(notas) > 1:

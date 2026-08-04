@@ -93,7 +93,8 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
     "traz_valores_corte_ou_doses": <true se o texto traz números operacionais: doses, alvos
        (ex.: LDL <55 mg/dL), valores de corte de exame, intervalos de seguimento>,
     "traz_magnitude_efeito": <true se a revisão quantifica o benefício das condutas que recomenda
-       (HR, RR, ARR, NNT, % de redução) atribuindo à fonte — e não só adjetivos como 'eficaz'>,
+       (HR, RR, ARR, NNT, % de redução) atribuindo à fonte — e não só adjetivos como 'eficaz'.
+        NNT só com risco basal e horizonte declarados — ver a REGRA DO NNT no fim deste prompt>,
     "traz_custo_acesso": <true se a revisão discute CUSTO, preço, disponibilidade, aprovação
        regulatória, cobertura ou viabilidade de implementação. Vale para qualquer sistema de saúde,
        mas discussão da realidade BRASILEIRA (SUS, ANVISA, CONITEC, saúde suplementar) é o caso forte>,

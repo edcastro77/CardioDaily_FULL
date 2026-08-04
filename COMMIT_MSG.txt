@@ -1,56 +1,102 @@
-Saida estruturada nos 3 provedores + PROVA DA EXTRACAO (a etapa nunca medida)
+O BURACO DO ESTUDO NEGATIVO — o motor punia o trabalho que muda conduta
 
-O Dr. Eduardo mandou parar e repensar a analise. Mapeando a corrente, apareceu
-que cada artigo dispara 6 chamadas de LLM e SO UMA delas foi medida (o redator,
-01/Ago). A etapa que JULGA — a extracao — nunca foi comparada com ninguem.
+O Dr. Eduardo rodou a prova da extracao numa meta-analise de DADOS INDIVIDUAIS
+de betabloqueador pos-IAM com FE preservada (NEJM 2026, 5 RCTs, 17.801 pacientes).
+Os dois modelos deram NOTA 4/10 — que na escala do CardioDaily e "confianca
+criticamente baixa, NAO serve de base para conduta".
 
-    PDF --[extracao]--> FATOS --[motor]--> NOTA --> publica? visual? audio?
-                                            +----> entra DENTRO do prompt do redator
+Palavras dele:
+  "antes eu ensinava aos residentes o MONABICHA. O M caiu (morfina reduz absorcao
+   de antiplaquetario e aumenta fibrose), o O caiu (oxigenio so se SatO2<90%,
+   senao aumenta radical livre), o B deixou de ser mantra (sem disfuncao de VE,
+   sem betabloqueador). Se o meu programa esta na contramao disto, meu programa
+   esta totalmente errado."
 
-Se a extracao le errado, artigo bom leva 5 e some. Ultima rodada: 122 analisados,
-75 recusados. Pode ser o sistema funcionando. Ninguem sabe, porque ninguem mediu.
+Ele tem razao. Metade da cardiologia que ele ensina veio de estudo NEGATIVO —
+COURAGE, ISCHEMIA, ORBITA, TOPCAT, CABANA, REDUCE-AMI. Um sistema que da 4/10
+para essa classe descarta exatamente o conteudo que mais muda conduta. E pode
+explicar boa parte dos 75 recusados de 122 da ultima rodada.
 
-1. BURACO ACHADO ANTES DE MEDIR — o gerar_json tinha:
-       if M.provedor(mod) != "anthropic": continue
-   O terra e o gemini eram PULADOS. Quando a Anthropic caia, a extracao desabava
-   para "peca JSON em prosa e torca" — o mesmo mecanismo que derrubou 74% da
-   rodada de 25/07 e que a saida estruturada veio matar. A cadeia dizia ter
-   fallback cross-provider; para a extracao, nao tinha. E impedia a medicao:
-   comparar sonnet (com schema imposto) contra terra (sem) e luta arranjada.
+CAUSA RAIZ — nao foi o modelo, nao foi alucinacao: O VOCABULARIO NAO TINHA A
+PALAVRA. O enum de `relevancia_clinica.classificacao` so oferecia:
+    robusto | provavel | incerto | significativo_mas_abaixo_do_mcid |
+    nao_relevante | nao_avaliavel
+Um trabalho que PROVA que a droga nao ajuda era obrigado a se declarar
+`nao_relevante` — teto 6. O extrator nao conseguiria acertar nem se quisesse.
+Segunda camada: `muda_conduta` exigia `efeito_relevante_consistente`, que um
+estudo nulo nunca tem. Por construcao, o trabalho que TIROU o betabloqueador
+do pos-IAM saia com "muda conduta: NAO".
 
-   As tres casas fazem a mesma coisa com nome diferente. Implementados os tres:
-     Anthropic -> tool use         (ja existia)
-     OpenAI    -> function calling (parameters + tool_choice forcado)
-     Google    -> responseSchema   (+ response_mime_type=application/json)
-   _ULTIMO_MODO registra qual caminho cada chamada usou — "o gemini caiu para
-   json mode sem schema" e um fato que o instrumento tem de contar.
+A DISTINCAO (metodologica, nao de gosto) — tres coisas que caiam no mesmo balde:
+  · significativo abaixo do MCID  → achou efeito, ninguem sente        → teto 6
+  · INCONCLUSIVO                  → poder fraco / IC largo             → teto 7
+  · AUSENCIA DEMONSTRADA          → poder ok + IC exclui beneficio     → SEM TETO
 
-   _schema_para_gemini: o dialeto do Google nao aceita `type` em lista. Nossos
-   FATOS usam ["boolean","null"] para os TRES estados do NHLBI (fez / nao fez /
-   NAO REPORTA). A conversao vira type+nullable e PRESERVA o null — perder isso
-   apagaria a diferenca entre "nao cegou" e "nao conta se cegou": meia nota.
+Decisoes do Dr. Eduardo (04/Ago):
+  · nulo demonstrado pode chegar a 10, como qualquer positivo forte
+  · so vale com as DUAS provas: IC exclui beneficio relevante E poder declarado
+  · sem elas, o motor REBAIXA sozinho para `incerto` — quem decide e o codigo,
+    nao a palavra do modelo (mesma razao de a LEI 0 ser deterministica)
 
-2. prova_extracao.py — o lab. Mesmo PDF, 3 modelos, e cada extracao passa pelo
-   MESMO motor deterministico. O motor e a REGUA COMUM: nao se compara JSON
-   campo a campo (chato e nao responde nada), compara-se a DECISAO que cada
-   leitura produz. Depois mostra SO os campos que divergiram, com coluna vazia
-   para o Dr. Eduardo marcar quem leu certo — o unico gabarito possivel.
-   Nao move arquivo, nao publica, nao fala com o Supabase.
+VARREDURA (LEI 9) — a regra morava em 5 blocos vivos, corrigidos todos:
+  1. analise.py            SCHEMA: enum + campo `ic_exclui_beneficio_relevante`
+  2. analise_prompt.md     ensina a separar os tres casos, com exemplo numerico
+  3. notas_prototipo.py    TETO_MCID + `_nulo_esta_demonstrado` + muda_conduta
+  4. redator_original_prompt.md   nao escrever o nulo como fracasso; escrever o
+                                  que ele permite DEIXAR DE FAZER, e em quem
+  5. teste_motor.py        teste_nulo_informativo — 12 travas puras
+  (blocos so de leitura, conferidos e sem regra propria: veredito.py,
+   ficha_site.py, contrato.py; legado nao tocado: article_analyzer, prompts/)
 
-3. analise.extrair_fatos ganha `cadeia=` (so a prova usa). O lab roda o MESMO
-   codigo da producao — se medisse caminho proprio, mediria outra coisa: foi o
-   buraco do prova_classificador, que media so o LLM enquanto a producao decidia
-   nas camadas de cima.
+MEDIDO no caso real (meta, desfecho duro, dominios NHLBI completos):
+    antes  "nao_relevante"                    teto  6 → nota 6 → muda conduta NAO
+    depois nulo demonstrado                   teto 10 → nota 8 → muda conduta SIM
+    depois nulo sem IC excluir beneficio      teto  7 → nota 7 → muda conduta NAO
 
-4. Chave 11 · Prova da Extracao — mostra custo e pede [s/N] antes de gastar.
-
-5. teste_motor: teste_schema_do_google — trava pura sobre os 3 schemas reais,
-   garantindo que nenhum `type` sobra em lista e que nenhuma propriedade se perde.
-
-CORRECAO DE ERRO MEU, registrada: eu disse que as diretrizes seriam truncadas
-porque o GUIDELINE_LONGO nao e chamado. ERRADO. O corte de 40k caiu em 01/Ago;
-hoje o redator tem teto de 1.200.000 chars e a diretriz da SBC (246.528 tokens
-~ 985k chars) cabe inteira — o proprio comparativo do Dr. Eduardo prova. O que
-sobra e menor: a EXTRACAO corta em 600.000 chars, com aviso na tela.
+MAIS, da mesma rodada:
+  · prova_extracao agora grava os FATOS CRUS e mostra QUAL TETO MORDEU — sem isso
+    nao dava para saber de onde veio o 4 sem pagar a extracao de novo.
+  · gemini-3.1-pro-preview falha por COTA (429 RESOURCE_EXHAUSTED), nao por nome
+    errado. E o ultimo fallback de 5 das 7 cadeias: na pratica ha DOIS degraus.
+  · checar_modelos.py + Chave 12: bate na porta de cada modelo (texto e JSON
+    estruturado) e diz quantos degraus cada cadeia tem DE VERDADE.
+  · erros de LLM nao vem mais cortados em 120 chars.
 
 Bateria: APROVADO. Todos os .py compilam.
+
+═══════════════════════════════════════════════════════════════════════════
+
+MAIS DOIS, no mesmo embalo (ordem do Dr. Eduardo, 04/Ago 02h30):
+
+A) FIM DO "SEMPRE CALCULE NNT" — a regra que empurrava o modelo a inventar.
+   NNT = 1/ARR, logo so existe com TRES coisas declaradas: risco basal (de HR/
+   RR/OR sozinhos NAO sai NNT), horizonte de tempo (o mesmo tratamento tem NNT
+   diferente em 1, 3 e 5 anos) e a mesma escala do desfecho.
+   Casos: artigo reporta -> copia com horizonte e risco basal dele; da n/N dos
+   dois bracos + seguimento -> calcula e declara o horizonte; so tem HR/RR/OR ->
+   "nao calculavel a partir do reportado"; META com risco basal heterogeneo ->
+   NNT unico e ficcao; IC 95% CRUZA O NULO -> NAO SE APLICA (o intervalo do NNT
+   vai de negativo a infinito, e "trata X salva 1" vira frase inventada sobre um
+   efeito que nao existe). Proibido NNT sem horizonte ao lado.
+
+   Varredura (LEI 9) — 5 arquivos VIVOS corrigidos:
+     analise_prompt.md · analise_revisao_prompt.md · redator_meta_prompt.md ·
+     redator_original_prompt.md · script_audio_prompt.md
+   O script_audio era o PIOR: pedia "o numero que impressiona — trata X, salva 1"
+   sempre. E o audio vai direto no ouvido do assinante, sem tabela ao lado para
+   conferir. (redator_prompt.md nao foi tocado: ninguem o chama — e legado.)
+
+B) GEMINI FORA DAS CADEIAS — "ele e bom mas sempre da problema, limites doidos".
+   Medido na mesma noite: 429 RESOURCE_EXHAUSTED nos dois caminhos, em dois
+   artigos seguidos. Era o ultimo degrau de 5 das 7 cadeias — a LEI DA
+   EQUIVALENCIA tinha na pratica DOIS degraus, e ninguem sabia porque fallback so
+   e exercitado quando o primario cai, no meio de um lote, de madrugada.
+     PROFUNDO   opus-5  -> sol   -> sonnet-5
+     ESCRITA    sonnet-5-> terra -> sol
+     EXTRACAO   sonnet-5-> terra -> sol
+     PERICIA    terra   -> sonnet-5 -> sol
+     RAPIDO     haiku   -> luna  -> sonnet-5
+     GUIDELINE_LONGO  sol -> terra
+   PERDA DECLARADA: o gemini era a unica outra janela de ~1M. O 2o degrau do
+   GUIDELINE_LONGO passa a ter ~400k. Como essa cadeia nao e chamada por ninguem
+   ainda, a perda e teorica — mas fica escrita para nao virar surpresa.

@@ -142,17 +142,53 @@ def falhas_fatais(a):
 TETO_MCID = {
     "significativo_mas_abaixo_do_mcid": 6,   # ← o teto que o Dr. Eduardo aprovou
     "nao_relevante": 6,                      # ← MESMO teto: é pelo menos tão ruim quanto o de cima.
-                                             #   [ESCOLHA MINHA — deixar sem teto seria incoerente.
-                                             #    Se quiser 5, é uma linha.]
-    "incerto": 7,                            # [ESCOLHA MINHA] efeito de relevância duvidosa não
-                                             #   deveria "mudar a prática amanhã" (≥8)
+    "incerto": 7,                            # efeito de relevância duvidosa não muda a prática amanhã
+    # ═══════════════ 04/Ago/2026 — O BURACO QUE INVERTIA O CARDIODAILY ═══════════════
+    #
+    # `ausencia_de_efeito_demonstrada` NÃO TEM TETO. Decisão do Dr. Eduardo, 04/Ago.
+    #
+    # O CASO: a meta-análise de dados individuais de betabloqueador pós-IAM com FE preservada
+    # (NEJM 2026 — 5 RCTs, 17.801 pacientes) recebeu **NOTA 4/10**, que na escala do CardioDaily
+    # é "confiança criticamente baixa — NÃO serve de base para conduta".
+    #
+    # A causa não foi o modelo nem o LLM: **o vocabulário não tinha a palavra.** O enum de
+    # `classificacao` só oferecia `nao_relevante` (teto 6) para um resultado nulo. Um trabalho
+    # que PROVA que a droga não ajuda era obrigado a se declarar irrelevante.
+    #
+    # POR QUE ISSO INVERTIA O PRODUTO — nas palavras do Dr. Eduardo:
+    #   "antes eu ensinava aos residentes o MONABICHA. O M caiu (morfina reduz absorção de
+    #    antiplaquetário), o O caiu (oxigênio só se SatO2<90%, senão aumenta radical livre),
+    #    o B deixou de ser mantra (sem disfunção de VE, sem betabloqueador). Se o meu programa
+    #    está na contramão disto, meu programa está totalmente errado."
+    #
+    # Metade da cardiologia que ele ensina é fruto de ESTUDO NEGATIVO. COURAGE, ISCHEMIA, ORBITA,
+    # TOPCAT, CABANA, REDUCE-AMI. Um sistema que dá 4/10 para essa classe descarta exatamente o
+    # conteúdo que mais muda conduta.
+    #
+    # A DISTINÇÃO (metodológica, não de gosto) — três coisas que caíam no mesmo balde:
+    #   · significativo abaixo do MCID → p<0,05 e ninguém sente         → teto 6
+    #   · INCONCLUSIVO → poder fraco ou IC largo: ainda cabe benefício  → teto 7
+    #   · AUSÊNCIA DEMONSTRADA → poder ok + IC exclui benefício relevante → SEM TETO (até 10)
+    "ausencia_de_efeito_demonstrada": 10,
 }
+
+# O que o extrator precisa PROVAR para merecer o crédito do nulo (decisão do Dr. Eduardo, 04/Ago):
+# as DUAS coisas — o IC 95% exclui benefício clinicamente relevante E o poder foi declarado.
+# Se faltar qualquer uma, o motor REBAIXA para `incerto` (teto 7) — porque aí não é "provamos que
+# não funciona", é "não conseguimos mostrar". Quem decide isso é o CÓDIGO, não a palavra do modelo:
+# é a mesma razão de a LEI 0 ser determinística.
+def _nulo_esta_demonstrado(rc, a):
+    return bool(rc.get("ic_exclui_beneficio_relevante")) and bool(a.get("poder_ok"))
 
 
 def teto_mcid(a):
-    """REGRA 3 — o efeito é clinicamente relevante, não só estatisticamente significativo?"""
+    """REGRA 3 — o efeito é clinicamente relevante, não só estatisticamente significativo?
+    E, desde 04/Ago: o resultado NULO foi DEMONSTRADO ou apenas não encontrado?"""
     rc = a.get("relevancia_clinica") or {}
-    return TETO_MCID.get((rc.get("classificacao") or "").strip().lower(), 10)
+    c = (rc.get("classificacao") or "").strip().lower()
+    if c == "ausencia_de_efeito_demonstrada" and not _nulo_esta_demonstrado(rc, a):
+        return TETO_MCID["incerto"]          # o modelo disse; o motor não aceitou sem prova
+    return TETO_MCID.get(c, 10)
 
 
 # ──────────────── NHLBI CONTÁVEL — o rigor vira auditável, critério a critério ────────────────
@@ -911,10 +947,17 @@ def muda_conduta(a, aplic):
     """REGRA 4 — checklist 'mudar a prática', NUNCA a autoridade."""
     if a["pergunta"] != "intervencao":
         return "N/A (não é intervenção)"
-    ok = (aplic >= 8
+    comum = (aplic >= 8
+             and a.get("extrapolavel", True)
+             and a.get("sem_evidencia_conflitante_melhor", True))
+    # 04/Ago — DEIXAR DE FAZER TAMBÉM É CONDUTA. Exigir `efeito_relevante_consistente` fazia com que
+    # NENHUM estudo negativo pudesse dizer SIM: por construção, um nulo não tem "efeito relevante".
+    # Era por isso que o trabalho que TIROU o betabloqueador do pós-IAM saía com "muda conduta: NÃO".
+    rc = a.get("relevancia_clinica") or {}
+    if (rc.get("classificacao") or "").strip().lower() == "ausencia_de_efeito_demonstrada":
+        return "SIM" if (comum and _nulo_esta_demonstrado(rc, a)) else "NÃO"
+    ok = (comum
           and a.get("efeito_relevante_consistente", False)
-          and a.get("extrapolavel", True)
-          and a.get("sem_evidencia_conflitante_melhor", True)
           and a.get("beneficio_supera_risco", True))
     return "SIM" if ok else "NÃO"
 

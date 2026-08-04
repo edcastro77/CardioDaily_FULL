@@ -105,8 +105,17 @@ SCHEMA_FATOS = {
                 "para_desfecho_duro": _S,
                 "efeito_excede_limiar": {"type": ["boolean", "null"]},
                 "ic_sustenta_relevancia": {"type": ["boolean", "null"]},
+                # ═══ 04/Ago/2026 — O BURACO DO ESTUDO NEGATIVO ═══
+                # O IC 95% DESCARTA um benefício clinicamente relevante? É o que separa
+                # "provamos que não funciona" de "não conseguimos mostrar que funciona".
+                # Sem este campo, as duas coisas viravam `nao_relevante` e levavam teto 6.
+                "ic_exclui_beneficio_relevante": {"type": ["boolean", "null"]},
                 "classificacao": {"type": "string",
                                   "enum": ["robusto", "provavel", "incerto",
+                                           # NOVO: o nulo INFORMATIVO. Poder adequado + IC estreito
+                                           # que exclui benefício relevante = RESPOSTA, não fracasso.
+                                           # Foi o que tirou o B do MONABICHA. Vale até 10.
+                                           "ausencia_de_efeito_demonstrada",
                                            "significativo_mas_abaixo_do_mcid", "nao_relevante", "nao_avaliavel"]},
                 "frase_chave": _S,
             },

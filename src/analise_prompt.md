@@ -54,8 +54,9 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
     "mcid_fonte_metodo": "<fonte (próprio estudo | estudo prévio | diretriz | consenso) + método (anchor-based | distribution-based | consenso | não informado); 'n/a' se não reportado>",
     "para_desfecho_duro": "<SÓ se binário/tempo-até-evento: diferença absoluta de risco, NNT/NNH e o tamanho de efeito no critério GRADE (pequeno | moderado | importante). 'n/a' se contínuo/PROM>",
     "efeito_excede_limiar": <true se o efeito PONTUAL excede o MCID/limiar de importância; false; null se não avaliável>,
+    "ic_exclui_beneficio_relevante": <true se o IC 95% DESCARTA um benefício clinicamente relevante (o limite mais favorável do IC ainda fica AQUÉM do MCID/limiar); false se o IC ainda comporta benefício relevante; null se não avaliável>,
     "ic_sustenta_relevancia": <true se o IC95% INTEIRO fica além do limiar na direção favorável; false se cruza o limiar ou a nulidade; null se não avaliável>,
-    "classificacao": "<um de: robusto | provavel | incerto | significativo_mas_abaixo_do_mcid | nao_relevante | nao_avaliavel>",
+    "classificacao": "<um de: robusto | provavel | incerto | ausencia_de_efeito_demonstrada | significativo_mas_abaixo_do_mcid | nao_relevante | nao_avaliavel>",
     "frase_chave": "<UMA frase objetiva: foi estatisticamente significativo? foi clinicamente importante segundo MCID/limiar? o IC95% sustenta essa relevância?>"
   },
   "qualidade_nhlbi": {
@@ -166,11 +167,56 @@ Você extrai os critérios como FATOS; NÃO calcula nota nem conta pontos (isso 
   e deixe null quando não der. NÃO estime.
 - `falhas_fatais` só recebe código quando há BASE NO TEXTO. Suspeita não é falha.
 
+O RESULTADO NULO — LEIA ISTO ANTES DE CLASSIFICAR (regra de 04/Ago/2026, a mais importante deste bloco)
+
+"O estudo não achou efeito" e "o estudo achou um efeito irrelevante" são coisas OPOSTAS, e antes desta
+data as duas caíam em `nao_relevante`. Um trabalho que PROVA que a droga não ajuda é um dos achados mais
+valiosos que existem — foi assim que a morfina, o oxigênio de rotina e o betabloqueador pós-IAM sem
+disfunção de VE saíram da prática. Estudo negativo bem feito é RESPOSTA, não fracasso.
+
+Separe os três casos, e não os confunda:
+
+  · `ausencia_de_efeito_demonstrada` — o estudo tinha PODER declarado E o IC 95% EXCLUI um benefício
+    clinicamente relevante. Ou seja: mesmo no melhor cenário compatível com os dados, o benefício é
+    pequeno demais para importar. Isto é uma conclusão forte e pode valer nota máxima.
+    Exemplo: HR 0,97 (IC95% 0,87–1,07) em 17.801 pacientes randomizados, desfecho duro.
+
+  · `incerto` — não achou efeito, MAS o poder era insuficiente OU o IC ainda comporta benefício
+    relevante. Aqui a resposta honesta é "não sabemos", não "não funciona".
+    Exemplo: HR 0,85 (IC95% 0,60–1,20) em 300 pacientes.
+
+  · `significativo_mas_abaixo_do_mcid` / `nao_relevante` — ACHOU efeito, e ele é pequeno demais
+    para mudar a vida de alguém.
+
+Na dúvida entre `ausencia_de_efeito_demonstrada` e `incerto`, escolha `incerto`: o motor exige as duas
+provas (IC exclui benefício + poder declarado) e rebaixa sozinho se elas não estiverem lá.
+
 RELEVÂNCIA CLÍNICA (MCID/MID/N-SID — o filtro de tradução clínica): NÃO confunda p<0,05 com importância clínica.
 p-valor diz se o efeito é compatível com acaso; o MCID diz se o efeito provavelmente IMPORTA para o paciente/decisão.
 Para escalas/PROM, procure MCID, MID, minimal important difference, responder threshold, patient-acceptable symptom state.
 Para desfecho DURO (morte, IAM, AVC, hospitalização por IC, sangramento), NÃO force MCID de escala — use diferença
 absoluta de risco, NNT/NNH e o limiar GRADE. Se o MCID/limiar não for reportado, escreva "não reportado" (não invente).
+
+═══ REGRA DO NNT/NNH — NÃO EXISTE "SEMPRE CALCULE" (04/Ago/2026) ═══
+
+NNT = 1 / ARR. Logo o NNT SÓ EXISTE se as TRÊS coisas estiverem declaradas:
+  1. RISCO BASAL — a taxa de eventos no grupo CONTROLE. De HR, RR ou OR sozinhos NÃO sai NNT.
+  2. HORIZONTE DE TEMPO — "NNT 40" não quer dizer nada; "NNT 40 em 3 anos" quer. O MESMO tratamento
+     tem NNT diferente em 1, 3 e 5 anos. Número sem horizonte é número ERRADO, não incompleto.
+  3. A MESMA ESCALA do desfecho — NNT não se converte entre desfechos nem entre populações.
+
+CASO A CASO:
+  · o artigo REPORTA o NNT ......... copie, com o horizonte e o risco basal que ELE usou.
+  · dá n/N nos dois braços + seguimento ... pode calcular; DECLARE o horizonte junto.
+  · só tem HR/RR/OR sem risco basal ...... "NNT não calculável a partir do reportado".
+  · META-ANÁLISE com risco basal heterogêneo entre os estudos ... um NNT único é FICÇÃO. Só use se o
+    próprio artigo o derivar de um risco basal declarado — e diga de qual risco basal saiu.
+  · o IC 95% do efeito CRUZA O NULO ...... NNT NÃO SE APLICA. O intervalo do NNT vai de um número
+    negativo a infinito, e "trata X para salvar 1" vira frase inventada sobre efeito que não existe.
+    Escreva "não aplicável: o efeito não é distinguível de zero".
+
+Não é permitido escrever um NNT sem o horizonte ao lado.
+
 
 ARTIGO:
 {article_text}

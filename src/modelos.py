@@ -29,16 +29,41 @@ def _env(chave, padrao):
     return v if v else padrao
 
 
+# ═══════════ GEMINI FORA DAS CADEIAS — 04/Ago/2026 ═══════════
+# Decisão do Dr. Eduardo: *"pode tirar o gemini da jogada — ele é bom mas sempre dá problema,
+# limites doidos"*. Medido na mesma noite, na prova da extração: `429 RESOURCE_EXHAUSTED` nos DOIS
+# caminhos (estruturado e texto), em dois artigos seguidos. Ele era o último degrau de 5 das 7
+# cadeias — ou seja, a "LEI DA EQUIVALÊNCIA" tinha na prática DOIS degraus, e ninguém sabia, porque
+# fallback só é exercitado quando o primário cai: no meio de um lote, de madrugada.
+#
+# CONSEQUÊNCIA ASSUMIDA: sobram duas casas (Anthropic e OpenAI). O 3º degrau passa a ser um modelo
+# da MESMA casa de um dos dois primeiros. É menos proteção que três donos independentes — mas é
+# proteção que RESPONDE, e um degrau que devolve 429 não é degrau nenhum.
+
+# GROK (xAI) — o 3º degrau, no lugar do gemini (decisão do Dr. Eduardo, 04/Ago).
+# ⚠️ O ID DO MODELO É UM PALPITE MEU e precisa ser PROVADO pela Chave 12 antes de valer.
+# A xAI já mudou nomes ("grok-4", "grok-4-latest", "grok-4.5", "grok-4-5"...). Se a Chave 12
+# devolver 404 neste nome, é só ajustar CD_M_GROK no .env — sem tocar em código.
+GROK = _env("CD_M_GROK", "grok-4.5")
+
 # ─────────── CADEIAS POR TAREFA (primário → fallback cross-provider, mesmo tier) ───────────
 
 # Escrita com raciocínio pesado: Pesquisador (capítulo), pontos críticos
-PROFUNDO = [_env("CD_M_PROFUNDO", "claude-opus-5"), "gpt-5.6-sol", "gemini-3.1-pro-preview"]
+PROFUNDO = [_env("CD_M_PROFUNDO", "claude-opus-5"), "gpt-5.6-sol", "claude-sonnet-5"]
 
+# 04/Ago — TERRA PASSA A SER O PRIMÁRIO. Decisão do Dr. Eduardo: *"o sonnet está gastando demais e
+# entregando praticamente o mesmo"*. Medido: na perícia (01/Ago) o terra ganhou nos três eixos e
+# custou 40% do sonnet; na prova da extração (04/Ago, 2 artigos) os dois chegaram à MESMA nota, e o
+# terra custou US$ 0,05 contra US$ 0,13 — 2,5× mais barato pela mesma decisão.
+# ⚠️ RESSALVA HONESTA: são 2 artigos, e naquela rodada o terra correu em MODO TEXTO (o function
+# calling falhou). Antes de soltar 500 artigos com ele na frente da EXTRAÇÃO, a Chave 12 tem de
+# mostrar `function_calling` funcionando — senão os 500 rodam sem schema imposto, que é o modo que
+# derrubou 74% da rodada de 25/07.
 # Escrita em geral: perícia/redator, análise de artigo, ACRI, roteiro de áudio (a MAIORIA)
-ESCRITA = [_env("CD_M_ESCRITA", "claude-sonnet-5"), "gpt-5.6-terra", "gemini-3.1-pro-preview"]
+ESCRITA = [_env("CD_M_ESCRITA", "gpt-5.6-terra"), "claude-sonnet-5", GROK]
 
 # Extração com rigor (homem das cavernas — decide tipo, delatores): escrita, não filtragem
-EXTRACAO = [_env("CD_M_EXTRACAO", "claude-sonnet-5"), "gpt-5.6-terra", "gemini-3.1-pro-preview"]
+EXTRACAO = [_env("CD_M_EXTRACAO", "gpt-5.6-terra"), "claude-sonnet-5", GROK]
 
 # PERÍCIA (a análise crítica que vai ao site) — cadeia PRÓPRIA, decidida por MEDIÇÃO em 01/Ago/2026.
 # Comparativo real em 5 documentos (original, diretriz, revisão, meta, diretriz SBC de 130 páginas),
@@ -50,11 +75,11 @@ EXTRACAO = [_env("CD_M_EXTRACAO", "claude-sonnet-5"), "gpt-5.6-terra", "gemini-3
 # (cobrados como saída). Fica como 1º fallback: ele é o melhor a ANCORAR afirmação em número.
 # Por que cadeia separada e não trocar a ESCRITA: ACRI e roteiro de áudio NÃO foram testados assim —
 # mexer neles sem medir seria repetir o erro que passamos o dia consertando.
-PERICIA = [_env("CD_M_PERICIA", "gpt-5.6-terra"), "claude-sonnet-5", "gemini-3.1-pro-preview"]
+PERICIA = [_env("CD_M_PERICIA", "gpt-5.6-terra"), "claude-sonnet-5", GROK]
 
 # Rápido/volume: triagem do Radar, classificação, filtragem (pouco raciocínio)
 # Haiku primário (Anthropic, confiável, na conta que o Dr. Eduardo controla). Gemini só como último fallback.
-RAPIDO = [_env("CD_M_RAPIDO", "claude-haiku-4-5-20251001"), "gpt-5.6-luna", "gemini-3.6-flash"]
+RAPIDO = [_env("CD_M_RAPIDO", "claude-haiku-4-5-20251001"), "gpt-5.6-luna", GROK]
 
 # CLASSIFICACAO — o tipo do documento (Chave 1). MEDIDO, não escolhido por gosto:
 # em 31/07/2026, nos 111 artigos do gabarito do Dr. Eduardo, com o prompt v3:
@@ -66,7 +91,11 @@ CLASSIFICACAO = [_env("CD_M_CLASSIF", "gpt-5.6-luna"), "claude-haiku-4-5-2025100
 
 # Guidelines: contexto longo (200+ páginas). GPT-5.6 Sol tem ~1,05M de janela → aguenta como primário.
 # Gemini 3.1 Pro (1M) fica de fallback (Claude não cabe, ~200k).
-GUIDELINE_LONGO = [_env("CD_M_GUIDELINE", "gpt-5.6-sol"), "gemini-3.1-pro-preview"]
+# ⚠️ PERDA REAL E DECLARADA: o gemini era a ÚNICA outra janela de ~1M. Sem ele, o 2º degrau é o
+# terra (~400k) — cobre a grande maioria das diretrizes, mas uma de 200+ páginas que hoje passa
+# inteira no sol NÃO passaria no fallback. Como esta cadeia não é chamada por ninguém ainda
+# (verificado 03/Ago), a perda é teórica — mas fica escrita para não virar surpresa.
+GUIDELINE_LONGO = [_env("CD_M_GUIDELINE", "gpt-5.6-sol"), "gpt-5.6-terra"]
 
 
 # ─────────── temperature: modelos de raciocínio (thinking on) REJEITAM sampling custom ───────────
@@ -92,4 +121,6 @@ def provedor(model_id):
         return "openai"
     if m.startswith("gemini"):
         return "google"
+    if m.startswith("grok"):
+        return "xai"          # 04/Ago: entrou no lugar do gemini como 3º degrau
     return "desconhecido"

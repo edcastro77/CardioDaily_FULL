@@ -15,6 +15,16 @@ Uso:
 import os
 import modelos as M
 
+# ═══ TIMEOUT — 03/Ago/2026 ═══
+# NÃO HAVIA NENHUM. Cada SDK usava o padrão da casa (Anthropic: 600 s com 2 retentativas INTERNAS =
+# 30 min numa chamada só; e o nosso laço tenta mais 3 vezes por cima = quase 2 h pendurado).
+# Foi assim que a prova do PLATO — 13 páginas, 58 mil chars, ~14,5 mil tokens, que deveria levar
+# 30 s — passou de 30 minutos sem uma linha na tela. E é o MESMO risco na Chave 2: uma conexão
+# pendurada num lote de 431 artigos congela a noite inteira sem ninguém saber.
+# Quem tem de decidir quando desistir é o CardioDaily, não o padrão de fábrica de cada fornecedor.
+TIMEOUT_S = float(os.getenv("CD_TIMEOUT_S", "180"))   # 3 min por tentativa — folga de 6× sobre o normal
+_RETRIES_SDK = 0        # as retentativas são NOSSAS (visíveis, com espera crescente), não do SDK
+
 _ULTIMO_MODELO = [None]   # observabilidade: quem respondeu por último
 _ULTIMO_USO = {}          # observabilidade: tokens/stop_reason da última chamada (o lab lê daqui)
 _USO_CTX = {"etapa": "?", "artigo": "?"}   # quem chamou seta isto antes de gerar (p/ o log saber a etapa/artigo)
@@ -76,7 +86,8 @@ def gerar(chain, instrucao, contexto=None, max_tokens=2000, temperatura=0.4):
     erros = []
     for mod in chain:
         prov = M.provedor(mod)
-        fn = {"anthropic": _anthropic, "openai": _openai, "google": _gemini}.get(prov)
+        fn = {"anthropic": _anthropic, "openai": _openai,
+              "google": _gemini, "xai": _xai}.get(prov)
         if fn is None:
             erros.append(f"{mod}: provedor desconhecido"); continue
         for tentativa in (1, 2, 3):                   # retry com espera crescente antes de trocar de modelo
@@ -87,7 +98,7 @@ def gerar(chain, instrucao, contexto=None, max_tokens=2000, temperatura=0.4):
             except Exception as e:
                 if _transitorio(e) and tentativa < 3:  # rede/429/sobrecarga → espera e tenta o MESMO modelo
                     import time; time.sleep(5 * tentativa); continue
-                erros.append(f"{mod}: {type(e).__name__}: {str(e)[:140]}")
+                erros.append(f"{mod}: {type(e).__name__}: {str(e)[:600]}")
                 break
     raise RuntimeError("Todos os modelos da cadeia falharam:\n  " + "\n  ".join(erros))
 
@@ -129,7 +140,8 @@ def _schema_para_gemini(s):
 
 def _json_anthropic(mod, instrucao, schema, contexto, max_tokens, nome):
     import anthropic
-    cli = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    cli = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+                              timeout=TIMEOUT_S, max_retries=_RETRIES_SDK)
     if contexto:
         content = [{"type": "text", "text": contexto, "cache_control": {"type": "ephemeral"}},
                    {"type": "text", "text": instrucao}]
@@ -156,7 +168,8 @@ def _json_openai(mod, instrucao, schema, contexto, max_tokens, nome):
     assim (campo que o artigo não reporta fica de fora de propósito), e o strict recusaria o schema."""
     import json
     from openai import OpenAI
-    cli = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
+    cli = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""),
+                 timeout=TIMEOUT_S, max_retries=_RETRIES_SDK)
     texto = (contexto + "\n\n" + instrucao) if contexto else instrucao
     r = cli.chat.completions.create(
         model=mod, max_completion_tokens=max_tokens,
@@ -179,7 +192,8 @@ def _json_gemini(mod, instrucao, schema, contexto, max_tokens, nome):
     import json
     from google import genai
     from google.genai import types
-    cli = genai.Client(api_key=os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", ""))
+    cli = genai.Client(api_key=os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", ""),
+                       http_options=types.HttpOptions(timeout=int(TIMEOUT_S * 1000)))   # ms
     texto = (contexto + "\n\n" + instrucao) if contexto else instrucao
     for cfg, modo in ((types.GenerateContentConfig(max_output_tokens=max_tokens,
                                                    response_mime_type="application/json",
@@ -199,7 +213,11 @@ def _json_gemini(mod, instrucao, schema, contexto, max_tokens, nome):
             raise
 
 
-_JSON_POR_PROVEDOR = {"anthropic": _json_anthropic, "openai": _json_openai, "google": _json_gemini}
+def _json_por_provedor(prov):
+    """Resolvido na HORA DA CHAMADA, não na importação — o `_json_xai` mora mais abaixo no arquivo
+    (junto do `_xai`, para o par ficar lado a lado) e um dicionário no topo quebrava com NameError."""
+    return {"anthropic": _json_anthropic, "openai": _json_openai,
+            "google": _json_gemini, "xai": _json_xai}.get(prov)
 
 
 def gerar_json(chain, instrucao, schema, contexto=None, max_tokens=8000, nome="extrair"):
@@ -227,7 +245,7 @@ def gerar_json(chain, instrucao, schema, contexto=None, max_tokens=8000, nome="e
     """
     erros = []
     for mod in chain:
-        fn = _JSON_POR_PROVEDOR.get(M.provedor(mod))
+        fn = _json_por_provedor(M.provedor(mod))
         if fn is None:
             erros.append(f"{mod}: provedor desconhecido")
             continue
@@ -238,14 +256,15 @@ def gerar_json(chain, instrucao, schema, contexto=None, max_tokens=8000, nome="e
             except Exception as e:
                 if _transitorio(e) and tentativa < 3:
                     import time; time.sleep(5 * tentativa); continue
-                erros.append(f"{mod}: {type(e).__name__}: {str(e)[:120]}")
+                erros.append(f"{mod}: {type(e).__name__}: {str(e)[:600]}")
                 break
     raise RuntimeError("gerar_json falhou em toda a cadeia:\n  " + "\n  ".join(erros or ["cadeia vazia"]))
 
 
 def _anthropic(mod, instrucao, contexto, max_tokens, temperatura):
     import anthropic
-    cli = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    cli = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+                              timeout=TIMEOUT_S, max_retries=_RETRIES_SDK)
     if contexto:                                   # contexto reaproveitável → cacheado (10% na leitura)
         content = [{"type": "text", "text": contexto, "cache_control": {"type": "ephemeral"}},
                    {"type": "text", "text": instrucao}]
@@ -269,7 +288,8 @@ def _anthropic(mod, instrucao, contexto, max_tokens, temperatura):
 
 def _openai(mod, instrucao, contexto, max_tokens, temperatura):
     from openai import OpenAI
-    cli = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
+    cli = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""),
+                 timeout=TIMEOUT_S, max_retries=_RETRIES_SDK)
     texto = (contexto + "\n\n" + instrucao) if contexto else instrucao   # OpenAI cacheia prefixo automático
     for kw in (M.temp_kwargs(mod, temperatura), {}):
         try:
@@ -283,10 +303,52 @@ def _openai(mod, instrucao, contexto, max_tokens, temperatura):
             raise
 
 
+def _xai(mod, instrucao, contexto, max_tokens, temperatura):
+    """xAI (grok) — 04/Ago/2026, entrou no lugar do gemini como 3º degrau.
+    A API da xAI é COMPATÍVEL COM A DA OPENAI: mesmo SDK, só muda o endereço e a chave. Por isso
+    não há cliente novo aqui — é o `openai` apontando para api.x.ai."""
+    from openai import OpenAI
+    cli = OpenAI(api_key=os.getenv("XAI_API_KEY", ""), base_url="https://api.x.ai/v1",
+                 timeout=TIMEOUT_S, max_retries=_RETRIES_SDK)
+    texto = (contexto + "\n\n" + instrucao) if contexto else instrucao
+    for kw in (M.temp_kwargs(mod, temperatura), {}):
+        try:
+            r = cli.chat.completions.create(model=mod, max_completion_tokens=max_tokens,
+                                            messages=[{"role": "user", "content": texto}], **kw)
+            _registrar_uso(r, mod)
+            return r.choices[0].message.content or ""
+        except Exception as e:
+            if kw and _erro_de_sampling(e):
+                continue
+            raise
+
+
+def _json_xai(mod, instrucao, schema, contexto, max_tokens, nome):
+    """Saída estruturada no grok — function calling, igual à OpenAI (a API é compatível)."""
+    import json
+    from openai import OpenAI
+    cli = OpenAI(api_key=os.getenv("XAI_API_KEY", ""), base_url="https://api.x.ai/v1",
+                 timeout=TIMEOUT_S, max_retries=_RETRIES_SDK)
+    texto = (contexto + "\n\n" + instrucao) if contexto else instrucao
+    r = cli.chat.completions.create(
+        model=mod, max_completion_tokens=max_tokens,
+        messages=[{"role": "user", "content": texto}],
+        tools=[{"type": "function",
+                "function": {"name": nome, "description": "Devolve os dados estruturados pedidos.",
+                             "parameters": schema}}],
+        tool_choice={"type": "function", "function": {"name": nome}})
+    _registrar_uso(r, mod)
+    for tc in (r.choices[0].message.tool_calls or []):
+        _ULTIMO_MODO[0] = "function_calling(xai)"
+        return json.loads(tc.function.arguments)
+    raise RuntimeError("grok não devolveu function_call")
+
+
 def _gemini(mod, instrucao, contexto, max_tokens, temperatura):
     from google import genai
     from google.genai import types
-    cli = genai.Client(api_key=os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", ""))
+    cli = genai.Client(api_key=os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", ""),
+                       http_options=types.HttpOptions(timeout=int(TIMEOUT_S * 1000)))   # ms
     texto = (contexto + "\n\n" + instrucao) if contexto else instrucao
     cfg = types.GenerateContentConfig(max_output_tokens=max_tokens,
                                       **M.temp_kwargs(mod, temperatura))   # Gemini aceita temperature

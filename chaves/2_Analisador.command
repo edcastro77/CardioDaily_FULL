@@ -37,7 +37,8 @@ if [ "$N_TOT" -eq 0 ] && [ "$N_MINI" -eq 0 ]; then
   echo "   Fila vazia — nada a fazer. Rode a Chave 1 primeiro."
   read -p "Enter para fechar. "; exit 0
 fi
-echo "   Custo aproximado: US\$ $(awk "BEGIN{printf \"%.2f\", ($N_TOT*0.30)+($N_MINI*0.15)}")"
+CENT=$((N_TOT * 30 + N_MINI * 15))   # sem awk — ver o comentário na Chave 11 (travou o Terminal em 04/Ago)
+printf "   Custo aproximado: US\$ %d.%02d\n" $((CENT/100)) $((CENT%100))
 echo "   (blocos de 20: cada bloco vai pro Supabase antes do próximo — se a net cair, só o bloco refaz)"
 echo "   Diário desta rodada: ${DIARIO/#$HOME/~}"
 echo

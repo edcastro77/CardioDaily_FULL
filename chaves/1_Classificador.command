@@ -24,7 +24,8 @@ if [ "$N" -eq 0 ]; then
 fi
 
 echo "   $N PDF na fila  ·  vão ser LIDOS, RENOMEADOS e MOVIDOS para CLASSIFICADOS/<tipo>/"
-echo "   Custo aproximado: US\$ $(awk "BEGIN{printf \"%.2f\", $N*0.02}")"
+CENT=$((N * 2))                      # sem awk — ver o comentário na Chave 11 (travou o Terminal em 04/Ago)
+printf "   Custo aproximado: US\$ %d.%02d\n" $((CENT/100)) $((CENT%100))
 echo "   (o modelo só é chamado quando as camadas determinísticas não decidem sozinhas)"
 echo
 read -r -p "   Começar? [s/N]: " OK

@@ -86,6 +86,27 @@ Métodos, lateralidade, censura, ajuste para confundidores (quais), e — crucia
 DE PARADA pré-especificadas? Nomeie fragilidades.
 
 ## Principais Achados
+
+═══ REGRA DO NNT/NNH — NÃO EXISTE "SEMPRE CALCULE" (04/Ago/2026) ═══
+
+NNT = 1 / ARR. Logo o NNT SÓ EXISTE se as TRÊS coisas estiverem declaradas:
+  1. RISCO BASAL — a taxa de eventos no grupo CONTROLE. De HR, RR ou OR sozinhos NÃO sai NNT.
+  2. HORIZONTE DE TEMPO — "NNT 40" não quer dizer nada; "NNT 40 em 3 anos" quer. O MESMO tratamento
+     tem NNT diferente em 1, 3 e 5 anos. Número sem horizonte é número ERRADO, não incompleto.
+  3. A MESMA ESCALA do desfecho — NNT não se converte entre desfechos nem entre populações.
+
+CASO A CASO:
+  · o artigo REPORTA o NNT ......... copie, com o horizonte e o risco basal que ELE usou.
+  · dá n/N nos dois braços + seguimento ... pode calcular; DECLARE o horizonte junto.
+  · só tem HR/RR/OR sem risco basal ...... "NNT não calculável a partir do reportado".
+  · META-ANÁLISE com risco basal heterogêneo entre os estudos ... um NNT único é FICÇÃO. Só use se o
+    próprio artigo o derivar de um risco basal declarado — e diga de qual risco basal saiu.
+  · o IC 95% do efeito CRUZA O NULO ...... NNT NÃO SE APLICA. O intervalo do NNT vai de um número
+    negativo a infinito, e "trata X para salvar 1" vira frase inventada sobre efeito que não existe.
+    Escreva "não aplicável: o efeito não é distinguível de zero".
+
+Não é permitido escrever um NNT sem o horizonte ao lado.
+
 TODOS os números, agrupados: desfecho primário (n/N, %, RRR, ARR, IC95%, p, NNT), modo de evento,
 secundários, desfecho combinado (e o que dentro dele carregou o resultado), consistência em subgrupos
 (HR, com teste de interação — pré-especificado ou fishing?), segurança (eventos adversos, descontinuação).
@@ -95,6 +116,14 @@ secundários, desfecho combinado (e o que dentro dele carregou o resultado), con
 Separe SIGNIFICÂNCIA ESTATÍSTICA de RELEVÂNCIA CLÍNICA. O efeito ultrapassa a diferença mínima
 clinicamente importante (MCID) para este desfecho? O MCID foi reportado pelos autores ou você está
 usando referência externa (diga qual)? Um p<0,001 num efeito abaixo do MCID não muda conduta de ninguém.
+
+E O INVERSO, QUE É IGUALMENTE IMPORTANTE (04/Ago/2026): se o veredito trouxer
+`ausencia_de_efeito_demonstrada`, NÃO escreva este trabalho como fracasso ou como "estudo negativo, de
+pouco valor". Ele é uma RESPOSTA — o estudo tinha poder e o IC 95% exclui benefício clinicamente
+relevante. Escreva o que ele PERMITE DEIXAR DE FAZER, em quem, e o que se ganha com isso (menos droga,
+menos efeito adverso, menos custo). Foi assim que a morfina, o oxigênio de rotina e o betabloqueador
+pós-IAM sem disfunção de VE saíram da prática. Se o veredito disser `incerto`, aí sim é "não sabemos" —
+e a diferença entre as duas frases é a diferença entre informar e desinformar o leitor.
 
 ## Interpretação dos Resultados
 A crítica profunda. Separe DIREÇÃO de MAGNITUDE. NOMEIE os mecanismos de viés/inflação (run-in
