@@ -1405,6 +1405,61 @@ def teste_escala_de_aplicabilidade_da_meta():
           "campo novo ignorando o antigo — foi o que derrubou a IPD do NEJM para 6")
     return "escala 0→4 · 1→5 · 2→6 · 3→8 · 4→9/10"
 
+
+def teste_carimbo_ve_o_motor():
+    """O carimbo do staging tem de vigiar o CÓDIGO que dá a nota, não só os prompts.
+
+    ═══ 04/Ago/2026, 21h39 — A RODADA QUE NÃO FEZ NADA ═══
+
+    O Dr. Eduardo rodou a Chave 2 logo depois de a régua da meta ser reescrita (Escada, escala de
+    aplicabilidade, bicondicional). A rodada terminou em segundos, com "reusado (staging pronto)"
+    nos 24. Ele desconfiou sozinho — *"foi muito rápido, está certo isso?"* — e não estava:
+
+    O `versoes_atuais` listava só o hash dos PROMPTS. Nenhum prompt tinha mudado desde a rodada
+    anterior; o que mudou foi o MOTOR. Como o motor não estava no carimbo, o guarda viu tudo igual,
+    reaproveitou o staging e REPUBLICOU as notas da régua velha. Medido no Supabase logo depois:
+    um artigo com nota 9 e "muda_conduta: NÃO" — a contradição recém-matada, de volta no banco.
+
+    AGRAVANTE MEU: numa auditoria que ELE pediu ("veja se não faltou commitar nada, se está tudo
+    pronto"), eu conferi prompts, schemas, redatores, bateria e cadeias de modelo — e NÃO conferi
+    o carimbo, que era o que decidia se a rodada faria alguma coisa. E ainda escrevi na mensagem
+    do commit, como fato, que os 24 seriam reanalisados. Não medi.
+
+    Esta trava existe para que o carimbo cego não volte: função pura, sem LLM, sem rede.
+    """
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import analisador as AN
+
+    v = AN.versoes_atuais("x/META_ANALISES/y.pdf")
+
+    # 1 · o CÓDIGO que dá a nota tem de estar no carimbo
+    for chave, arq in (("motor", "notas_prototipo.py"), ("extracao", "analise.py")):
+        checa(f"carimbo: vigia o código '{arq}'", chave in v and arq in str(v.get(chave)),
+              f"carimbo tem só {sorted(v)} — mudar a régua não invalidaria o staging")
+
+    # 2 · e mudar esse código PRECISA mudar o carimbo (senão a vigilância é decorativa)
+    if "motor" not in v:
+        return "carimbo SEM o motor — as travas acima já acusaram"   # não quebra: já reprovou
+    alvo = os.path.join(os.path.dirname(os.path.abspath(AN.__file__)), "notas_prototipo.py")
+    antes = v["motor"]
+    with open(alvo, "rb") as fh:
+        conteudo = fh.read()
+    try:
+        with open(alvo, "ab") as fh:
+            fh.write(b"\n# sabotagem do teste\n")
+        depois = AN.versoes_atuais("x/META_ANALISES/y.pdf")["motor"]
+        checa("carimbo: mexer no motor MUDA o carimbo", antes != depois,
+              f"antes={antes} depois={depois} — o carimbo não enxerga a mudança")
+    finally:
+        with open(alvo, "wb") as fh:
+            fh.write(conteudo)
+
+    # 3 · e os prompts continuam vigiados (não troquei uma cegueira por outra)
+    for chave in ("extrator", "redator", "acri", "audio", "gancho"):
+        checa(f"carimbo: continua vigiando o prompt '{chave}'", chave in v)
+    return f"carimbo com {len(v)} itens: código + prompts"
+
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,
               teste_tetos_da_lei_0, teste_teto_estatistico, teste_rigor_conhece_o_desenho,
@@ -1424,7 +1479,7 @@ if __name__ == "__main__":
               teste_gabarito_dos_artigos, teste_contrato_de_saida,
               teste_todo_schema_tem_a_capa,
               teste_escada_da_meta, teste_bicondicional_nota_e_conduta,
-              teste_escala_de_aplicabilidade_da_meta]
+              teste_escala_de_aplicabilidade_da_meta, teste_carimbo_ve_o_motor]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:
         antes = len(falhas)

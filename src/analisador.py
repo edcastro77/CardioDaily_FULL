@@ -103,11 +103,42 @@ def hash_prompt(nome):
         return "?"
 
 
+def hash_arquivo_src(nome):
+    """SHA1 do conteúdo de um arquivo de `src/` — para carimbar CÓDIGO, não só prompt."""
+    import hashlib
+    try:
+        return hashlib.sha1(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), nome),
+                                 "rb").read()).hexdigest()[:12]
+    except Exception:
+        return "?"
+
+
 def versoes_atuais(pdf_path=""):
-    """O carimbo de TODOS os prompts que participam deste tipo de documento."""
+    """O carimbo de tudo que MUDA A SAÍDA deste tipo de documento.
+
+    ═══ 04/Ago/2026, 21h40 — O CARIMBO SÓ OLHAVA OS PROMPTS ═══
+
+    O Dr. Eduardo rodou a Chave 2 depois de a régua da meta ser reescrita (Escada + escala de
+    aplicabilidade + bicondicional) e a rodada terminou em SEGUNDOS: "reusado (staging pronto)"
+    nos 24. Ele desconfiou na hora — *"foi muito rápido, está certo isso?"* — e não estava.
+
+    A causa: este carimbo listava só o hash dos PROMPTS. Eu não tinha mexido em prompt nenhum
+    depois da rodada anterior; mexi no MOTOR. Como o motor não estava no carimbo, o guarda viu
+    tudo igual e reaproveitou — republicando notas calculadas com a régua VELHA. Medido no
+    Supabase logo depois: um artigo com nota 9 e "muda_conduta: NÃO", a contradição que a gente
+    tinha acabado de matar, de volta no banco.
+
+    É a família de erro do dia inteiro: uma decisão que depende de N coisas, e o guarda olha uma.
+
+    Agora entram TAMBÉM os arquivos de CÓDIGO que determinam a nota. Mudar a régua passa a
+    invalidar o staging sozinho — sem depender de eu lembrar de avisar.
+    """
     from analise import PROMPT_ARQ_POR_TIPO
     tipo = tipo_do_documento(pdf_path)
     return {
+        # ── o CÓDIGO que decide a nota (não é prompt, mas muda a saída do mesmo jeito) ──
+        "motor":    f"notas_prototipo.py@{hash_arquivo_src('notas_prototipo.py')}",
+        "extracao": f"analise.py@{hash_arquivo_src('analise.py')}",   # os SCHEMAS moram aqui
         "extrator": f"{PROMPT_ARQ_POR_TIPO[tipo]}@{hash_prompt(PROMPT_ARQ_POR_TIPO[tipo])}",
         "redator":  f"{_PROMPT_POR_TIPO_DOC[tipo]}@{hash_prompt(_PROMPT_POR_TIPO_DOC[tipo])}",
         "acri":     f"acri_prompt.md@{hash_prompt('acri_prompt.md')}",
