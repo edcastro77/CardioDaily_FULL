@@ -151,6 +151,66 @@ os erros voltaram idênticos — revisões sistemáticas em REVISOES, três Scie
 nunca rodaram juntos" e **mesmo assim disse "pode soltar"**. Enunciar o risco não é o mesmo que tratá-lo.
 Se o Claude sabe nomear o que não foi medido, ele **para** — não mede pela metade e libera.
 
+### LEI 10: O CARDIODAILY PUBLICA MENOS E REPROVA MAIS — E ISSO É A REGRA (04/Ago/2026)
+
+**Palavras do Dr. Eduardo, quando eu avisei que a régua nova derrubaria metade da fila:**
+*"CardioDaily publica muito menos e reprova muito mais — ESTA É A REGRA!"*
+
+O CardioDaily NÃO é um serviço de resumo. É um serviço de **filtro**. O valor que ele vende é
+dizer *"olhei 24 e 12 não prestam"* — e ter razão. Um sistema que aprova quase tudo não vale
+assinatura nenhuma: o cardiologista já tem excesso de artigo, o que falta é quem separe.
+
+**A ESCADA DE AVALIAÇÃO CRÍTICA DE META-ANÁLISES** (especificação dele, para ele e para os
+residentes do Hospital Rio Doce). Vale para TODAS as metas, inclusive **rede** e **IPD**:
+
+| Degrau | O que olha | Efeito |
+|---|---|---|
+| 1 · registro | PROSPERO, PRISMA, PICO(TS) | desconto no domínio `busca` |
+| 2 · qualidade de entrada | **misturou ECR com observacional no primário?** | **FATAL — teto 5** |
+| 3 · heterogeneidade | I²>50% sem sensibilidade/subgrupo/meta-regressão | teto 6 ("em cima do muro") |
+| 4 · viés de publicação | **perdeu significância no Trim-and-Fill?** | **FATAL — teto 5** |
+| 5 · utilidade clínica | desfecho SUBSTITUTO (Lp(a), GLS, FEVE) | teto 8 |
+
+**A ESCALA DE APLICABILIDADE** — os 4 crivos do algoritmo de beira do leito GRADUAM a nota
+(não apenas capam). Números ditados por ele, um a um:
+
+| crivos cumpridos | nota máxima |
+|---|---|
+| 4/4 | **9 ou 10** (LOE A · muda conduta · TSA cruzada autoriza o 10) |
+| 3/4 | 8 |
+| 2/4 | 6 |
+| 1/4 | 5 |
+| 0/4 | 4 |
+
+Os crivos: (1) só ECR de baixo risco de viés · (2) I²<25% ou alto porém isolado e explicado ·
+(3) robusto ao Trim-and-Fill · (4) desfecho DURO. **O NNT<25 VALORIZA, mas NÃO é régua.**
+Repare no salto 2→3 (6 para 8) e na ausência do 7: é de propósito.
+
+**A REGRA MAIS IMPORTANTE DE TODAS — BICONDICIONAL:**
+*"Toda nota 9 e 10 muda conduta! Se muda a conduta é 9 ou 10, e se é 9 ou 10 é porque muda
+conduta."* Nota e `muda_conduta` são o MESMO fato dito de dois jeitos. É proibido calculá-los
+por caminhos separados — em 04/Ago existiam TRÊS caminhos que discordavam, e três meta-análises
+subiram ao Supabase com nota 9 e "muda_conduta: NÃO".
+
+**O CASO QUE ORIGINOU A LEI — TOCILIZUMABE NA COVID-19.** Em 2021 as meta-análises diziam que a
+droga não valia o investimento; a nota técnica do Ministério da Saúde (CCATES, abril/2021)
+concluiu, com "certeza moderada", que reduzia ventilação mecânica mas **não** reduzia mortalidade
+— apoiada num conjunto que **misturava ECRs com observacionais**. O RECOVERY, **um único** ensaio
+com N adequado, encerrou a discussão sozinho: reduzia mortalidade.
+
+Nas palavras dele: *"uma meta-análise só é tão boa quanto os estudos que a compõem. Somar estudos
+pequenos, retrospectivos, heterogêneos e enviesados propaga e amplifica esses erros numa
+estimativa matematicamente bonita, mas clinicamente enganosa."* **GIGO.**
+
+**MEDIDO em 04/Ago, nas 24 metas do lote:** só ECR de baixo risco = 5/24 · Trim-and-Fill feito =
+**1/24** · TSA feita = **2/24**. Média das notas: 5,92. Publicáveis: **12 de 24**. E das 24, **4
+reprovaram no Degrau 2 — todas por misturar ECR com observacional**, com a ferramenta dupla
+(RoB 2 + ROBINS-I) escrita no próprio artigo. O erro do tocilizumabe, quatro vezes em 24.
+
+**Corolário:** quando o Claude achar que a régua está "severa demais" e for propor afrouxá-la,
+ele mostra os números e QUEM DECIDE É O DONO. Afrouxar régua para caber mais artigo é trocar o
+produto por volume — e o produto é justamente o filtro.
+
 ### LEI 1: NUNCA PROPOR ABANDONAR PARTE DO PROJETO
 - O Claude NUNCA deve sugerir abandonar, descontinuar, remover ou desistir de qualquer funcionalidade planejada ou em desenvolvimento do CardioDaily.
 - Se uma abordagem tecnica nao funciona, o Claude deve propor ALTERNATIVAS, nunca eliminacao.

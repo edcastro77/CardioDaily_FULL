@@ -395,12 +395,37 @@ def teste_extrator_da_meta():
                                      "heterogeneidade_avaliada": True, "i2_valor": 20.0},
                     qualidade_meta=dict(k_estudos=12, n_bases=4, **qm))
 
+    # ── os campos da ESCADA (04/Ago) ──
+    for c in ("mistura_ecr_observacional_no_primario", "so_ecr_baixo_risco_vies",
+              "trim_and_fill_feito", "trim_and_fill_perdeu_significancia",
+              "desfecho_primario_duro", "nnt_agrupado", "tsa_feita", "tsa_cruzou_fronteira",
+              "analise_sensibilidade_leave_one_out", "subgrupo_pre_especificado",
+              "meta_regressao", "q_cochran_p"):
+        checa(f"meta: campo da ESCADA '{c}' está no schema", c in campos)
+
+    # ══ 04/Ago — EU MEXI NO TESTE, NÃO NA REGRA, E ESTÁ ESCRITO AQUI ══════════════════════
+    # Este fixture chamava-se "impecável" e não trazia NENHUM fato da Escada. Depois que o
+    # Dr. Eduardo especificou a Escada de Avaliação Crítica, "impecável" passou a significar
+    # MAIS COISA: não basta caprichar no método (os 6 domínios), tem de passar nos degraus —
+    # só ECR de baixo risco, heterogeneidade explorada, robusto ao Trim-and-Fill, desfecho DURO.
+    # O fixture antigo batendo no teto 8 é o motor OBEDECENDO à regra nova, não um defeito.
+    # Por isso quem muda é o fixture. Se um dia eu afrouxar a regra para o teste passar, é
+    # porque errei — a regra é dele, o teste é meu.
+    ESCADA_OK = dict(so_ecr_baixo_risco_vies=True,
+                     mistura_ecr_observacional_no_primario=False,
+                     analise_sensibilidade_leave_one_out=True,
+                     subgrupo_pre_especificado=True,
+                     trim_and_fill_feito=True,
+                     trim_and_fill_perdeu_significancia=False,
+                     desfecho_primario_duro=True, nnt_agrupado=18,
+                     tsa_feita=True, tsa_cruzou_fronteira=True)
+
     # ── o teto sumiu: uma meta impecável agora ALCANÇA o topo ──
     perfeita = meta(protocolo_registrado=True, extracao_em_duplicata=True,
                     excluidos_listados_com_motivo=True, vies_mudou_interpretacao=True,
                     heterogeneidade_investigada=True, tau2_reportado=True,
                     intervalo_predicao_reportado=True, funnel_plot_feito=True,
-                    grade_usado=True, limitacoes_reconhecidas=True)
+                    grade_usado=True, limitacoes_reconhecidas=True, **ESCADA_OK)
     # ⚠️ A HISTÓRIA DESTE TESTE, porque ela ensina (04/Ago):
     # 1ª versão: cobrei `aplic >= 9`. Reprovou em 8, porque `_TETO_INTERVENCAO["meta"] = 8` capava
     #   por cima. O reflexo errado seria afrouxar a LEI 0 para o teste passar — não fiz, avisei.
@@ -468,7 +493,11 @@ def teste_ipd_nao_e_punida():
 
     NHLBI = {"pergunta_focada": True, "elegibilidade_predefinida": True, "i2_valor": 20.0,
              "heterogeneidade_avaliada": True, "qualidade_estudos_avaliada": True}
-    QM = dict(k_estudos=5, n_total=17801, n_bases=1, protocolo_registrado=True,
+    # 04/Ago — a Escada exige que o fixture DIGA o que a IPD do NEJM é: 5 ECRs, RoB 2, nenhum
+    # observacional na mistura. Não é afrouxar a régua; é o fixture parar de omitir o que o
+    # artigo real declara. (O `desfecho_duro=True` já vem do _bom e agora o crivo o enxerga.)
+    QM = dict(so_ecr_baixo_risco_vies=True, mistura_ecr_observacional_no_primario=False,
+              k_estudos=5, n_total=17801, n_bases=1, protocolo_registrado=True,
               busca_sistematica_abrangente=False, heterogeneidade_investigada=True,
               tau2_reportado=True, heterogeneidade_clinica_relevante=True,
               teste_funnel_indicado=False, rob_ferramenta="RoB 2",
@@ -1187,6 +1216,195 @@ def teste_todo_schema_tem_a_capa():
             f"pagar a análise inteira (foi o que aconteceu com 10 metas em 03/Ago).")
     return f"{len(schemas)} schema(s) com a capa completa"
 
+
+def teste_escada_da_meta():
+    """A ESCADA DE AVALIAÇÃO CRÍTICA — especificação do Dr. Eduardo, 04/Ago/2026.
+
+    O caso que a originou: TOCILIZUMABE na COVID-19. Em 2021 as meta-análises — inclusive a nota
+    técnica do Ministério da Saúde — diziam que a droga não reduzia mortalidade, apoiadas num
+    conjunto que MISTURAVA ECR com estudo observacional. O RECOVERY, um ensaio só com N adequado,
+    encerrou a discussão sozinho. A conta da meta estava certa; a matéria-prima é que não prestava.
+
+    Função pura: sem LLM, sem rede, sem banco.
+    """
+    def m(**qm):
+        return _bom(pergunta="intervencao", desenho="meta", tipo_documento="meta",
+                    qualidade_nhlbi={"pergunta_focada": True, "elegibilidade_predefinida": True,
+                                     "busca_sistematica_abrangente": True, "revisao_em_duplicata": True,
+                                     "qualidade_estudos_avaliada": True, "vies_publicacao_avaliado": True,
+                                     "heterogeneidade_avaliada": True, "i2_valor": qm.pop("i2", 20.0)},
+                    qualidade_meta={**dict(k_estudos=12, n_bases=4, protocolo_registrado=True,
+                                           vies_mudou_interpretacao=True, grade_usado=True,
+                                           limitacoes_reconhecidas=True, funnel_plot_feito=True,
+                                           heterogeneidade_investigada=True), **qm})
+
+    OK = dict(so_ecr_baixo_risco_vies=True, mistura_ecr_observacional_no_primario=False,
+              analise_sensibilidade_leave_one_out=True, trim_and_fill_feito=True,
+              trim_and_fill_perdeu_significancia=False, desfecho_primario_duro=True,
+              tsa_feita=True, tsa_cruzou_fronteira=True)
+
+    topo = N.score(m(**OK))["aplic"]
+    checa("escada: meta que passa nos 4 crivos chega ao topo", topo >= 9, f"veio {topo}")
+
+    # DEGRAU 2 — o caso tocilizumabe: misturou ECR com observacional → FATAL, teto 5
+    r = N.score(m(**{**OK, "mistura_ecr_observacional_no_primario": True}))
+    checa("escada D2: misturar ECR com observacional é FATAL (teto 5)", r["aplic"] <= 5,
+          f"veio {r['aplic']} — é o erro que atrasou o tocilizumabe")
+
+    # DEGRAU 4 — o efeito não sobreviveu ao Trim-and-Fill → FATAL, teto 5
+    r = N.score(m(**{**OK, "trim_and_fill_perdeu_significancia": True}))
+    checa("escada D4: perder significância no Trim-and-Fill é FATAL (teto 5)", r["aplic"] <= 5,
+          f"veio {r['aplic']} — 'se perdeu, não use'")
+
+    # DEGRAU 3 — I² alto SEM exploração → em cima do muro (teto 6)
+    r = N.score(m(i2=78.0, **{**OK, "analise_sensibilidade_leave_one_out": False,
+                              "heterogeneidade_investigada": False}))
+    checa("escada D3: I² alto sem explorar fica em cima do muro (teto 6)", r["aplic"] <= 6,
+          f"veio {r['aplic']}")
+    # e I² alto EXPLORADO não é punido do mesmo jeito
+    r2 = N.score(m(i2=78.0, **OK))
+    checa("escada D3: I² alto porém EXPLORADO não cai para 6", r2["aplic"] > 6, f"veio {r2['aplic']}")
+
+    # DEGRAU 5 — desfecho substituto não chega a 9.
+    # A asserção é sobre o TETO da própria escada, não só sobre a nota final: o crivo 4 também
+    # capa em 8, então olhar só o número não distingue quem capou. Sabotando o TETO_SURROGATE eu
+    # vi a trava NÃO morder — trava que não distingue a causa não prova a causa.
+    sub = m(**{**OK, "desfecho_primario_duro": False})
+    teto_sub, degraus_sub, _ = N.escada_meta(sub)
+    checa("escada D5: desfecho SUBSTITUTO capa em 8 NA ESCADA", teto_sub <= 8, f"teto veio {teto_sub}")
+    checa("escada D5: o degrau 5 DIZ que o desfecho é substituto",
+          "SUBSTITUTO" in degraus_sub.get("5_utilidade", ""), degraus_sub.get("5_utilidade"))
+    checa("escada D5: e a nota final não passa de 8", N.score(sub)["aplic"] <= 8)
+
+    # k<10 não é castigo (Cochrane cap. 13): o teste de assimetria nem era indicado
+    r = N.score(m(**{**OK, "k_estudos": 6, "trim_and_fill_feito": False, "funnel_plot_feito": False}))
+    checa("escada D4: com k<10 não se cobra teste de viés (Cochrane)", r["aplic"] >= 9,
+          f"veio {r['aplic']} — cobrar teste sem poder é punir quem fez certo")
+
+    # NNT é EXTRA que valoriza, NÃO régua (correção do Dr. Eduardo, 04/Ago)
+    sem_nnt = N.score(m(**OK))["aplic"]
+    com_nnt = N.score(m(**{**OK, "nnt_agrupado": 12}))["aplic"]
+    checa("escada D5: NNT é extra, não régua — sua ausência NÃO derruba a nota",
+          sem_nnt == com_nnt, f"sem NNT={sem_nnt} com NNT={com_nnt}")
+    return "escada: 4 crivos, 2 falhas fatais, 2 tetos"
+
+
+def teste_bicondicional_nota_e_conduta():
+    """A REGRA MAIS IMPORTANTE DE TODAS, nas palavras do Dr. Eduardo (04/Ago/2026):
+
+        *"Toda nota 9 e 10 muda conduta! Se muda a conduta é 9 ou 10, e se é 9 ou 10 é porque
+        muda conduta."*
+
+    É uma BICONDICIONAL — nota e `muda_conduta` são o mesmo fato dito de dois jeitos. Até 04/Ago
+    eram calculados por TRÊS caminhos independentes que discordavam entre si, e o resultado foi
+    medido no Supabase: TRÊS meta-análises publicadas com nota 9 e "muda_conduta: NÃO", ZERO com SIM.
+
+    Esta trava varre TODAS as fixtures e TODOS os desenhos. Se algum dia alguém reintroduzir um
+    segundo caminho, morre aqui — e não no banco, depois de publicado.
+    """
+    casos = []
+    for nome, fx in N.FIXTURES.items():
+        casos.append((nome, N.score(dict(fx))))
+    for d in ("rct", "meta", "coorte", "registro", "observacional_ajustado", "transversal",
+              "serie_de_casos", "caso_controle"):
+        for q in PERGUNTAS:
+            casos.append((f"{d}/{q}", N.score(_bom(pergunta=q, desenho=d))))
+
+    ruins = []
+    for nome, r in casos:
+        a, md = r["aplic"], r["muda_conduta"]
+        if md.startswith("N/A"):
+            checa_silencioso = a <= 8
+            if not checa_silencioso:
+                ruins.append(f"{nome}: N/A mas nota {a}")
+            continue
+        if (a >= 9) != (md == "SIM"):
+            ruins.append(f"{nome}: nota {a} com muda_conduta={md}")
+    checa(f"BICONDICIONAL 9/10 ⟺ muda conduta ({len(casos)} casos)", not ruins,
+          "; ".join(ruins[:4]))
+    return f"{len(casos)} casos, nenhuma contradição"
+
+
+def teste_escala_de_aplicabilidade_da_meta():
+    """A ESCALA que o Dr. Eduardo ditou, número por número (04/Ago/2026):
+
+        0/4 crivos → 4     1/4 → 5     2/4 → 6     3/4 → 8     4/4 → 9 ou 10
+
+    Repare no salto 2→3 (6 para 8) e na ausência do 7: é de propósito, é a régua dele.
+
+    ERRO QUE ELA CORRIGE: eu tinha feito os 4 crivos apenas CAPAREM em 8. Quem falhava nos
+    QUATRO ficava com a mesma nota de quem falhava em UM — o algoritmo de beira do leito virava
+    um interruptor, quando na escada dele é uma ESCALA. A prova do absurdo foi um PROTOCOLO de
+    revisão sistemática (BMJ Open): zero estudos incluídos, zero estimativa de efeito, reprovou
+    nos 4 crivos e ficou com 8, porque os 6 domínios de MÉTODO eram bons. Ele viu e disse:
+    *"mas o protocolo passa pela escala de aplicabilidade"*.
+
+    Função pura: sem LLM, sem rede, sem banco.
+    """
+    checa("escala: a tabela é exatamente a que o Dr. Eduardo ditou",
+          N.TETO_POR_CRIVO == {4: 10, 3: 8, 2: 6, 1: 5, 0: 4},
+          f"veio {N.TETO_POR_CRIVO}")
+    checa("escala: não existe teto 7 (o salto 2→3 é 6→8, de propósito)",
+          7 not in N.TETO_POR_CRIVO.values())
+
+    def m(**qm):
+        return _bom(pergunta="intervencao", desenho="meta", tipo_documento="meta",
+                    qualidade_nhlbi={"pergunta_focada": True, "elegibilidade_predefinida": True,
+                                     "busca_sistematica_abrangente": True, "revisao_em_duplicata": True,
+                                     "qualidade_estudos_avaliada": True, "vies_publicacao_avaliado": True,
+                                     "heterogeneidade_avaliada": True, "i2_valor": qm.pop("i2", 20.0)},
+                    qualidade_meta={**dict(k_estudos=12, n_bases=4, protocolo_registrado=True,
+                                           vies_mudou_interpretacao=True, grade_usado=True,
+                                           limitacoes_reconhecidas=True, funnel_plot_feito=True,
+                                           heterogeneidade_investigada=True), **qm})
+
+    TUDO = dict(so_ecr_baixo_risco_vies=True, mistura_ecr_observacional_no_primario=False,
+                analise_sensibilidade_leave_one_out=True, trim_and_fill_feito=True,
+                trim_and_fill_perdeu_significancia=False, desfecho_primario_duro=True,
+                tsa_feita=True, tsa_cruzou_fronteira=True)
+
+    # derruba os crivos um a um e confere o teto de CADA degrau da escala
+    quedas = [
+        ({}, 4, 10),
+        ({"desfecho_primario_duro": False, "desfecho_duro": None}, 3, 8),
+        ({"desfecho_primario_duro": False, "desfecho_duro": None,
+          "i2": 78.0, "analise_sensibilidade_leave_one_out": False,
+          "heterogeneidade_investigada": False}, 2, 6),
+        ({"desfecho_primario_duro": False, "desfecho_duro": None,
+          "i2": 78.0, "analise_sensibilidade_leave_one_out": False,
+          "heterogeneidade_investigada": False, "so_ecr_baixo_risco_vies": False}, 1, 5),
+    ]
+    for extra, n_esperado, teto in quedas:
+        dd = extra.pop("desfecho_duro", "manter")
+        a = m(**{**TUDO, **extra})
+        if dd is None:
+            a["desfecho_duro"] = None          # o crivo tem 2 fontes: derruba as duas
+        n = sum(1 for v in N.crivos_beira_do_leito(a).values() if v)
+        checa(f"escala: {n_esperado}/4 crivos", n == n_esperado, f"contou {n}")
+        checa(f"escala: {n_esperado}/4 → teto {teto}",
+              N.TETO_POR_CRIVO[n] == teto, f"tabela diz {N.TETO_POR_CRIVO[n]}")
+
+    # o PROTOCOLO: falha em tudo → 4, e 4 está ABAIXO do corte de publicação (6).
+    # Um protocolo não tem estudos incluídos: logo não tem I², não tem k, não tem efeito.
+    # (Meu 1º fixture deixava o I²=20 do molde e o crivo da heterogeneidade PASSAVA — dava 1/4.
+    #  Protocolo com heterogeneidade baixa é contradição: não há o que ser heterogêneo.)
+    prot = m(i2=None, **{k: False for k in TUDO})
+    prot["qualidade_meta"]["k_estudos"] = 0
+    prot["qualidade_meta"]["heterogeneidade_investigada"] = False
+    prot["qualidade_meta"]["funnel_plot_feito"] = False
+    prot["desfecho_duro"] = None
+    r = N.score(prot)
+    checa("escala: protocolo (0/4 crivos) vai para 4 e NÃO publica", r["aplic"] <= 4,
+          f"veio {r['aplic']} — um protocolo não tem resultado clínico para oferecer")
+
+    # e o crivo do desfecho duro tem DUAS fontes — a nova e a antiga
+    a = m(**{**TUDO, "desfecho_primario_duro": None})
+    a["desfecho_duro"] = True
+    checa("escala: `desfecho_duro` do topo vale quando o campo novo cala",
+          N.crivos_beira_do_leito(a)["desfecho_duro"],
+          "campo novo ignorando o antigo — foi o que derrubou a IPD do NEJM para 6")
+    return "escala 0→4 · 1→5 · 2→6 · 3→8 · 4→9/10"
+
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,
               teste_tetos_da_lei_0, teste_teto_estatistico, teste_rigor_conhece_o_desenho,
@@ -1204,7 +1422,9 @@ if __name__ == "__main__":
               teste_schema_do_google, teste_nulo_informativo, teste_extrator_da_meta,
               teste_ipd_nao_e_punida,
               teste_gabarito_dos_artigos, teste_contrato_de_saida,
-              teste_todo_schema_tem_a_capa]
+              teste_todo_schema_tem_a_capa,
+              teste_escada_da_meta, teste_bicondicional_nota_e_conduta,
+              teste_escala_de_aplicabilidade_da_meta]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:
         antes = len(falhas)

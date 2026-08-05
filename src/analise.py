@@ -204,7 +204,32 @@ SCHEMA_FATOS_META = {
                 "teste_funnel_indicado": _B3,          # false se k<10 (Cochrane: não testar)
                 # VIÉS DOS INCLUÍDOS (AMSTAR-2)
                 "rob_ferramenta": _S,
-                "vies_mudou_interpretacao": _B3,       # usou o RoB ao concluir, ou foi check-box?
+                "vies_mudou_interpretacao": _B3,
+        # ═══════ A ESCADA DE AVALIAÇÃO CRÍTICA — 04/Ago/2026 ═══════════════════════════════
+        # Especificação do Dr. Eduardo, a partir do caso TOCILIZUMABE/COVID-19. Em 2021 as
+        # meta-análises (inclusive a nota técnica do Ministério da Saúde) diziam que o
+        # tocilizumabe não reduzia mortalidade — misturando ECR com observacional. O RECOVERY,
+        # UM ensaio com N adequado e desenho válido, encerrou a discussão sozinho.
+        # Nas palavras dele: uma meta-análise só é tão boa quanto os estudos que a compõem;
+        # somar estudos frágeis produz "uma estimativa matematicamente bonita e clinicamente
+        # enganosa". GIGO — garbage in, garbage out.
+        #
+        # DEGRAU 2 · qualidade de entrada (as duas primeiras viram FALHA FATAL, teto 5)
+        "mistura_ecr_observacional_no_primario": _B,   # ACC/AHA + Cochrane: NUNCA se combinam
+        "so_ecr_baixo_risco_vies": _B,                 # crivo 1 do algoritmo de beira do leito
+        # DEGRAU 3 · heterogeneidade — reportar não basta, tem de EXPLORAR
+        "q_cochran_p": _NUM,                           # p<0,05 = heterogeneidade não é acaso
+        "analise_sensibilidade_leave_one_out": _B,     # um outlier explica tudo?
+        "subgrupo_pre_especificado": _B,               # pré-especificado, não pescado
+        "meta_regressao": _B,                          # idade/dose/gravidade explicam a variação?
+        # DEGRAU 4 · viés de publicação — Duval & Tweedie
+        "trim_and_fill_feito": _B,
+        "trim_and_fill_perdeu_significancia": _B,      # FALHA FATAL: "se perdeu, não use"
+        # DEGRAU 5 · utilidade clínica — o topo da escada
+        "desfecho_primario_duro": _B,                  # mortalidade/IAM, não Lp(a) nem GLS nem FEVE
+        "nnt_agrupado": _NUM,                          # extra que valoriza, não régua
+        "tsa_feita": _B,                               # Trial Sequential Analysis
+        "tsa_cruzou_fronteira": _B,                    # cruzou = novo estudo não vira o resultado       # usou o RoB ao concluir, ou foi check-box?
                 # CERTEZA (PRISMA 15 · GRADE)
                 "grade_usado": _B3,
                 "certeza_desfecho_primario": {"type": "string",

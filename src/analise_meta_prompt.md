@@ -168,6 +168,75 @@ as "dos estudos incluídos"?
 
 ---
 
+## A ESCADA DE AVALIAÇÃO CRÍTICA — OS 5 DEGRAUS (04/Ago/2026)
+
+Especificação do Dr. Eduardo, escrita para ele e para os residentes do Hospital Rio Doce. Os campos
+abaixo alimentam DIRETAMENTE o motor de nota. Errar um deles é errar a nota.
+
+### POR QUE ELA EXISTE — O CASO TOCILIZUMABE
+
+Em 2021 as meta-análises diziam que o tocilizumabe não valia o investimento na COVID-19. A nota
+técnica do Ministério da Saúde (CCATES, abril/2021) concluiu, com "certeza moderada", que a droga
+reduzia ventilação mecânica mas **não** reduzia mortalidade — apoiada num conjunto que **misturava
+ECRs pequenos com estudos observacionais**. O RECOVERY, **um único** ensaio com N adequado e desenho
+que sustentava validade interna e externa, encerrou a discussão sozinho: reduzia mortalidade.
+
+Palavras dele: *"uma meta-análise só é tão boa quanto os estudos que a compõem. Somar estudos
+pequenos, retrospectivos, heterogêneos e enviesados propaga e amplifica esses erros numa estimativa
+matematicamente bonita, mas clinicamente enganosa."* **GIGO — garbage in, garbage out.**
+
+Um ECR grande e bem desenhado desbanca uma pirâmide de dados observacionais frágeis. Por isso a
+Escada não mede o capricho da revisão — mede se a MATÉRIA-PRIMA presta.
+
+### DEGRAU 2 · QUALIDADE DE ENTRADA — as duas perguntas que REPROVAM
+
+`mistura_ecr_observacional_no_primario` — **a mais importante deste prompt.**
+Os autores combinaram quantitativamente (pooling) ECRs com estudos observacionais **no desfecho
+primário**? ACC/AHA e Cochrane: desenhos diferentes NUNCA se combinam. `true` derruba a nota para 5,
+por melhor que seja o resto. Se a mistura existe mas só em análise secundária/exploratória, `false`
+— e registre a ressalva. Se não dá para saber quais desenhos entraram no primário, `null`.
+
+`so_ecr_baixo_risco_vies` — a análise principal inclui SOMENTE ECRs julgados de baixo risco de viés
+(RoB 2)? É exigente de propósito: é o 1º crivo do topo da escada.
+
+### DEGRAU 3 · HETEROGENEIDADE — reportar não é investigar
+
+`q_cochran_p` — o p do teste Q. `<0,05` = a variabilidade não é acaso.
+
+Se I² > 50%, os autores são OBRIGADOS a explorar. Marque qual exploração houve:
+  `analise_sensibilidade_leave_one_out` — tiraram um estudo por vez para achar o outlier?
+  `subgrupo_pre_especificado` — subgrupo PRÉ-especificado (não pescado depois)
+  `meta_regressao` — idade, dose ou gravidade basal explicam a variação?
+
+Nenhuma das três com I² alto → o efeito médio é, nas palavras dele, *"matematicamente inútil para a
+decisão à beira do leito"*. Teto 6.
+
+### DEGRAU 4 · VIÉS DE PUBLICAÇÃO — Duval & Tweedie
+
+`trim_and_fill_feito` — aplicaram o Trim-and-Fill (insere estudos "fictícios" do lado vazio do funil
+e recalcula o efeito ajustado)?
+`trim_and_fill_perdeu_significancia` — **o efeito sumiu depois do ajuste?** `true` derruba para 5.
+Ordem dele: *"se perder a significância após o Trim-and-Fill, não use — o efeito positivo é ilusão
+de publicação seletiva"*.
+
+Continua valendo a porteira da Cochrane (cap. 13): **k < 10 → o teste não tem poder e não é cobrado.**
+
+### DEGRAU 5 · UTILIDADE CLÍNICA — o topo
+
+`desfecho_primario_duro` — o desfecho primário AGRUPADO é DURO (mortalidade, IAM, AVC, hospitalização)
+ou SUBSTITUTO (Lp(a), strain/GLS, FEVE, marcador laboratorial)? Substituto não passa de 8.
+
+`nnt_agrupado` — o NNT derivado da redução absoluta de risco global, se der para calcular.
+**É um EXTRA que valoriza, NÃO uma régua** (correção expressa dele, 04/Ago): sua ausência não
+derruba nota nenhuma. Em cardiologia, NNT < 25 é considerado impactante.
+
+`tsa_feita` / `tsa_cruzou_fronteira` — Trial Sequential Analysis. Ajusta o limiar de significância de
+forma cumulativa, como as análises interinas de um ECR, para evitar falso positivo por testes
+repetidos ao longo dos anos. Se a curva cruzou a fronteira de monitoramento, o resultado é robusto e
+não vai oscilar com novos estudos — é o que autoriza a nota 10.
+
+---
+
 ## A REGRA DO NNT/NNH
 
 NNT = 1/ARR. Só existe com RISCO BASAL declarado + HORIZONTE DE TEMPO + a mesma escala do desfecho.

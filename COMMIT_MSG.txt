@@ -1,80 +1,123 @@
-A CAPA QUE FALTAVA E A TABELA QUE NÃO CABIA — 04/Ago/2026
+A ESCADA DE AVALIAÇÃO CRÍTICA DE META-ANÁLISES — 04/Ago/2026
 
-Três defeitos que só apareciam DEPOIS de a análise estar paga, e duas travas para
-que não voltem.
+O motor da meta foi reorganizado a partir de uma especificação do Dr. Eduardo, escrita para
+ele e para os residentes do Hospital Rio Doce. E a régua nova foi rodada nas 24 metas do lote.
 
-═══ 1 · A CAPA (10 artigos recusados no portão) ═══
+═══ POR QUE — O CASO TOCILIZUMABE ═══
 
-O SCHEMA_FATOS_META foi escrito com os blocos de método da meta-análise — PRISMA,
-Cochrane, AMSTAR-2, GRADE — e sem a identificação do artigo. Dez meta-análises
-saíram com nota 6 a 9, pacote completo (perícia, PDF, áudio, visual), e o contrato
-recusou as dez:
+Em 2021 as meta-análises diziam que o tocilizumabe não valia o investimento na COVID-19. A nota
+técnica do Ministério da Saúde (CCATES, abril/2021) concluiu, com "certeza moderada", que a droga
+reduzia ventilação mecânica mas NÃO reduzia mortalidade — apoiada num conjunto que MISTURAVA ECRs
+com estudos observacionais. O RECOVERY, um único ensaio com N adequado e desenho válido, encerrou
+a discussão sozinho: reduzia mortalidade.
 
-    "data_publicacao: ausente · titulo vazio · revista vazia"   × 10
+"Uma meta-análise só é tão boa quanto os estudos que a compõem. Somar estudos pequenos,
+retrospectivos, heterogêneos e enviesados propaga e amplifica esses erros numa estimativa
+matematicamente bonita, mas clinicamente enganosa." — GIGO.
 
-O portão estava certo: a linha sobe COMPLETA ou não sobe. Faltava o dado.
+Por isso a Escada é uma camada POR CIMA dos 6 domínios ponderados. A ponderação mede o CAPRICHO
+da revisão; a Escada mede se a MATÉRIA-PRIMA presta.
 
-  · analise.py .............. titulo/revista/ano/doi/autores no SCHEMA_FATOS_META,
-                              os três primeiros obrigatórios
-  · analise_meta_prompt.md .. TÓPICO −1 · IDENTIFICAÇÃO, antes de qualquer método
-  · ficha_site.py ........... 2ª fonte da capa: o nome do arquivo (metadado do PubMed
-                              posto ali pelo classificador — catálogo, não leitura de LLM)
-  · pdf_analise.py .......... a MESMA 2ª fonte, esquecida na primeira passada (ver LEI 9)
-  · reparar_capa.py [NOVO] .. repara os pacotes já feitos consultando o DOI no PubMed.
-                              Sem LLM, sem Supabase, sem mover arquivo. 26/26 reparados.
+═══ 1 · A ESCADA (notas_prototipo.py · analise.py · analise_meta_prompt.md) ═══
 
-Resultado, medido: o contrato passou de 11 para 23 pacotes aprovados, sem re-analisar
-nada e sem gastar um centavo.
+  Degrau 2 · misturou ECR com observacional no primário ...... FATAL, teto 5
+  Degrau 4 · perdeu significância no Trim-and-Fill ........... FATAL, teto 5
+  Degrau 3 · I²>50% sem sensibilidade/subgrupo/meta-regressão . teto 6
+  Degrau 5 · desfecho SUBSTITUTO (Lp(a), GLS, FEVE) .......... teto 8
+  Degrau 1 · sem PROSPERO ................................... desconto no domínio
 
-═══ 2 · A TABELA CORTADA ═══
+  Mantida a porteira da Cochrane (cap. 13): k<10 não cobra Egger.
+  12 campos novos no SCHEMA_FATOS_META, todos pedidos explicitamente no prompt.
 
-O CSS dizia só `width: 100%`. Sem `table-layout`, isso é um PEDIDO: o motor mede a
-largura mínima de cada coluna pelo conteúdo, soma, e se passar da página TRANSBORDA.
-Medido no JACC: 192,2 mm numa página de 170 mm úteis — a coluna "Peso na agregação"
-saía cortada na margem. Em TODOS os PDFs.
+═══ 2 · A ESCALA DE APLICABILIDADE — os crivos GRADUAM, não só capam ═══
 
-  · table-layout: fixed → transbordar vira matematicamente impossível
-  · estilo de revista (decisão do Dr. Eduardo): sem grade vertical, três traços
-    horizontais como NEJM/Lancet, zebra levíssima
-  · coluna não reportada em NENHUM estudo é podada — e DECLARADA em nota sob a tabela.
-    Dado não some calado: a informação ter sido pedida e não existir é um achado sobre
-    a revisão, não um detalhe de diagramação.
-  · o título vira legenda da tabela (caption): é parte dela, não fica órfão nunca mais
-  · linha não se parte entre páginas · cabeçalho repete em tabela longa
+  0/4 → 4    1/4 → 5    2/4 → 6    3/4 → 8    4/4 → 9 ou 10
 
-Medido: 24/24 perícias sem uma tabela cortada. 217 tabelas com título embutido,
-41 com coluna podada e declarada.
+ERRO MEU, QUE ELE PEGOU: eu tinha feito os 4 crivos apenas CAPAREM em 8. Quem falhava nos QUATRO
+ficava com a mesma nota de quem falhava em UM — o algoritmo de beira do leito virava um
+interruptor, quando na escada dele é uma ESCALA. A prova do absurdo foi um PROTOCOLO de revisão
+sistemática (BMJ Open): zero estudos, zero efeito, reprovou nos 4 crivos e ficou com 8, porque os
+domínios de MÉTODO eram bons. Ele viu: "mas o protocolo passa pela escala de aplicabilidade".
+Agora vai para 4 e é recusado.
 
-═══ 3 · O REGEX QUE ENGOLIU PARÁGRAFOS ═══
+O NNT<25 VALORIZA mas NÃO é régua (correção expressa dele).
 
-`<h2>(.*?)</h2>\s*<table>` parece certo e está errado. O `.*?` preguiçoso para no
-primeiro fechamento — mas se o `<table>` não vier logo depois, o motor VOLTA ATRÁS e
-estica até um `</h2>` lá na frente que tenha tabela em seguida. Parágrafos inteiros da
-perícia viraram legenda: oito linhas em maiúscula azul na tela do Dr. Eduardo.
+═══ 3 · A BICONDICIONAL: 9/10 ⟺ MUDA CONDUTA ═══
 
-Conserto: ponto temperado `(?:(?!</h\1>).)*?` — um curinga que se recusa a atravessar
-o fechamento. Sem esse freio não existe quantificador preguiçoso que segure.
+"Toda nota 9 e 10 muda conduta! Se muda a conduta é 9 ou 10, e se é 9 ou 10 é porque muda conduta."
 
-═══ 4 · AS DUAS TRAVAS (teste_motor.py — 37 verdes) ═══
+Estavam sendo calculados por TRÊS caminhos independentes que discordavam. Medido no Supabase:
+três meta-análises publicadas com nota 9 e "muda_conduta: NÃO", ZERO com SIM. Agora a nota é a
+fonte e o checklist virou insumo que corta. Contradição impossível por construção.
 
-  · teste_todo_schema_tem_a_capa — compara o que CADA schema PEDE com o que o contrato
-    EXIGE. É uma função pura, custa microssegundos, e teria pego o defeito nº 1 antes de
-    o primeiro artigo ser pago. Provada: arrancando `titulo` do schema, ela reprova.
+No caminho, dois defeitos antigos que só apareceram porque a regra ficou rígida:
+  · `a.get(k, True)` NÃO devolve o padrão quando a chave existe valendo None — a REGRA MÃE
+    ("null é não-reportado, false é não-fez") estava violada DENTRO do motor. Reprovava o
+    melhor RCT possível.
+  · o checklist exigia `efeito_relevante_consistente` E o MCID — mesma pergunta, duas vezes.
+  · `desfecho_duro` (topo) e `desfecho_primario_duro` (bloco meta): o crivo lia só o novo e
+    derrubava a IPD do NEJM, cujo desfecho MORTALIDADE está no campo antigo.
 
-  · teste_schema_do_google — a lista de schemas era ESCRITA À MÃO e não incluía o
-    SCHEMA_FATOS_META. Quando ele nasceu, ninguém o acrescentou, e a bateria seguiu
-    dando APROVADO: teste que não olha para o schema novo não tem como reprovar. A
-    meta rodou em produção com a conversão para o Google nunca testada. Trocado por
-    descoberta automática — schema novo entra sozinho nos dois testes.
+═══ 4 · O CARD MOSTRAVA UMA NOTA E O BANCO OUTRA (visual_abstract_generator.py) ═══
 
-    É o mesmo defeito dos 10 artigos com outra roupa: lista escrita à mão que não cresce
-    quando o sistema cresce. A cura é DESCOBRIR, não LISTAR.
+"Mas por que eles dão notas diferentes?" — card "NAC: 3/10", registro "nota 8", mesma linha.
+
+O Visual Abstract PERGUNTA a nota ao modelo e depois tentava sobrescrevê-la com a do pipeline.
+A intenção estava certa. Mas lia de um `analysis.json` que NÃO EXISTE MAIS — artefato do
+`article_analyzer.py`, aposentado pela LEI 5. Medido: ZERO analysis.json nos 26 pacotes. Logo o
+override nunca rodava e o que ia ao PNG era o palpite do modelo, sozinho.
+Agora lê o `_CANONICO.md`. O modelo escreve os TEXTOS; a NOTA vem de quem tem autoridade.
+
+═══ 5 · O ÚLTIMO PONTO SEM REDE DE SEGURANÇA (visual_abstract_generator.py) ═══
+
+"Está tudo com o gpt terra?" — a varredura mostrou que não. Extração, perícia, ACRI e áudio já
+eram terra → sonnet-5 → grok. O Visual Abstract chamava o SDK da Anthropic DIRETO, com
+`model="claude-sonnet-5"` chumbado: fora do modelos.py, sem cadeia, sem fallback. Se a Anthropic
+caísse no meio de um lote de 55, o artigo INTEIRO falhava — enquanto todo o resto tinha para onde ir.
+
+Agora usa `llm_client.gerar(M.ESCRITA, ...)`, a mesma porta do resto da casa. De quebra saiu o
+retry manual duplicado (3 tentativas, 10s/20s) — o llm_client já faz backoff, timeout e troca de
+provedor.
+
+E as mensagens de tela que MENTIAM foram corrigidas: era o "🔍 Extraindo dados via Claude Sonnet
+5..." do Visual Abstract que fazia o dono achar que a EXTRAÇÃO DOS FATOS era sonnet, quando é terra.
+
+A corrente inteira, medida:
+   classificação   CLASSIFICACAO   luna  → haiku → sonnet-5   (decisão dele; acurácia medida com luna)
+   extração FATOS  EXTRACAO        terra → sonnet-5 → grok
+   perícia         PERICIA         terra → sonnet-5 → grok
+   ACRI/áudio      ESCRITA         terra → sonnet-5 → grok
+   Visual Abstract ESCRITA         terra → sonnet-5 → grok
+
+═══ 6 · AS TRAVAS (teste_motor.py — 40 verdes) ═══
+
+  · teste_escada_da_meta ................. 4 crivos, 2 falhas fatais, 2 tetos
+  · teste_bicondicional_nota_e_conduta ... 39 casos, nenhuma contradição
+  · teste_escala_de_aplicabilidade_da_meta  a tabela exata, e o protocolo indo para 4
+
+Cada uma foi PROVADA por sabotagem: quebrei a regra de propósito e conferi que a trava acusa.
+A do desfecho substituto NÃO mordia (a regra estava duplamente garantida e o teste olhava só o
+número final) — apertei para olhar o degrau, não a nota.
+
+═══ O QUE A RÉGUA FEZ COM AS 24 METAS (medido, rodado na máquina dele) ═══
+
+  distribuição: 9→1 · 8→4 · 7→1 · 6→6 · 5→10 · 4→2
+  média 5,92  ·  publicáveis (≥6): 12 de 24  ·  violações da bicondicional: 0
+
+  4 reprovaram no Degrau 2 — TODAS por misturar ECR com observacional, com a ferramenta dupla
+  (RoB 2 + ROBINS-I) escrita no próprio artigo. O erro do tocilizumabe, 4 vezes em 24.
+
+  E a fotografia da literatura: só ECR de baixo risco 5/24 · Trim-and-Fill 1/24 · TSA 2/24.
+
+Decisão do dono, registrada como LEI 10 no CLAUDE.md:
+"CardioDaily publica muito menos e reprova muito mais — ESTA É A REGRA!"
 
 ═══ O QUE ESTE COMMIT NÃO RESOLVE ═══
 
-  · 3 pacotes do STAGING seguem retidos: falta áudio (Prasugrel) e ACRI (JAMA Alcohol).
-    A Chave 2 completa sozinha — reaproveita o que existe e gera só o que falta.
-  · a Chave 2 ainda escreve "✔ Publicado em blocos" mesmo com ZERO publicado.
-  · 14 meta-análises seguem na fila, agora com o extrator corrigido.
+  · o `analise_meta_prompt.md` mudou → os 24 pacotes têm carimbo velho e serão reanalisados
+  · lentidão: 129s/artigo (perícia 65s · PDF 60s · visual 30s · áudio 27s). O conserto do
+    Visual Abstract tira ~30s; faltam o PDF (WeasyPrint sobe do zero a cada artigo) e o
+    paralelismo entre artigos
+  · 2 pacotes órfãos no STAGING de rodadas antigas, sem `tipo_documento`
 
-Bateria: APROVADO · 37 travas · Contrato: passa 23 · retido 3
+Bateria: APROVADO · 40 travas

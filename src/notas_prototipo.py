@@ -421,6 +421,183 @@ def dominios_meta(a):
     return d
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# A ESCADA DE AVALIAÇÃO CRÍTICA DE META-ANÁLISES — 04/Ago/2026
+# Especificação do Dr. Eduardo, para ele e para os residentes do Hospital Rio Doce.
+#
+# ═══ O CASO QUE A ORIGINOU: TOCILIZUMABE NA COVID-19 ═══
+#
+# Em 2021 as meta-análises diziam que o tocilizumabe não valia o investimento. A própria nota
+# técnica do Ministério da Saúde (CCATES, abril/2021) concluiu, com "certeza moderada", que a
+# droga reduzia ventilação mecânica mas NÃO reduzia mortalidade — apoiando-se num conjunto que
+# misturava ECRs pequenos com estudos observacionais. O RECOVERY, UM único ensaio com N
+# adequado e desenho que sustentava validade interna e externa, encerrou a discussão sozinho:
+# reduzia mortalidade.
+#
+# Palavras dele: *"uma meta-análise só é tão boa quanto os estudos que a compõem. Quando
+# combinamos vários estudos pequenos, retrospectivos, heterogêneos e propensos a vieses, a
+# meta-análise propaga e amplifica esses erros em uma estimativa combinada matematicamente
+# bonita, mas clinicamente enganosa."*  GIGO — garbage in, garbage out.
+#
+# Por isso a Escada é uma camada POR CIMA dos 6 domínios ponderados. A ponderação mede o
+# CAPRICHO da revisão; a Escada mede se a MATÉRIA-PRIMA presta. Uma revisão pode ser impecável
+# em método e clinicamente enganosa — foi exatamente o caso do tocilizumabe.
+#
+# Vale para TODAS as metas, inclusive rede e IPD (decisão dele, 04/Ago).
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+TETO_FALHA_ESCADA = 5     # as duas falhas fatais (degraus 2 e 4) — aprovado por ele
+TETO_MURO = 6             # "em cima do muro": I² alto sem exploração (degrau 3)
+TETO_SURROGATE = 8        # desfecho substituto: bom, mas não é 9/10 (degrau 5)
+NNT_QUE_VALORIZA = 25     # EXTRA que valoriza — NÃO é régua (correção dele, 04/Ago)
+
+FALHAS_FATAIS_META = {
+    "M1": ("misturou ECR com estudo observacional no desfecho primário — ACC/AHA e Cochrane: "
+           "desenhos diferentes NUNCA se combinam quantitativamente. Foi o erro do tocilizumabe"),
+    "M2": ("o efeito perdeu significância após o ajuste Trim-and-Fill (Duval & Tweedie) — "
+           "o resultado positivo era ilusão de publicação seletiva"),
+}
+
+
+def falhas_fatais_meta(a):
+    m = a.get("qualidade_meta") or {}
+    f = []
+    if m.get("mistura_ecr_observacional_no_primario"):
+        f.append("M1")
+    if m.get("trim_and_fill_perdeu_significancia"):
+        f.append("M2")
+    return f
+
+
+def heterogeneidade_explorada(a):
+    """DEGRAU 3 — I² alto obriga a EXPLORAR, não só a reportar.
+
+    Regra de ouro do decisor: se I² > 50% e os autores só jogaram tudo num modelo de efeitos
+    aleatórios sem explicar a variação, o efeito médio é "matematicamente inútil para a decisão
+    à beira do leito". Vale qualquer uma das três explorações legítimas.
+    """
+    m = a.get("qualidade_meta") or {}
+    return bool(m.get("analise_sensibilidade_leave_one_out")
+                or m.get("subgrupo_pre_especificado")
+                or m.get("meta_regressao")
+                or m.get("heterogeneidade_investigada"))
+
+
+def escada_meta(a):
+    """Aplica a Escada. Devolve (teto, degraus, falhas) — o teto é o MENOR dos tetos dos degraus."""
+    q = a.get("qualidade_nhlbi") or {}
+    m = a.get("qualidade_meta") or {}
+    i2 = _n(q.get("i2_valor"))
+    k = _n(m.get("k_estudos"))
+    degraus, teto = {}, 10
+
+    # DEGRAU 1 · registro e protocolo — sinal amarelo, não mata (já pesa no domínio `busca`)
+    degraus["1_protocolo"] = "PROSPERO" if m.get("protocolo_registrado") else "sem registro prévio"
+
+    # DEGRAU 2 · qualidade de entrada (GIGO) — FATAL
+    if m.get("mistura_ecr_observacional_no_primario"):
+        degraus["2_entrada"] = "FATAL: misturou ECR com observacional no desfecho primário"
+        teto = min(teto, TETO_FALHA_ESCADA)
+    elif m.get("so_ecr_baixo_risco_vies"):
+        degraus["2_entrada"] = "só ECR de baixo risco de viés"
+    else:
+        degraus["2_entrada"] = f"ferramenta de viés: {m.get('rob_ferramenta') or 'não declarada'}"
+
+    # DEGRAU 3 · heterogeneidade — TETO 6 se alto e não explorado
+    if i2 is None:
+        degraus["3_heterogeneidade"] = "I² não reportado"
+    elif i2 > 50 and not heterogeneidade_explorada(a):
+        degraus["3_heterogeneidade"] = f"I²={i2:.0f}% ALTO e não explorado — em cima do muro"
+        teto = min(teto, TETO_MURO)
+    elif i2 > 50:
+        degraus["3_heterogeneidade"] = f"I²={i2:.0f}% alto, mas explorado (sensibilidade/subgrupo/meta-regressão)"
+    else:
+        degraus["3_heterogeneidade"] = f"I²={i2:.0f}%"
+
+    # DEGRAU 4 · viés de publicação — FATAL se o Trim-and-Fill matou o efeito
+    if m.get("trim_and_fill_perdeu_significancia"):
+        degraus["4_vies_publicacao"] = "FATAL: efeito não sobreviveu ao Trim-and-Fill"
+        teto = min(teto, TETO_FALHA_ESCADA)
+    elif m.get("trim_and_fill_feito"):
+        degraus["4_vies_publicacao"] = "robusto ao Trim-and-Fill"
+    elif k is not None and k < 10:
+        # Cochrane cap. 13: com k<10 o teste não tem poder. Cobrar é punir quem fez certo.
+        degraus["4_vies_publicacao"] = f"k={k:.0f}<10: teste de assimetria não indicado (Cochrane)"
+    else:
+        degraus["4_vies_publicacao"] = "funnel/Egger" if m.get("funnel_plot_feito") else "não avaliado"
+
+    # DEGRAU 5 · utilidade clínica — desfecho SUBSTITUTO não chega a 9/10
+    duro = m.get("desfecho_primario_duro")
+    if duro is False:
+        degraus["5_utilidade"] = "desfecho SUBSTITUTO (Lp(a), GLS, FEVE) — não é desfecho duro"
+        teto = min(teto, TETO_SURROGATE)
+    elif duro:
+        nnt = _n(m.get("nnt_agrupado"))
+        extra = f" · NNT {nnt:.0f}" + (" (impactante)" if nnt <= NNT_QUE_VALORIZA else "") if nnt else ""
+        degraus["5_utilidade"] = "desfecho DURO" + extra
+    else:
+        degraus["5_utilidade"] = "tipo de desfecho não declarado"
+    return teto, degraus, falhas_fatais_meta(a)
+
+
+# ═══ A ESCALA DE APLICABILIDADE DA META — os crivos GRADUAM, não só capam (04/Ago/2026) ═══
+#
+# Régua ditada pelo Dr. Eduardo, número por número:
+#
+#      0/4 crivos → 4       1/4 → 5       2/4 → 6       3/4 → 8       4/4 → 9 ou 10
+#
+# ERRO MEU, QUE ELE PEGOU: eu tinha feito os 4 crivos apenas CAPAREM em 8. Com isso, quem
+# falhava nos QUATRO ficava com a mesma nota de quem falhava em UM — o algoritmo de beira do
+# leito virava um interruptor, quando na escada dele é uma ESCALA.
+#
+# A prova do absurdo foi o protocolo do BMJ Open: um PROTOCOLO de revisão sistemática, sem
+# nenhum estudo incluído e sem estimativa de efeito, reprovou nos 4 crivos e ficou com 8 —
+# porque os 6 domínios de MÉTODO eram bons. Um protocolo é metodologicamente impecável e
+# clinicamente vazio. Palavras dele: *"mas o protocolo passa pela escala de aplicabilidade"*.
+# Passa: e é a escala que tem de dizer que ele não serve, não os domínios de método.
+#
+# Repare no salto 2→3 crivos (6 → 8) e na ausência do 7: é de propósito, é a régua dele.
+TETO_POR_CRIVO = {4: 10, 3: 8, 2: 6, 1: 5, 0: 4}
+
+
+def crivos_beira_do_leito(a):
+    """O ALGORITMO DE BEIRA DO LEITO — os 4 crivos que autorizam nota 9/10.
+
+    Palavras do Dr. Eduardo: *"se ela passar pelos seguintes crivos, então temos em mãos um
+    estudo de impacto real, capaz de fundamentar uma recomendação com alto nível de evidência
+    (LOE A) para guiar o tratamento dos pacientes e o ensino dos residentes."*
+
+    E é AQUI que a regra mais importante do CardioDaily fica verdadeira POR CONSTRUÇÃO:
+    **toda nota 9/10 muda conduta, e o que muda conduta é 9 ou 10.** São o mesmo fato dito de
+    dois jeitos. Até 04/Ago essa regra era calculada em TRÊS lugares que discordavam entre si —
+    e três meta-análises subiram ao Supabase com nota 9 e "muda_conduta: NÃO".
+    Agora existe uma conta só, e a contradição deixa de ser possível.
+    """
+    m = a.get("qualidade_meta") or {}
+    q = a.get("qualidade_nhlbi") or {}
+    i2 = _n(q.get("i2_valor"))
+    return {
+        # 1 · só ECR de baixo risco de viés
+        "so_ecr_baixo_risco": bool(m.get("so_ecr_baixo_risco_vies"))
+                              and not m.get("mistura_ecr_observacional_no_primario"),
+        # 2 · I² baixo, OU alto porém isolado e explicado
+        "heterogeneidade_ok": (i2 is not None and i2 < 25) or
+                              (i2 is not None and heterogeneidade_explorada(a)),
+        # 3 · robusto ao Trim-and-Fill (ou teste não indicado por k<10)
+        "robusto_vies_publicacao": not m.get("trim_and_fill_perdeu_significancia")
+                                   and bool(m.get("trim_and_fill_feito")
+                                            or (_n(m.get("k_estudos")) or 99) < 10),
+        # 4 · desfecho DURO (o NNT<25 é extra que valoriza, não régua — decisão dele, 04/Ago)
+        #     ⚠️ DUAS FONTES para a MESMA pergunta: `desfecho_duro` no topo dos fatos (que todo
+        #     extrator preenche desde sempre) e `desfecho_primario_duro` dentro do bloco da meta
+        #     (que eu criei hoje). Ler só o novo fazia a IPD de betabloqueador do NEJM — desfecho
+        #     MORTALIDADE, declarado no campo antigo — reprovar no crivo do desfecho duro.
+        #     É o mesmo erro do dia inteiro: campo novo que ignora o campo velho que já respondia.
+        "desfecho_duro": bool(m.get("desfecho_primario_duro") if m.get("desfecho_primario_duro") is not None
+                              else a.get("desfecho_duro")),
+    }
+
+
 # quantos FATOS de meta o extrator precisa ter respondido para a ponderação valer.
 # Abaixo disso, pontuar seria punir o SILÊNCIO do extrator, não a qualidade do estudo —
 # o mesmo erro que já foi evitado na contagem NHLBI e que eu repeti aqui (pego pelo teste, 02/Ago).
@@ -468,7 +645,24 @@ def nota_meta(a):
     # Assim um defeito real continua doendo, mas não anula os outros cinco domínios. Foi isso que
     # derrubou a meta de betabloqueador do NEJM de 7 para 5, abaixo do corte de publicação.
 
+    # ═══ A ESCADA (04/Ago) — por cima da ponderação, nunca por baixo ═══
+    # A ponderação mede o CAPRICHO da revisão; a Escada mede se a MATÉRIA-PRIMA presta.
+    # Uma revisão pode ser impecável em método e clinicamente enganosa: foi o tocilizumabe.
+    teto_esc, degraus, fatais = escada_meta(a)
+    s = min(s, teto_esc)
+
+    # O TOPO SÓ COM OS 4 CRIVOS. Sem eles a meta é boa, não é definitiva — e "definitiva" é
+    # exatamente o que 9/10 significa no CardioDaily, porque 9/10 obriga a mudar conduta.
+    cr = crivos_beira_do_leito(a)
+    n_crivos = sum(1 for v in cr.values() if v)
+    s = min(s, TETO_POR_CRIVO[n_crivos])
+    # TSA que cruzou a fronteira: novo estudo não vira o resultado → o 10 fica autorizado
+    if s >= 9 and not (a.get("qualidade_meta") or {}).get("tsa_cruzou_fronteira"):
+        s = min(s, 9)
+
     frase = next(f for lim, f in FAIXA_META if s >= lim)
+    if fatais:
+        frase = "REPROVADO NA ESCADA — " + "; ".join(FALHAS_FATAIS_META[k] for k in fatais)
     return s, d, frase
 
 
@@ -711,7 +905,10 @@ def score_diretriz(a):
     return {"trabalho": s, "aplic": aplic, "teto_desenho": td, "teto_externa": tb,
             "teto_falha_fatal": tf, "teto_mcid": 10,
             # ESCOLHA MINHA: numa diretriz o documento INTEIRO é conduta; o gatilho é a nota.
-            "muda_conduta": "SIM" if aplic >= 8 else "NÃO",
+            "muda_conduta": "SIM" if aplic >= 9 else "NÃO",   # 04/Ago — A REGRA MAIS IMPORTANTE:
+            # nota 9/10 ⟺ muda conduta. Bicondicional, palavras do Dr. Eduardo: "se muda a
+            # conduta é 9 ou 10, e se é 9 ou 10 é porque muda conduta". Era >= 8 aqui e um
+            # CHECKLIST separado na REGRA 4 — dois caminhos, e 3 metas subiram 9 com "NÃO".
             "rota": ROTA_CLINICA, "falhas_fatais": ff, "motor": "DIRETRIZ",
             "nhlbi": {"cumpre": 0, "falha": 0, "nao_reporta": 0, "teto": 10, "criterios_falhos": []},
             "teto_nivel_c": tc, "pct_nivel_c": p_c,
@@ -910,7 +1107,10 @@ def score_revisao(a):
             "teto_falha_fatal": 10, "teto_mcid": 10, "teto_atualidade": ta, "defasagem_anos": dfg,
             "utilidade": u,
             # numa revisão o que "muda conduta" é ela entregar conduta pronta E ser confiável
-            "muda_conduta": "SIM" if aplic >= 8 else "NÃO",
+            "muda_conduta": "SIM" if aplic >= 9 else "NÃO",   # 04/Ago — A REGRA MAIS IMPORTANTE:
+            # nota 9/10 ⟺ muda conduta. Bicondicional, palavras do Dr. Eduardo: "se muda a
+            # conduta é 9 ou 10, e se é 9 ou 10 é porque muda conduta". Era >= 8 aqui e um
+            # CHECKLIST separado na REGRA 4 — dois caminhos, e 3 metas subiram 9 com "NÃO".
             "rota": ROTA_CLINICA, "falhas_fatais": [], "motor": "REVISAO",
             "nhlbi": {"cumpre": 0, "falha": 0, "nao_reporta": 0, "teto": 10, "criterios_falhos": []},
             "dominios_revisao_rigor": dom_r, "dominios_revisao_util": dom_u,
@@ -1036,21 +1236,51 @@ def nota_estatistica(a):
 
 
 def muda_conduta(a, aplic):
-    """REGRA 4 — checklist 'mudar a prática', NUNCA a autoridade."""
+    """REGRA 4 — checklist 'mudar a prática', NUNCA a autoridade.
+
+    ═══ 04/Ago — A REGRA MAIS IMPORTANTE DO CARDIODAILY, E O BURACO QUE ELA ABRIU ═══
+
+    Palavras do Dr. Eduardo: *"toda nota 9 e 10 muda conduta! Se muda a conduta é 9 ou 10, e se
+    é 9 ou 10 é porque muda conduta."* É uma BICONDICIONAL: a nota e o `muda_conduta` são o mesmo
+    fato dito de dois jeitos, não duas perguntas independentes.
+
+    Só que estavam sendo calculados por CAMINHOS SEPARADOS — a nota de um lado, este checklist do
+    outro. Um artigo podia passar de 9 na nota e reprovar no checklist (que exige
+    `efeito_relevante_consistente`). Aconteceu 3 vezes: três meta-análises subiram ao Supabase com
+    nota 9 e "muda_conduta: NÃO", medido em 04/Ago.
+
+    O conserto NÃO é ajustar o limiar: é INVERTER A HIERARQUIA. O checklist continua existindo e
+    continua sendo a pergunta certa — mas como INSUMO, cortando a nota. Quem reprova aqui não
+    chega a 9. Assim a bicondicional passa a ser verdadeira POR CONSTRUÇÃO, e não por conferência
+    de alguém que lembre de olhar.
+    """
     if a["pergunta"] != "intervencao":
         return "N/A (não é intervenção)"
-    comum = (aplic >= 8
-             and a.get("extrapolavel", True)
-             and a.get("sem_evidencia_conflitante_melhor", True))
+    # ⚠️ 04/Ago — `a.get(k, True)` NÃO devolve o padrão quando a chave EXISTE valendo None.
+    # `sem_evidencia_conflitante_melhor: null` (= "o artigo não conta") virava falso, e o checklist
+    # reprovava. É a REGRA MÃE dos prompts — *null é "não reportado", false é "não fez"* — violada
+    # DENTRO do motor. Ficou invisível enquanto o checklist só escrevia um rótulo; virou teto de nota
+    # em 04/Ago e derrubou 11 travas da bateria de uma vez, inclusive o "melhor RCT possível".
+    def _sim(chave, padrao=True):
+        v = a.get(chave)
+        return padrao if v is None else bool(v)
+
+    comum = (aplic >= 8 and _sim("extrapolavel") and _sim("sem_evidencia_conflitante_melhor"))
     # 04/Ago — DEIXAR DE FAZER TAMBÉM É CONDUTA. Exigir `efeito_relevante_consistente` fazia com que
     # NENHUM estudo negativo pudesse dizer SIM: por construção, um nulo não tem "efeito relevante".
     # Era por isso que o trabalho que TIROU o betabloqueador do pós-IAM saía com "muda conduta: NÃO".
     rc = a.get("relevancia_clinica") or {}
     if (rc.get("classificacao") or "").strip().lower() == "ausencia_de_efeito_demonstrada":
         return "SIM" if (comum and _nulo_esta_demonstrado(rc, a)) else "NÃO"
-    ok = (comum
-          and a.get("efeito_relevante_consistente", False)
-          and a.get("beneficio_supera_risco", True))
+    # ⚠️ 04/Ago — MESMA PERGUNTA, DUAS VEZES. `efeito_relevante_consistente` e o MCID perguntam a
+    # MESMA coisa: "esse efeito importa para o paciente?". O MCID já responde, com vocabulário mais
+    # fino (robusto / provavel / incerto / abaixo do MCID / ausência demonstrada). Exigir o booleano
+    # ADEMAIS do MCID fazia o melhor RCT possível — efeito grande, MCID robusto — reprovar só porque
+    # o extrator deixou aquele campo em `null`. Punia o SILÊNCIO do extrator, não o estudo:
+    # o mesmo erro que este projeto já corrigiu na contagem NHLBI e nos fatos da meta.
+    _cls = ((a.get("relevancia_clinica") or {}).get("classificacao") or "").strip().lower()
+    _relevante = _sim("efeito_relevante_consistente", False) or _cls in ("robusto", "provavel")
+    ok = comum and _relevante and _sim("beneficio_supera_risco")
     return "SIM" if ok else "NÃO"
 
 
@@ -1144,8 +1374,38 @@ def score(a):
         aplic = s
     else:
         aplic = min(td, te, s, tf, tm)   # ← a régua-chave (artigo original)
+
+    # ═══ 04/Ago — A BICONDICIONAL: 9/10 ⟺ MUDA CONDUTA ═══
+    # *"Toda nota 9 e 10 muda conduta! Se muda a conduta é 9 ou 10, e se é 9 ou 10 é porque muda
+    # conduta."* — Dr. Eduardo, e ele chama de a regra mais importante de todas.
+    #
+    # Até hoje a nota saía de um caminho e o `muda_conduta` de OUTRO (o checklist da REGRA 4).
+    # Dois caminhos independentes para o MESMO fato: a definição de buraco. Resultado medido no
+    # Supabase em 04/Ago: TRÊS meta-análises com nota 9 e "muda_conduta: NÃO". Zero com SIM.
+    #
+    # O conserto não é mexer no limiar — é inverter a hierarquia. O checklist continua sendo a
+    # pergunta certa, mas como INSUMO: quem reprova nele NÃO CHEGA A 9. Depois disso, o
+    # `muda_conduta` é lido da própria nota. Uma conta, um lugar, contradição impossível.
+    # A META tem escada PRÓPRIA (os 4 crivos de beira do leito, já aplicados dentro do nota_meta).
+    # Cobrar dela TAMBÉM o checklist do artigo original é o erro de sempre — o instrumento errado
+    # para o objeto: `efeito_relevante_consistente` é pergunta de ensaio, não de revisão.
+    # O checklist da REGRA 4 era, em quase tudo, REDUNDANTE com tetos que já existem:
+    #   `extrapolavel`  → já é o teto_externa       ·  relevância clínica → já é o teto_mcid
+    # Manter os dois era julgar o mesmo defeito duas vezes por caminhos que discordavam.
+    # Sobraram DUAS perguntas que só ele fazia — e elas viram TETO, no lugar certo:
+    if a.get("beneficio_supera_risco") is False:
+        aplic = min(aplic, 8)
+        fl.append("o benefício NÃO supera o risco → teto 8 (não se muda conduta para piorar)")
+    if a.get("sem_evidencia_conflitante_melhor") is False:
+        aplic = min(aplic, 8)
+        fl.append("existe evidência conflitante MELHOR → teto 8 (não é a palavra final)")
+    if a.get("pergunta") != "intervencao":
+        _muda = "N/A (não é intervenção)"   # prognóstico/diagnóstico: não há conduta a mudar
+    else:
+        _muda = "SIM" if aplic >= 9 else "NÃO"
+
     r = {"trabalho": s, "aplic": aplic, "teto_desenho": td, "teto_externa": te,
-         "teto_falha_fatal": tf, "teto_mcid": tm, "muda_conduta": muda_conduta(a, aplic),
+         "teto_falha_fatal": tf, "teto_mcid": tm, "muda_conduta": _muda,
          "rota": ROTA_CLINICA, "falhas_fatais": ff,
          # o rótulo é a TRILHA que rodou, não o resultado dela. Vinha de `dom_meta` — logo, uma meta
          # sem os 6 domínios extraídos era carimbada "ORIGINAL" e o redator recebia a perícia errada.

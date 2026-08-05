@@ -3,7 +3,7 @@
 Visual Abstract Generator — CardioDaily
 
 Gera Visual Abstracts de 1 página a partir de analysis.md/analysis.json.
-Extração via Claude Sonnet 5 → Jinja2 HTML → Playwright PNG.
+Extração via cadeia ESCRITA do modelos.py (terra → sonnet-5 → grok) → Jinja2 → Playwright PNG.
 
 Uso:
     # Gerar para um artigo específico
@@ -23,6 +23,13 @@ Uso:
 """
 
 import json
+
+# 04/Ago: o Visual Abstract passa a usar a MESMA porta que o resto da corrente (cadeia + fallback
+# cross-provider + timeout), em vez do SDK da Anthropic direto. Ver o bloco em `_extrair_dados`.
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import llm_client
+import modelos as M
 import os
 import re
 import sys
@@ -317,7 +324,7 @@ _REVIEW_SUBTYPES = {
 # ============================================================
 
 class VisualAbstractGenerator:
-    """Gera Visual Abstracts: Claude Sonnet 5 extração → Jinja2 → Playwright PNG."""
+    """Gera Visual Abstracts: cadeia ESCRITA → Jinja2 → Playwright PNG."""
 
     TEMPLATE_NAME = "visual_abstract_template.html"
     CACHE_FILENAME = "visual_abstract_data.json"
@@ -374,7 +381,7 @@ class VisualAbstractGenerator:
     def extrair_dados(self, article_dir: Path, force: bool = False,
                       canonical_type: str | None = None) -> dict:
         """
-        Extrai dados estruturados do analysis.md via Claude Sonnet 5.
+        Extrai dados estruturados da perícia pela cadeia ESCRITA (com fallback cross-provider).
         Usa cache em assets/visual_abstract_data.json se disponível.
 
         canonical_type: quando passado pelo article_analyzer ("original",
@@ -436,31 +443,21 @@ class VisualAbstractGenerator:
         prompt_label = "revisão/meta-análise" if is_review else "artigo original"
         print(f"  📋 Tipo detectado: {prompt_label}")
 
-        # Chamar Claude Sonnet 5 (com retry para timeouts)
+        # ═══ 04/Ago/2026 — O ÚLTIMO PONTO DA CORRENTE SEM REDE DE SEGURANÇA ═══
+        #
+        # Até hoje esta chamada era `self.anthropic_client.messages.create(model="claude-sonnet-5")`:
+        # modelo CHUMBADO, fora do `modelos.py`, sem cadeia e sem fallback cross-provider.
+        #
+        # O Dr. Eduardo perguntou "está tudo com o gpt terra?" e a varredura mostrou que não: a
+        # extração, a perícia, o ACRI e o áudio já eram terra → sonnet-5 → grok. Só o Visual
+        # Abstract ficava preso a UM provedor. Se a Anthropic caísse no meio de um lote de 55, o
+        # artigo INTEIRO falhava — enquanto todo o resto da corrente teria para onde ir.
+        #
+        # O retry manual (3 tentativas, 10s/20s) também era duplicado: o `llm_client` já faz
+        # backoff, timeout e troca de provedor. Menos código, e o mesmo comportamento em toda a casa.
         prompt = template.format(content=content)
-
-        response = None
-        last_exc = None
-        for attempt in range(1, 4):  # até 3 tentativas
-            try:
-                response = self.anthropic_client.messages.create(
-                    model="claude-sonnet-5",   # 26/Jul/2026: sonnet-4-20250514 morto (404); teto folgado p/ thinking
-                    max_tokens=6000,
-                    system=SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                break
-            except (_anthropic_module.APIStatusError, _anthropic_module.APIConnectionError,
-                    _anthropic_module.APITimeoutError) as e:
-                last_exc = e
-                if attempt < 3:
-                    wait = 10 * attempt  # 10s, 20s
-                    print(f"  ⚠️  Tentativa {attempt} falhou ({type(e).__name__}), aguardando {wait}s...")
-                    time.sleep(wait)
-        if response is None:
-            raise last_exc
-
-        raw_response = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")  # thinking-safe (Sonnet 5)
+        raw_response = llm_client.gerar(M.ESCRITA, prompt, contexto=SYSTEM_PROMPT,
+                                        max_tokens=6000, temperatura=0.4)
 
         # Extrair JSON da resposta, tolerando as malformações comuns de LLM (mesma classe de falha
         # que derrubou a extração em 25/07: vírgula sobrando, caractere de controle, comentário //).
@@ -533,7 +530,7 @@ class VisualAbstractGenerator:
             return output_path
 
         # 1. Extrair dados
-        print(f"  🔍 Extraindo dados via Claude Sonnet 5...")
+        print(f"  🔍 Visual Abstract: lendo a perícia ({M.ESCRITA[0]})...")   # 04/Ago: dizia "Claude Sonnet 5" e fazia o dono achar que a EXTRAÇÃO dos fatos era sonnet
         data = self.extrair_dados(article_dir, force=force, canonical_type=canonical_type)
 
         # 2. Renderizar HTML
@@ -622,7 +619,37 @@ class VisualAbstractGenerator:
     # ------ Helpers ------
 
     def _ler_nota_existente(self, json_path: Path) -> int:
-        """Lê nota_aplicabilidade do analysis.json com fallback."""
+        """A nota do MOTOR — a única com autoridade para existir.
+
+        ═══ 04/Ago/2026 — POR QUE O CARD MOSTRAVA UMA NOTA E O BANCO OUTRA ═══
+
+        O Dr. Eduardo viu na tela, na mesma linha:  card "NAC: 3/10"  ·  registro "nota 8".
+        E perguntou o óbvio: *"mas por que eles dão notas diferentes?"*
+
+        Porque o Visual Abstract PERGUNTA a nota ao modelo, e depois tentava corrigi-la com a
+        nota do pipeline — a intenção estava certa, o comentário original dizia "mais confiável".
+        Só que a nota do pipeline era lida de um `analysis.json` que **não existe mais**: era
+        artefato do `article_analyzer.py`, aposentado pela LEI 5. Na corrente de hoje os arquivos
+        são `_fatos.json` e `_CANONICO.md`.
+
+        Medido em 04/Ago: ZERO `analysis.json` nos 26 pacotes do STAGING. Logo, esta função
+        devolvia 0 sempre, o `if nota_existente > 0` nunca entrava, e o que sobrava no PNG era o
+        PALPITE DO MODELO, sozinho. Não é o Sonnet estar errado — é ninguém estar mandando nele.
+
+        Agora a fonte é o CANÔNICO, onde o motor determinístico grava. O modelo continua
+        escrevendo os TEXTOS do card, que é o que ele faz bem; a NOTA vem de quem tem autoridade.
+        """
+        import re as _re
+        # 1ª fonte (a certa): o canônico do motor, na mesma pasta do artigo
+        try:
+            for can in Path(json_path).parent.glob("*_CANONICO.md"):
+                m = _re.search(r"nota_aplicabilidade_clinica:\s*(\d+)",
+                               can.read_text(encoding="utf-8"))
+                if m:
+                    return int(m.group(1))
+        except Exception:
+            pass
+        # 2ª fonte: o analysis.json da corrente ANTIGA (só sobrevive para pacotes históricos)
         if not json_path.exists():
             return 0
         try:
