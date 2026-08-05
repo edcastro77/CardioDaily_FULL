@@ -158,10 +158,27 @@ def _tirar_da_fila(pdf, classificados, subpasta):
         print(f"      (aviso: não moveu {os.path.basename(pdf)}: {e})")
 
 
-def main(classificados, tam_bloco=20, maximo=0, rampa=False, so_pasta=""):
+def main(classificados, tam_bloco=20, maximo=0, rampa=False, so_pasta="", so_artigo=""):
     staging = os.path.abspath(os.path.join(_HERE, "..", "outputs", "STAGING"))
     os.makedirs(staging, exist_ok=True)
     fila, sem_pasta = _pdfs_na_fila(classificados)
+    # ═══ 05/Ago — `--artigo=<pedaço do nome>`: rodar UM artigo escolhido ═══
+    # O Dr. Eduardo pediu uma amostra de 1 artigo original e 1 revisão antes de gastar nos 431.
+    # Com `--max=1` puro sairia o PRIMEIRO da ordem alfabética — e na REVISOES o primeiro é um
+    # `2014_07_.pdf`, sem título nem revista no nome. A amostra sairia ruim por motivo errado.
+    # Este filtro deixa ESCOLHER: casa por substring, sem acento, em qualquer parte do nome.
+    if so_artigo:
+        import unicodedata as _u
+        def _norm(s):
+            s = _u.normalize("NFD", (s or "").lower())
+            return "".join(c for c in s if _u.category(c) != "Mn")
+        alvo = _norm(so_artigo)
+        antes = len(fila)
+        fila = [p for p in fila if alvo in _norm(os.path.basename(p))]
+        print(f"SÓ O ARTIGO que casa com '{so_artigo}': {len(fila)} de {antes}\n")
+        if not fila:
+            print(f"Nenhum PDF casa com '{so_artigo}'. Confira o pedaço do nome.")
+            return 1
     if so_pasta:
         antes = len(fila)
         fila = [p for p in fila if os.path.basename(os.path.dirname(p)) == so_pasta]
@@ -285,7 +302,9 @@ if __name__ == "__main__":
     mx = next((int(a.split("=")[1]) for a in sys.argv[1:] if a.startswith("--max=")), 0)
     rampa = "--rampa" in sys.argv[1:]
     so_pasta = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--pasta=")), "")
-    args = [a for a in args if a != "--rampa" and not a.startswith("--pasta=")]
+    so_artigo = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--artigo=")), "")
+    args = [a for a in args if a != "--rampa" and not a.startswith("--pasta=")
+            and not a.startswith("--artigo=")]
     cl = os.path.expanduser(args[0]) if args else ""
     tb = int(args[1]) if len(args) > 1 else 20
     if not cl or not os.path.isdir(cl):
@@ -294,7 +313,7 @@ if __name__ == "__main__":
     # Antes, um Ctrl+C aqui caía direto na trilha da minirevisão (mais 81 artigos pagos): o
     # "eu interrompi e ele não para" do Dr. Eduardo.
     try:
-        sys.exit(main(cl, tb, mx, rampa, so_pasta) or 0)
+        sys.exit(main(cl, tb, mx, rampa, so_pasta, so_artigo) or 0)
     except KeyboardInterrupt:
         print("\n\n⛔ INTERROMPIDO POR VOCÊ (Ctrl+C). O que já publicou está salvo no Supabase;"
               "\n   o resto continua na fila. Clique a Chave 2 de novo quando quiser continuar.")
