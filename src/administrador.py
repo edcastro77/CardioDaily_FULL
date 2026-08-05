@@ -54,7 +54,7 @@ def buscar():
         r = requests.get(f"{url}/rest/v1/artigos",
                          params={"select": "doc_id,titulo,revista,data_publicacao,tipo_estudo,doenca_principal,"
                                            "nota_aplicabilidade,nota_trabalho_estatistico,mcid_avaliacao,"
-                                           "caminho_pdf,caminho_audio,caminho_visual_abstract,descartado,publicar_no_site",
+                                           "caminho_pdf,caminho_audio,caminho_visual_abstract,publicar_no_site",
                                  "order": "nota_aplicabilidade.desc"},
                          headers={"apikey": key, "Authorization": f"Bearer {key}"}, timeout=40)
         r.raise_for_status()
@@ -103,8 +103,6 @@ busca = sb.text_input("Busca no nome")
 
 
 def passa(a):
-    if _verdade(a.get("descartado")):
-        return False
     n = a.get("nota_aplicabilidade") or 0
     if not (nmin <= n <= nmax):
         return False

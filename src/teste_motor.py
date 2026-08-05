@@ -1460,6 +1460,342 @@ def teste_carimbo_ve_o_motor():
         checa(f"carimbo: continua vigiando o prompt '{chave}'", chave in v)
     return f"carimbo com {len(v)} itens: código + prompts"
 
+
+def teste_diretriz_nao_tem_porta():
+    """A DIRETRIZ SOBE SEMPRE — a exceção da LEI 10, e SÓ ela (05/Ago/2026).
+
+    Palavras do Dr. Eduardo: *"as diretrizes — precisamos manter esta classificação mas não
+    teremos nenhum impedimento para subir. Mesmo com as limitações, é o que tem para hoje."*
+    E, sobre o alcance: *"ESTA REGRA SÓ VALE PARA DIRETRIZ."*
+
+    POR QUE NÃO É BRECHA NA LEI 10: o CardioDaily é um filtro porque, para uma meta ruim, existe
+    outra melhor — reter não custa nada ao leitor. Com diretriz é o contrário: não existe "outra
+    diretriz de fibrilação atrial", existe A diretriz. Reter não protege ninguém, só esconde o
+    documento que rege a prática e pelo qual o médico será cobrado.
+
+    Medido em 04/Ago: 13 de 31 diretrizes ficavam retidas com nota 4 e 5 — ESC, AHA, ESPEN, NICE.
+
+    Esta trava existe para que ninguém "arrume" isso achando que é bug, e para que a exceção NÃO
+    vaze para os outros três tipos.
+    """
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import analisador as AN
+
+    # 1 · diretriz sobe em QUALQUER nota, com o pacote completo
+    for nota in range(0, 11):
+        ents, sobe = AN.decidir_entregaveis(nota, "diretriz")
+        checa(f"diretriz nota {nota}: SOBE", sobe, "ficou retida")
+        for peca in ("ACRI", "texto", "infografico", "audio"):
+            checa(f"diretriz nota {nota}: leva '{peca}'", peca in ents, f"veio {ents}")
+
+    # 2 · e a exceção NÃO vaza para os outros três (ordem expressa dele)
+    for tipo in ("original", "meta", "revisao_narrativa", None):
+        for nota in (0, 3, 5):
+            _, sobe = AN.decidir_entregaveis(nota, tipo)
+            checa(f"{tipo} nota {nota}: RETÉM (a LEI 10 continua valendo)", not sobe,
+                  "a exceção da diretriz vazou para outro tipo")
+        _, sobe6 = AN.decidir_entregaveis(6, tipo)
+        checa(f"{tipo} nota 6: sobe", sobe6)
+
+    # 3 · o áudio da diretriz é OUTRO prompt, e o carimbo tem de enxergar isso
+    #    (senão mexer no roteiro da diretriz não invalida o staging dela — LEI 9)
+    a_dir = AN.versoes_atuais("x/GUIDELINES/y.pdf")["audio"]
+    a_out = AN.versoes_atuais("x/META_ANALISES/y.pdf")["audio"]
+    checa("diretriz: áudio usa prompt PRÓPRIO", "diretriz" in a_dir, f"veio {a_dir}")
+    checa("os outros tipos: áudio segue o prompt comum", "diretriz" not in a_out, f"veio {a_out}")
+    checa("carimbo distingue os dois roteiros", a_dir != a_out)
+
+    # 4 · o predicado é UM só (não espalhado em cinco `if`)
+    checa("existe o predicado único eh_diretriz", hasattr(AN, "eh_diretriz"))
+    checa("eh_diretriz reconhece", AN.eh_diretriz("diretriz") and AN.eh_diretriz(" Diretriz "))
+    checa("eh_diretriz não confunde", not AN.eh_diretriz("meta") and not AN.eh_diretriz(None))
+    return "diretriz sem porta · exceção contida nos outros 3 tipos"
+
+
+def teste_keywords_em_portugues():
+    """As palavras-chave são como o assinante ACHA o artigo. Os 4 tipos, prompt E schema.
+
+    ═══ 05/Ago — DOIS BURACOS DIFERENTES, ACHADOS EM SEQUÊNCIA ═══
+
+    (1) O prompt da DIRETRIZ pedia os termos "EM INGLÊS", com todas as letras. O focused update de
+        dislipidemia do ESC subiu com `dyslipidaemia`, `LDL cholesterol`, `bempedoic acid`.
+        Medido no Supabase: 18 de 18 diretrizes com termo em inglês, só 4 com português.
+        Achado em um prompt, corrigido em três (o do artigo original e o da revisão tinham igual).
+
+    (2) O prompt da META **não dizia NADA** — embora o schema peça o campo. Cada meta saía de um
+        jeito: das 11 publicadas, 7 com inglês e 9 com português. O Dr. Eduardo cobrou:
+        *"não acredito que depois de analisar meta ontem umas 10 vezes você deu este vacilo"*.
+        Ele estava certo: eu reescrevi aquele prompt seção por seção e nunca perguntei
+        "e as palavras-chave?".
+
+    Por isso esta trava cobra as DUAS coisas nos QUATRO tipos: a regra no PROMPT e a descrição no
+    SCHEMA. Campo sem instrução é campo preenchido a esmo — e a esmo, em inglês.
+    """
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import analise as A
+    aqui = os.path.dirname(os.path.abspath(__file__))
+
+    PROMPTS = {"analise_prompt.md": "SCHEMA_FATOS",
+               "analise_meta_prompt.md": "SCHEMA_FATOS_META",
+               "analise_diretriz_prompt.md": "SCHEMA_FATOS_DIRETRIZ",
+               "analise_revisao_prompt.md": "SCHEMA_FATOS_REVISAO"}
+
+    for arq, esq in PROMPTS.items():
+        caminho = os.path.join(aqui, arq)
+        if not os.path.exists(caminho):
+            checa(f"prompt '{arq}' existe", False); continue
+        t = open(caminho, encoding="utf-8").read()
+        # 1 · a INSTRUÇÃO não pode pedir inglês (o texto que EXPLICA o erro antigo pode citá-lo)
+        checa(f"{arq}: não pede keywords em inglês",
+              "termos clínicos específicos EM INGLÊS" not in t,
+              "voltou a pedir inglês — o acervo fica invisível para quem paga a assinatura")
+        # 2 · e tem de DIZER a regra (campo sem instrução vira preenchimento a esmo)
+        checa(f"{arq}: manda as keywords em PORTUGUÊS",
+              "PORTUGUÊS BRASILEIRO" in t,
+              "o prompt pede o campo e não diz o idioma — foi o buraco da meta")
+        # 3 · o SCHEMA também carrega a regra: o modelo lê os dois
+        d = str((getattr(A, esq)["properties"].get("keywords") or {}).get("description") or "")
+        checa(f"{esq}: keywords tem descrição em português",
+              "PORTUGUÊS BRASILEIRO" in d,
+              "schema sem description — o modelo preenche como quiser")
+    return "4 prompts + 4 schemas com a regra das palavras-chave"
+
+
+def teste_ficha_sem_contradicao():
+    """A LINHA DO BANCO não pode dizer duas coisas diferentes sobre o mesmo fato.
+
+    ═══ 05/Ago — TRÊS DEFEITOS QUE SÓ APARECERAM OLHANDO A TABELA INTEIRA ═══
+
+    O Dr. Eduardo cobrou uma revisão dos 4 schemas coluna por coluna — *"você só se concentra em
+    atividades de curto prazo"* — e ele estava certo: os três achados abaixo são invisíveis quando
+    se olha peça por peça, e óbvios quando se olha a linha inteira.
+
+    1 · `tipo_documento: diretriz` E `tipo_estudo: artigo_original` NA MESMA LINHA, 18 de 18.
+        O `tipo_estudo` vinha do campo `tipo` do CANÔNICO — e o canônico de uma diretriz grava
+        `tipo: "artigo_original"`, porque quem o escreve não recebe o tipo da pasta. Duas colunas
+        respondendo a mesma pergunta: o mesmo padrão do `muda_conduta` em 3 caminhos (04/Ago) e
+        do `desfecho_duro` em 2 campos. Agora `tipo_estudo` é DERIVADO de `tipo_documento`.
+
+    2 · `data_publicacao` sempre em AAAA-01-01 — 29 de 29 linhas. O focused update do ESC é de
+        NOVEMBRO e estava gravado como janeiro: erro de até 11 meses, que quebra ordenação por
+        data e qualquer agenda de envio. O mês existia no nome do arquivo (posto lá pelo
+        classificador, com metadado do PubMed) e estava sendo descartado.
+
+    3 · `gancho_lista` IDÊNTICO a `contexto_tema` em 9 de 18 diretrizes. São campos com função
+        diferente — a isca da lista e o "por que importa" do card. Repetir não é buraco de dado,
+        é buraco EDITORIAL: o leitor lê a mesma frase duas vezes.
+
+    Função pura: lê o STAGING em disco, não chama LLM nem banco.
+    """
+    import os, sys, glob
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import ficha_site as F
+
+    raiz = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "outputs", "STAGING")
+    pastas = [p for p in sorted(glob.glob(os.path.join(raiz, "*"))) if os.path.isdir(p)]
+    if not pastas:
+        return "STAGING vazio — nada a conferir (não é falha)"
+
+    COERENTE = {"diretriz": "diretriz_pratica_clinica",
+                "meta": "revisao_sistematica_meta_analise",
+                "revisao_narrativa": "revisao_narrativa",
+                "original": "artigo_original"}
+    mau_tipo, mau_data, mau_gancho, n = [], [], [], 0
+    for p in pastas:
+        try:
+            fi = F.montar(p)
+        except Exception:
+            continue
+        n += 1
+        base = os.path.basename(p)
+        td, te = fi.get("tipo_documento"), fi.get("tipo_estudo")
+        if td in COERENTE and te != COERENTE[td]:
+            mau_tipo.append(f"{base[:28]}: {td}/{te}")
+        # o mês do NOME do arquivo tem de sobreviver até a data_publicacao
+        dt = str(fi.get("data_publicacao") or "")
+        if len(base) >= 7 and base[4] == "-" and base[:4].isdigit() and base[5:7].isdigit():
+            if dt[:7] and dt[:7] != base[:7]:
+                mau_data.append(f"{base[:28]}: nome {base[:7]} × data {dt[:7]}")
+        if (fi.get("gancho_lista") or "") and fi.get("gancho_lista") == fi.get("contexto_tema"):
+            mau_gancho.append(base[:28])
+
+    checa(f"ficha: tipo_estudo coerente com tipo_documento ({n} pacotes)", not mau_tipo,
+          "; ".join(mau_tipo[:3]))
+    checa(f"ficha: o MÊS do nome sobrevive na data_publicacao", not mau_data,
+          "; ".join(mau_data[:3]))
+    checa(f"ficha: gancho_lista ≠ contexto_tema", not mau_gancho,
+          "iguais em: " + ", ".join(mau_gancho[:3]))
+    return f"{n} pacotes: tipo coerente · mês preservado · gancho distinto"
+
+
+def teste_contrato_espelha_a_tabela():
+    """O CONTRATO e a TABELA têm de listar as MESMAS colunas — nem a mais, nem a menos.
+
+    ═══ 05/Ago — A COLUNA `descartado` FOI APAGADA (decisão do Dr. Eduardo) ═══
+
+    Ela nasceu para ele marcar "esse eu não quero" sem apagar. Mas NADA no sistema jamais escreveu
+    `true`: o `ficha_site` gravava `False` fixo e ninguém lia. Coluna morta. E em 04/Ago ele decidiu
+    que artigo reprovado tem a LINHA APAGADA (retratação no publicador) — o que tirou o último
+    sentido possível dela: o que é descartado não existe mais.
+
+    A varredura da LEI 9 achou SEIS blocos usando a coluna, e a ORDEM importou: se o `ALTER TABLE`
+    viesse antes, o painel de curadoria e o backfill quebrariam (os dois filtravam
+    `descartado=eq.false`, e o PostgREST erra quando a coluna não existe), e o publicador também
+    (validava o tipo no preflight). Código primeiro, banco depois.
+
+      ficha_site · publicador · contrato · administrador (×2) · painel_curadoria · backfill
+
+    Esta trava impede que a coluna renasça em UM bloco só — que é como um buraco começa.
+    Função pura: não fala com o banco, só compara as listas do código.
+    """
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import contrato as C, publicador as P, ficha_site as F
+
+    MORTAS = ("descartado",)
+    for col in MORTAS:
+        checa(f"contrato NÃO lista a coluna morta '{col}'",
+              col not in getattr(C, "COLUNAS", ()) and col not in str(getattr(C, "COLUNAS", "")),
+              "a coluna foi apagada da tabela — listá-la faz o preflight cobrar o que não existe")
+        checa(f"publicador NÃO valida o tipo de '{col}'",
+              col not in getattr(P, "TIPOS", {}),
+              "preflight cobrando coluna inexistente → erro 400 no próximo insert")
+
+    # e o payload não pode mandar coluna que a tabela não tem
+    import glob
+    pastas = [p for p in sorted(glob.glob(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "outputs", "STAGING", "*")))
+        if os.path.isdir(p)]
+    if pastas:
+        try:
+            pay = P._payload_site(F.montar(pastas[0]))
+            for col in MORTAS:
+                checa(f"payload NÃO manda '{col}'", col not in pay,
+                      "o insert vai falhar: a coluna não existe mais na tabela")
+        except Exception:
+            pass
+    return f"colunas mortas fora do código: {', '.join(MORTAS)}"
+
+
+def teste_independencia_editorial():
+    """QUEM PAGOU pesa na nota — e pesa DIFERENTE em cada tipo, por decisão do dono (05/Ago).
+
+    ═══ O QUE A VARREDURA DOS 4 SCHEMAS ACHOU ═══
+    Cada motor tratava dinheiro de um jeito, e ninguém tinha decidido isso — foi acumulado:
+        DIRETRIZ .. 6 campos, 20% da nota    REVISÃO ... 2 campos, 15%
+        ORIGINAL .. 1 campo, IGNORADO        META ...... NENHUM campo
+
+    Um RCT patrocinado, com o financiador desenhando o estudo e escrevendo o manuscrito, tirava a
+    MESMA nota de um ensaio acadêmico independente. É onde o ceticismo do Dr. Eduardo é mais
+    afiado ("especialmente estudos patrocinados pela indústria" — CLAUDE.md) e era o único ponto
+    cego do sistema.
+
+    RÉGUA DELE: diretriz até 20% · os outros três até 10%.
+    A REVISÃO ficou nos 15% que ele mesmo aprovou em 02/Ago — baixar seria revogar decisão dele
+    sem que ele pedisse (LEI 3). Está registrado aqui para não parecer esquecimento.
+    """
+    # ── o desconto por papel do financiador (ORIGINAL) ──
+    for texto, esperado in (("indústria envolvida", 1.0),
+                            ("indústria fora da análise/escrita", 0.3),
+                            ("público", 0.0), ("outro", 0.0)):
+        d, _ = N.desconto_independencia({"financiamento_papel": texto})
+        checa(f"independência ORIGINAL '{texto}' → −{esperado}", abs(d - esperado) < 0.01,
+              f"veio −{d}")
+
+    # ── e na META, que não perguntava NADA até hoje ──
+    for qm, esperado, nome in (
+        ({"conflitos_declarados": False}, 1.0, "sem declaração de conflito"),
+        ({"conflitos_declarados": True, "financiamento_industria": True,
+          "autores_industria_fora_da_analise": None}, 1.0, "indústria sem separação declarada"),
+        ({"conflitos_declarados": True, "financiamento_industria": True,
+          "autores_industria_fora_da_analise": True}, 0.3, "indústria com análise independente"),
+        ({"conflitos_declarados": True, "financiamento_industria": False}, 0.0, "sem indústria"),
+    ):
+        d, _ = N.desconto_independencia({"qualidade_meta": qm})
+        checa(f"independência META: {nome} → −{esperado}", abs(d - esperado) < 0.01, f"veio −{d}")
+
+    # ── o teto é 10% da escala: NUNCA pode passar de 1,0 ponto ──
+    piores = [{"financiamento_papel": "indústria envolvida"},
+              {"qualidade_meta": {"conflitos_declarados": False}}]
+    for p in piores:
+        d, _ = N.desconto_independencia(p)
+        checa("independência: o desconto nunca passa de 1,0 (=10%)", d <= 1.0, f"veio −{d}")
+
+    # ── os 4 schemas PERGUNTAM sobre dinheiro (a meta era o buraco) ──
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import analise as A
+    TERMOS = ("financiamento", "conflito")
+    for nome in ("SCHEMA_FATOS", "SCHEMA_FATOS_META", "SCHEMA_FATOS_DIRETRIZ", "SCHEMA_FATOS_REVISAO"):
+        todos = []
+        def varre(d):
+            for k, v in (d.get("properties") or {}).items():
+                todos.append(k)
+                if isinstance(v, dict) and v.get("type") == "object":
+                    varre(v)
+        varre(getattr(A, nome))
+        tem = any(t in c for c in todos for t in TERMOS)
+        checa(f"{nome} pergunta sobre financiamento/conflito", tem,
+              "schema cego a patrocínio — foi o buraco da meta até 05/Ago")
+    return "4 schemas perguntam · desconto ≤ 1,0 ponto em ORIGINAL e META"
+
+
+def teste_mcid_confere_a_conta():
+    """O MCID: a CONTA manda no RÓTULO — e o rótulo nunca é PROMOVIDO pela conta (05/Ago).
+
+    O extrator produzia NOVE campos de relevância clínica (mcid_valor, mcid_reportado,
+    mcid_fonte_metodo, efeito_observado, efeito_excede_limiar, ic_sustenta_relevancia,
+    para_desfecho_duro, tipo_desfecho, desfecho_primario) — e o motor lia UM: `classificacao`.
+
+    O modelo fazia a conta campo por campo e o código perguntava só "e aí, como você classifica?".
+    A conta era feita e jogada fora; ficava o rótulo — justamente a parte em que o LLM é menos
+    confiável. Palavras do Dr. Eduardo: *"devemos usar este esquema que é muito bom — e deve pesar
+    muito"*.
+
+    A REGRA-MÃE, e é assimétrica de propósito: os fatos podem REBAIXAR o rótulo, nunca PROMOVÊ-LO.
+    Cautela não se desfaz por número.
+    """
+    def rc(**kw): return {"relevancia_clinica": kw}
+
+    t, _ = N.mcid_conferido(rc(classificacao="robusto", efeito_excede_limiar=True,
+                               ic_sustenta_relevancia=True, mcid_reportado=True,
+                               mcid_valor="ARR 3%", tipo_desfecho="tempo_ate_evento"))
+    checa("MCID: conta fecha → sem teto", t == 10, f"veio {t}")
+
+    t, m = N.mcid_conferido(rc(classificacao="robusto", efeito_excede_limiar=False,
+                               mcid_reportado=True, mcid_valor="ARR 3%"))
+    checa("MCID: NÃO excede o limiar → teto 6 (o rótulo não salva)", t <= 6, f"veio {t}")
+    checa("MCID: e o motivo é dito", any("não excede" in x.lower() or "NÃO excede" in x for x in m))
+
+    t, _ = N.mcid_conferido(rc(classificacao="robusto", efeito_excede_limiar=True,
+                               ic_sustenta_relevancia=False, mcid_reportado=True, mcid_valor="ARR 3%"))
+    checa("MCID: IC não sustenta → teto 7", t == 7, f"veio {t}")
+
+    t, _ = N.mcid_conferido(rc(classificacao="robusto", mcid_reportado=False, mcid_valor=""))
+    checa("MCID: 'robusto' sem limiar declarado → teto 8", t <= 8, f"veio {t}")
+
+    t, _ = N.mcid_conferido(rc(classificacao="robusto", efeito_excede_limiar=True,
+                               ic_sustenta_relevancia=True, mcid_reportado=True,
+                               mcid_valor="Lp(a) -20%", tipo_desfecho="surrogate"))
+    checa("MCID: 'robusto' sobre desfecho SUBSTITUTO → teto 8", t <= 8, f"veio {t}")
+
+    # ── A REGRA-MÃE: a conta NÃO promove ──
+    fatos = _bom(pergunta="intervencao", desenho="rct", efeito_grande=True,
+                 relevancia_clinica={"classificacao": "incerto", "efeito_excede_limiar": True,
+                                     "ic_sustenta_relevancia": True, "mcid_reportado": True,
+                                     "mcid_valor": "ARR 5%", "tipo_desfecho": "tempo_ate_evento"})
+    r = N.score(fatos)
+    checa("MCID: conta boa NÃO promove rótulo 'incerto' (teto 7 fica)", r["aplic"] <= 7,
+          f"veio {r['aplic']} — a cautela do extrator foi desfeita por número")
+
+    # ── e o silêncio não pune: fatos ausentes não inventam teto ──
+    t, _ = N.mcid_conferido(rc(classificacao="robusto"))
+    checa("MCID: campos ausentes não capam sozinhos (null ≠ false)", t >= 8, f"veio {t}")
+    return "5 conferências · a conta rebaixa, nunca promove"
+
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,
               teste_tetos_da_lei_0, teste_teto_estatistico, teste_rigor_conhece_o_desenho,
@@ -1479,7 +1815,10 @@ if __name__ == "__main__":
               teste_gabarito_dos_artigos, teste_contrato_de_saida,
               teste_todo_schema_tem_a_capa,
               teste_escada_da_meta, teste_bicondicional_nota_e_conduta,
-              teste_escala_de_aplicabilidade_da_meta, teste_carimbo_ve_o_motor]
+              teste_escala_de_aplicabilidade_da_meta, teste_carimbo_ve_o_motor,
+              teste_diretriz_nao_tem_porta, teste_keywords_em_portugues,
+              teste_ficha_sem_contradicao, teste_contrato_espelha_a_tabela,
+              teste_independencia_editorial, teste_mcid_confere_a_conta]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:
         antes = len(falhas)

@@ -69,7 +69,7 @@ def buscar_artigos() -> list[dict]:
     out, passo = [], 1000
     for salto in range(0, 20000, passo):
         r = requests.get(f"{URL}/rest/v1/artigos", headers=HDR, params={
-            "select": campos, "descartado": "eq.false",
+            "select": campos,
             "order": "created_at.desc", "limit": str(passo), "offset": str(salto)}, timeout=40)
         if r.status_code != 200:
             st.error(f"Supabase {r.status_code}: {r.text[:200]}"); break

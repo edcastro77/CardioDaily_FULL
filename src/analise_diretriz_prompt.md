@@ -138,12 +138,55 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
   "o_que_mudou": "<2 a 4 frases: o que mudou em relação à versão anterior, com as recomendações
      concretas que entraram, subiram, desceram ou saíram. 'primeiro documento da série' se for o caso.
      Se o documento não permite saber, escreva 'o documento não compara com versão anterior'>",
-  "keywords": ["<5 a 10 termos clínicos específicos EM INGLÊS para indexação>"],
+  "keywords": ["<8 a 12 termos — LEIA A REGRA DAS PALAVRAS-CHAVE, LOGO ABAIXO DO JSON>"],
   "aplicabilidade": "<em QUEM se aplica e ressalvas do Brasil (acesso, ANVISA, CONITEC, SUS). 1-2 frases>",
   "falhas_fatais": ["<lista dos códigos que se aplicam; [] se nenhuma.
      G1 = documento NORMATIVO (dá ordens) sem classe NEM nível de evidência em nenhuma recomendação —
           não é auditável. Só use G1 se tipo_documento_norm é 'diretriz' ou 'consenso'.>"]
 }
+
+═══ AS PALAVRAS-CHAVE DA DIRETRIZ — ATENÇÃO ESPECIAL (05/Ago/2026) ═══
+
+Ordem do Dr. Eduardo: *"ela precisa de atenção especial na retirada das palavras-chave."*
+
+**O QUE ESTAVA ERRADO:** este prompt pedia os termos "EM INGLÊS". O focused update de dislipidemia
+do ESC saiu com `dyslipidaemia`, `LDL cholesterol`, `bempedoic acid`, `hypertriglyceridaemia`.
+Um cardiologista brasileiro digita **dislipidemia**, **colesterol LDL**, **ácido bempedoico** — e
+não acha nada. A diretriz é o documento MAIS buscado do acervo, e era o pior indexado.
+
+**AS REGRAS:**
+
+1. **PORTUGUÊS BRASILEIRO**, como o médico fala e digita. `fibrilação atrial`, não `atrial
+   fibrillation`. Exceção: sigla consagrada que ninguém traduz (`TAVI`, `SGLT2`, `DOAC`, `FEVE`,
+   `CRM`) e nome de ensaio (`RECOVERY`, `DAPA-HF`).
+
+2. **8 a 12 termos**, cobrindo QUATRO eixos — não repita o mesmo eixo:
+     · **doença/condição** — `insuficiência cardíaca`, `dislipidemia`, `estenose aórtica`
+     · **intervenção/droga** — `ácido bempedoico`, `ablação por cateter`, `inibidor de PCSK9`
+     · **população** — `prevenção secundária`, `idoso frágil`, `doença renal crônica`
+     · **desfecho ou conduta** — `meta de LDL`, `anticoagulação`, `alta hospitalar`
+
+3. **ESPECÍFICO, não genérico.** `cardiologia`, `diretriz`, `tratamento` e `manejo` são inúteis:
+   casam com tudo e não filtram nada. Se o termo serve para metade do acervo, não é palavra-chave.
+
+4. **A CLASSE DE DROGA E O PRINCÍPIO ATIVO, quando ambos existem.** Quem busca `estatina` e quem
+   busca `rosuvastatina` são o mesmo médico em dois momentos diferentes.
+
+5. **O TERMO EM INGLÊS ENTRA SÓ SE for como se busca no Brasil** — `heart team`, `shared decision
+   making`, `time in therapeutic range`. Na dúvida, português.
+
+6. **Não invente tema que a diretriz não cobre.** A palavra-chave promete conteúdo; se o documento
+   não fala de gravidez, `gestação` não entra.
+
+**Exemplo bom** (focused update de dislipidemia do ESC 2025):
+`dislipidemia · colesterol LDL · meta de LDL · ácido bempedoico · evinacumabe · lipoproteína(a) ·
+ hipertrigliceridemia · icosapenta etila · prevenção secundária · síndrome coronariana aguda ·
+ cardio-oncologia · HIV`
+
+**Exemplo ruim** (o que saiu de verdade em 04/Ago):
+`dyslipidaemia · LDL cholesterol · bempedoic acid · evinacumab · lipoprotein(a) ·
+ hypertriglyceridaemia · icosapent ethyl · HIV · cardio-oncology · acute coronary syndrome`
+Mesmo conteúdo, idioma errado — e por isso invisível para quem paga a assinatura.
 
 ═══ REGRAS FINAIS ═══
 1. **Não invente.** Se um dado não está no documento, use null (números) ou o valor honesto

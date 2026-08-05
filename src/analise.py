@@ -106,7 +106,8 @@ SCHEMA_FATOS = {
         "efeito_relevante_consistente": _B, "sem_evidencia_conflitante_melhor": _B,
         "beneficio_supera_risco": _B,
         "financiamento_papel": _S, "achados_principais": _S, "aplicabilidade": _S,
-        "keywords": {"type": "array", "items": {"type": "string"}},
+        "keywords": {"type": "array", "items": {"type": "string"},
+                     "description": "8-12 termos em PORTUGUÊS BRASILEIRO, como o médico busca (ex.: 'fibrilação atrial', não 'atrial fibrillation'). Exceção: sigla consagrada (TAVI, SGLT2, DOAC, FEVE) e nome de ensaio. Cubra 4 eixos sem repetir: doença · intervenção/droga · população · desfecho/conduta. Específico: 'cardiologia', 'tratamento' e 'manejo' não filtram nada."},
         "relevancia_clinica": {
             "type": "object",
             "properties": {
@@ -172,7 +173,7 @@ SCHEMA_FATOS_META = {
                       "enum": ["ipd", "dados_agregados", "rede", "prospectiva", "nao_reportado"]},
         "desenhos_incluidos": {"type": "string",
                                "enum": ["rcts", "observacionais", "mistos", "nao_reportado"]},
-        "achados_principais": _S, "aplicabilidade": _S, "keywords": {"type": "array", "items": _S},
+        "achados_principais": _S, "aplicabilidade": _S, "keywords": {"type": "array", "items": _S, "description": "8-12 termos em PORTUGUÊS BRASILEIRO, como o médico busca (ex.: 'fibrilação atrial', não 'atrial fibrillation'). Exceção: sigla consagrada (TAVI, SGLT2, DOAC, FEVE) e nome de ensaio. Cubra 4 eixos sem repetir: doença · intervenção/droga · população · desfecho/conduta. Específico: 'cardiologia', 'tratamento' e 'manejo' não filtram nada."},
 
         # ── o bloco que o motor procurava e nunca recebeu ──
         "qualidade_meta": {
@@ -205,6 +206,16 @@ SCHEMA_FATOS_META = {
                 # VIÉS DOS INCLUÍDOS (AMSTAR-2)
                 "rob_ferramenta": _S,
                 "vies_mudou_interpretacao": _B3,
+        # ── INDEPENDÊNCIA EDITORIAL — 05/Ago: a meta era o ÚNICO schema que não perguntava ──
+        # Medido em 05/Ago: DIRETRIZ tinha 6 campos sobre dinheiro (20% da nota), REVISÃO tinha 2
+        # (15%), ORIGINAL tinha 1 e o ignorava, e a META não tinha NENHUM. Não foi decidido: foi
+        # acumulado, cada motor herdando o que veio da régua de origem. Régua do Dr. Eduardo:
+        # até 10% nos três que não são diretriz. O AMSTAR-2 cobra as duas pontas — o financiamento
+        # DA REVISÃO e o dos estudos incluídos.
+        "conflitos_declarados": _B3,          # a revisão declara conflitos dos autores?
+        "financiamento_industria": _B3,       # a revisão foi financiada pela indústria?
+        "autores_industria_fora_da_analise": _B3,   # o financiador ficou FORA da análise/escrita?
+        "financiamento_dos_incluidos_relatado": _B3,  # AMSTAR-2 item 10: relatou o dos estudos?
         # ═══════ A ESCADA DE AVALIAÇÃO CRÍTICA — 04/Ago/2026 ═══════════════════════════════
         # Especificação do Dr. Eduardo, a partir do caso TOCILIZUMABE/COVID-19. Em 2021 as
         # meta-análises (inclusive a nota técnica do Ministério da Saúde) diziam que o
@@ -340,7 +351,8 @@ SCHEMA_FATOS_DIRETRIZ = {
         "agree": SCHEMA_AGREE,
         "temas_principais": {"type": "array", "items": {"type": "string"}},
         "o_que_mudou": _S,
-        "keywords": {"type": "array", "items": {"type": "string"}},
+        "keywords": {"type": "array", "items": {"type": "string"},
+                     "description": "8-12 termos em PORTUGUÊS BRASILEIRO, como o médico busca (ex.: 'fibrilação atrial', não 'atrial fibrillation'). Exceção: sigla consagrada (TAVI, SGLT2, DOAC, FEVE) e nome de ensaio. Cubra 4 eixos sem repetir: doença · intervenção/droga · população · desfecho/conduta. Específico: 'cardiologia', 'tratamento' e 'manejo' não filtram nada."},
         "aplicabilidade": _S,
         "falhas_fatais": {"type": "array", "items": {"type": "string", "enum": ["G1"]}},
     },
@@ -383,7 +395,8 @@ SCHEMA_FATOS_REVISAO = {
         "temas_principais": {"type": "array", "items": {"type": "string"}},
         "qualidade_revisao": SCHEMA_QUALIDADE_REVISAO,
         "o_que_ensina": _S,
-        "keywords": {"type": "array", "items": {"type": "string"}},
+        "keywords": {"type": "array", "items": {"type": "string"},
+                     "description": "8-12 termos em PORTUGUÊS BRASILEIRO, como o médico busca (ex.: 'fibrilação atrial', não 'atrial fibrillation'). Exceção: sigla consagrada (TAVI, SGLT2, DOAC, FEVE) e nome de ensaio. Cubra 4 eixos sem repetir: doença · intervenção/droga · população · desfecho/conduta. Específico: 'cardiologia', 'tratamento' e 'manejo' não filtram nada."},
         "aplicabilidade": _S,
     },
     "required": ["titulo", "revista", "ano", "tipo_documento", "qualidade_revisao",

@@ -82,8 +82,58 @@ SCHEMA_ARTIGOS = {
     "gancho_abertura": "text", "publicar_no_site": "boolean", "nota_trabalho_estatistico": "integer",
     "mcid_avaliacao": "text", "muda_conduta": "text",
     "motor": "text", "tipo_documento": "text", "veredito_dominios": "jsonb",
-    "descartado": "boolean",
 }
+
+
+def _retirar_do_supabase(doi, doc_id, publicar=False):
+    """RETRATAÇÃO — apaga a linha de um artigo que a régua ATUAL reprova.
+
+    ═══ 04/Ago/2026, 22h30 — O PORTÃO PUBLICAVA MAS NUNCA RETRATAVA ═══
+
+    Depois de a Escada entrar, o Dr. Eduardo rodou as 24 metas de novo. O placar da tela disse
+    "11 publicados · 13 recusados". Mas o banco tinha 23 LINHAS — 11 da rodada e 12 FANTASMAS,
+    de rodadas anteriores, com as notas da régua velha.
+
+    O efeito era o inverso exato da LEI 10: um artigo reprovado de 8 para 5 saía para _RECUSADOS
+    no disco e CONTINUAVA no banco valendo 8, pronto para ele mandar ao ar na Chave 5. E foi assim
+    que a contradição `nota 9 · muda_conduta NÃO` reapareceu no banco depois de a gente matá-la:
+    era uma linha velha do Ticagrelor, que nesta rodada tirou 5.
+
+    Decisão dele (opção A, 04/Ago): **apagar a linha.** O banco reflete só o que a régua atual
+    aprova. Coerente com "o site não recebe buraco" — e com o produto ser um FILTRO.
+
+    LEI 5: quem apaga é o publicador, o mesmo e único portão que escreve. Ninguém mais.
+    """
+    import requests
+    url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    key = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
+           or os.getenv("SUPABASE_KEY", ""))
+    if not url or not key:
+        return None
+    # a chave certa: a tabela tem UNIQUE(doi) e UNIQUE(doc_id) — usa o que existir
+    if doi and doi != "n/a":
+        alvo, valor = "doi", doi
+    elif doc_id:
+        alvo, valor = "doc_id", doc_id
+    else:
+        return None
+    h = {"apikey": key, "Authorization": f"Bearer {key}", "Prefer": "return=representation"}
+    try:
+        # 1) existe linha? (no dry-run só OLHA — não apaga nada)
+        g = requests.get(f"{url}/rest/v1/artigos", headers=h,
+                         params={alvo: f"eq.{valor}", "select": "id,nota_aplicabilidade"}, timeout=30)
+        linhas = g.json() if g.status_code == 200 else []
+        if not linhas:
+            return None
+        if not publicar:
+            return f"ENSAIO: existe linha (nota {linhas[0].get('nota_aplicabilidade')}) — seria APAGADA"
+        r = requests.delete(f"{url}/rest/v1/artigos", headers=h,
+                            params={alvo: f"eq.{valor}"}, timeout=30)
+        if r.status_code in (200, 204):
+            return f"RETRATADO: linha antiga (nota {linhas[0].get('nota_aplicabilidade')}) apagada"
+        return f"⚠️  retratação falhou: {r.status_code} {r.text[:120]}"
+    except Exception as e:
+        return f"⚠️  retratação falhou: {type(e).__name__}: {str(e)[:100]}"
 
 
 def _preflight(payload):
@@ -167,6 +217,10 @@ def processar_pasta(pasta, publicar=False):
             "RECUSADO PELO CONTRATO DE PUBLICAÇÃO — o site não recebe buraco.\n\n"
             + f"Artigo: {ficha.get('titulo') or base}\nNota: {ficha.get('nota_aplicabilidade')}\n\n"
             + "Campos que furaram:\n" + "\n".join(f"  • {v}" for v in violacoes) + "\n")
+        # RETRATAÇÃO (04/Ago): se este artigo já estava no banco de uma régua anterior, sai.
+        msg = _retirar_do_supabase(ficha.get("doi"), ficha.get("doc_id"), publicar)
+        if msg:
+            print(f"  ↩️  {msg}")
         return ("RECUSADO", ficha.get("nota_aplicabilidade"), violacoes)
 
     # passou no portão do CONTRATO → agora o PREFLIGHT de SCHEMA (roda até no dry-run: pega o erro antes)
@@ -175,6 +229,9 @@ def processar_pasta(pasta, publicar=False):
         open(os.path.join(pasta, "_REVISAR_publicacao.txt"), "w", encoding="utf-8").write(
             "RECUSADO NO PREFLIGHT DE SCHEMA — tipo/coluna não bate com a tabela artigos:\n\n"
             + "\n".join(f"  • {p}" for p in prob) + "\n")
+        msg = _retirar_do_supabase(ficha.get("doi"), ficha.get("doc_id"), publicar)
+        if msg:
+            print(f"  ↩️  {msg}")
         return ("RECUSADO(schema)", ficha.get("nota_aplicabilidade"), prob)
     if publicar:
         ficha = _subir_midia(ficha)              # payload validado → sobe PNG/áudio/PDF, troca por URLs

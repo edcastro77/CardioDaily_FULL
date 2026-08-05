@@ -181,6 +181,106 @@ def _nulo_esta_demonstrado(rc, a):
     return bool(rc.get("ic_exclui_beneficio_relevante")) and bool(a.get("poder_ok"))
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# INDEPENDÊNCIA EDITORIAL — 05/Ago/2026
+#
+# A varredura dos 4 schemas mostrou que cada um tratava DINHEIRO de um jeito, e ninguém tinha
+# decidido isso — foi acumulado:
+#     DIRETRIZ ...... 6 campos, 20% da nota (domínio `independencia` do AGREE)
+#     REVISÃO ....... 2 campos, 15% (domínio `conflitos`)
+#     ORIGINAL ...... 1 campo (`financiamento_papel`) — extraído e JOGADO FORA
+#     META .......... NADA — o schema nem perguntava
+#
+# Ou seja: um RCT patrocinado, com o financiador desenhando o estudo e escrevendo o manuscrito,
+# tirava a mesma nota de um ensaio acadêmico independente. É onde o ceticismo do Dr. Eduardo é
+# mais afiado ("especialmente estudos patrocinados pela indústria", CLAUDE.md) e era o único
+# lugar cego do sistema.
+#
+# RÉGUA DELE (05/Ago): diretriz até 20% · os outros três até 10%.
+#   · a DIRETRIZ já tinha 20% — nada muda.
+#   · a REVISÃO já tinha 15%, peso que ELE aprovou em 02/Ago. NÃO foi mexido: baixar para 10%
+#     seria eu revogar uma decisão dele sem que ele pedisse (LEI 3).
+#   · ORIGINAL e META ganham este desconto: até 1,0 ponto = 10% da escala de 0 a 10.
+DESCONTO_INDEPENDENCIA = {
+    "industria envolvida": 1.0,        # o financiador desenhou, analisou ou escreveu
+    "indústria envolvida": 1.0,
+    "industria fora da analise/escrita": 0.3,
+    "indústria fora da análise/escrita": 0.3,
+    "publico": 0.0, "público": 0.0, "outro": 0.0,
+}
+
+
+def desconto_independencia(a):
+    """Quanto a nota perde por dependência do financiador. Devolve (desconto, motivo)."""
+    # ORIGINAL: o campo é textual (`financiamento_papel`)
+    fp = (a.get("financiamento_papel") or "").strip().lower()
+    if fp:
+        for chave, d in DESCONTO_INDEPENDENCIA.items():
+            if chave in fp:
+                return d, (f"financiamento: {fp}" if d else "")
+        if "indust" in fp or "indúst" in fp:
+            return 0.6, f"financiamento: {fp} (papel não declarado)"
+    # META: campos booleanos (acrescentados em 05/Ago)
+    m = a.get("qualidade_meta") or {}
+    if m.get("conflitos_declarados") is False:
+        return 1.0, "nenhuma declaração de conflito de interesse"
+    if m.get("financiamento_industria") and not m.get("autores_industria_fora_da_analise"):
+        return 1.0, "financiada pela indústria, sem separação declarada da análise"
+    if m.get("financiamento_industria"):
+        return 0.3, "financiada pela indústria, com análise declarada independente"
+    return 0.0, ""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# MCID CONFERIDO — o motor CHECA A CONTA, não aceita o rótulo (05/Ago/2026)
+#
+# O extrator já lia NOVE campos de relevância clínica: mcid_reportado, mcid_valor,
+# mcid_fonte_metodo, efeito_observado, efeito_excede_limiar, ic_sustenta_relevancia,
+# para_desfecho_duro, tipo_desfecho, desfecho_primario.
+#
+# E o motor usava UM: `classificacao`. O modelo fazia a conta, campo por campo, e no fim o
+# código perguntava só "e aí, como você classifica?". A conta era feita e jogada fora; ficava
+# o rótulo — que é justamente a parte em que o LLM é menos confiável.
+#
+# Palavras do Dr. Eduardo, 05/Ago: *"devemos usar este esquema que é muito bom — e deve pesar
+# muito"*. Agora os FATOS mandam, e a regra-mãe é: **o rótulo pode ser rebaixado pela conta,
+# nunca promovido por ela.** Se o modelo diz "robusto" e o efeito não passa do limiar, o motor
+# corta. Se diz "incerto" e a conta é boa, continua incerto — cautela não se desfaz por número.
+TETO_MCID_NAO_EXCEDE   = 6   # efeito NÃO passa do limiar clinicamente importante
+TETO_MCID_IC_NAO_SUSTENTA = 7  # o ponto passa, mas o IC não sustenta a relevância
+TETO_MCID_SEM_LIMIAR   = 8   # disse "robusto" sem limiar declarado: é opinião, não medida
+TETO_MCID_SURROGATE    = 8   # rótulo alto sobre desfecho substituto
+
+
+_SURROGATE = ("surrogate", "biomarcador", "biomarker", "prom", "substituto")
+
+
+def mcid_conferido(a):
+    """Confere a CONTA do MCID contra o rótulo. Devolve (teto, [motivos])."""
+    rc = a.get("relevancia_clinica") or {}
+    c = (rc.get("classificacao") or "").strip().lower()
+    teto, motivos = 10, []
+
+    # 1 · o efeito passa do limiar? (o fato manda no rótulo)
+    if rc.get("efeito_excede_limiar") is False:
+        teto = min(teto, TETO_MCID_NAO_EXCEDE)
+        motivos.append(f"o efeito NÃO excede o limiar clinicamente importante (rótulo dizia '{c}')")
+    # 2 · o IC INTEIRO sustenta a relevância, ou só o ponto?
+    elif rc.get("ic_sustenta_relevancia") is False:
+        teto = min(teto, TETO_MCID_IC_NAO_SUSTENTA)
+        motivos.append("o efeito pontual excede o limiar, mas o IC 95% não sustenta a relevância")
+    # 3 · rótulo alto SEM limiar declarado é opinião, não medida
+    if c in ("robusto", "provavel") and rc.get("mcid_reportado") is False and not rc.get("mcid_valor"):
+        teto = min(teto, TETO_MCID_SEM_LIMIAR)
+        motivos.append(f"'{c}' sem MCID/limiar declarado — é juízo, não medida")
+    # 4 · rótulo alto sobre desfecho SUBSTITUTO
+    td = (rc.get("tipo_desfecho") or "").strip().lower()
+    if c in ("robusto", "provavel") and any(s in td for s in _SURROGATE):
+        teto = min(teto, TETO_MCID_SURROGATE)
+        motivos.append(f"desfecho substituto ({td}) não sustenta '{c}'")
+    return teto, motivos
+
+
 def teto_mcid(a):
     """REGRA 3 — o efeito é clinicamente relevante, não só estatisticamente significativo?
     E, desde 04/Ago: o resultado NULO foi DEMONSTRADO ou apenas não encontrado?"""
@@ -1374,6 +1474,24 @@ def score(a):
         aplic = s
     else:
         aplic = min(td, te, s, tf, tm)   # ← a régua-chave (artigo original)
+
+    # ═══ 05/Ago — O MCID CONFERIDO: a CONTA manda no RÓTULO ═══
+    # Vale para ORIGINAL e META. O extrator produz 9 campos de relevância clínica e até hoje o
+    # motor lia UM (`classificacao`). Agora os fatos podem REBAIXAR o rótulo — nunca promovê-lo.
+    _t_mcid, _mot_mcid = mcid_conferido(a)
+    if _t_mcid < 10:
+        aplic = min(aplic, _t_mcid)
+        for _m in _mot_mcid:
+            fl.append(f"MCID conferido → teto {_t_mcid}: {_m}")
+
+    # ═══ 05/Ago — INDEPENDÊNCIA EDITORIAL: até 10% (1,0 ponto) ═══
+    # Régua do Dr. Eduardo. A DIRETRIZ tem os 20% dela no domínio AGREE e a REVISÃO tem 15% no
+    # domínio `conflitos`; os dois motores não passam por aqui. Este desconto é de ORIGINAL e META,
+    # que até hoje eram CEGOS a financiamento (o `financiamento_papel` era extraído e ignorado).
+    _desc, _mot_ind = desconto_independencia(a)
+    if _desc:
+        aplic = max(0, int(round(aplic - _desc)))
+        fl.append(f"independência editorial −{_desc:.1f} ({_mot_ind})")
 
     # ═══ 04/Ago — A BICONDICIONAL: 9/10 ⟺ MUDA CONDUTA ═══
     # *"Toda nota 9 e 10 muda conduta! Se muda a conduta é 9 ou 10, e se é 9 ou 10 é porque muda

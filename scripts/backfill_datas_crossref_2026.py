@@ -37,7 +37,7 @@ def alvo():
     out, passo = [], 1000
     for off in range(0, 20000, passo):
         r = requests.get(f"{U}/rest/v1/artigos", headers=H, params={
-            "select": "doc_id,doi,data_publicacao", "descartado": "eq.false",
+            "select": "doc_id,doi,data_publicacao",
             "doi": "not.is.null", "limit": str(passo), "offset": str(off)}, timeout=40).json()
         out += [a for a in r if (a.get("data_publicacao") or "").endswith("-01-01")]
         if len(r) < passo:

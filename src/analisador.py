@@ -27,8 +27,43 @@ def _carregar_env():
 _carregar_env()
 
 
-def decidir_entregaveis(nota):
-    """As portas por nota. Devolve (lista_de_entregaveis, sobe?)."""
+def eh_diretriz(tipo):
+    """UM lugar só decide se é diretriz. Os 5 portões que olham nota consultam este predicado.
+
+    05/Ago: a exceção da diretriz precisa valer nos CINCO pontos que decidem por nota —
+    a porta (decidir_entregaveis), a geração do visual, a do áudio, e as duas checagens do _OK.
+    Espalhar `tipo == "diretriz"` em cinco `if` é como a regra ficou em três lugares e discordou
+    (o buraco do muda_conduta, 04/Ago). Um predicado, cinco chamadas."""
+    return (tipo or "").strip().lower() == "diretriz"
+
+
+def decidir_entregaveis(nota, tipo=None):
+    """As portas por nota. Devolve (lista_de_entregaveis, sobe?).
+
+    ═══ 05/Ago/2026 — A DIRETRIZ NÃO TEM PORTA. É A EXCEÇÃO DA LEI 10. ═══
+
+    Palavras do Dr. Eduardo: *"as diretrizes — precisamos manter esta classificação mas não
+    teremos nenhum impedimento para subir. Mesmo com as limitações, é o que tem para hoje."*
+
+    POR QUE A EXCEÇÃO É COERENTE, e não uma brecha na LEI 10:
+    A LEI 10 diz que o CardioDaily é um FILTRO — ele existe para dizer "olhei 24 metas e 12 não
+    prestam". Isso funciona porque, para uma meta ruim, existe outra melhor: o cardiologista não
+    perde nada se ela for retida.
+
+    Com DIRETRIZ é o contrário. Não existe "outra diretriz de fibrilação atrial melhor" — existe
+    A diretriz. Se ela é fraca, o médico precisa saber que é fraca **e mesmo assim precisa dela**,
+    porque é o que a sociedade publicou e é o que vai ser cobrado dele. Reter uma diretriz não
+    protege ninguém: só esconde o documento que rege a prática.
+
+    Por isso, para diretriz: NOTA CONTINUA VALENDO (e aparece, com justificativa), mas NÃO retém.
+    Medido em 04/Ago: 13 de 31 diretrizes ficavam retidas com nota 4 e 5 — ESC, AHA, ESPEN, NICE.
+
+    ⚠️ Vale SÓ para diretriz. Meta, revisão e artigo original mantêm a porta em 6 (ordem expressa
+    dele: "ESTA REGRA SÓ VALE PARA DIRETRIZ").
+    """
+    if eh_diretriz(tipo):
+        # sobe SEMPRE, com pacote completo: ACRI (palavras-chave cuidadas), visual e áudio LONGO
+        return ["canonico", "ACRI", "texto", "infografico", "audio"], True
     if nota < 6:
         return ["canonico(retido)"], False          # ≤5 FICA — retém local, não publica
     ents = ["canonico", "ACRI", "texto"]             # ≥6 SOBE
@@ -142,7 +177,9 @@ def versoes_atuais(pdf_path=""):
         "extrator": f"{PROMPT_ARQ_POR_TIPO[tipo]}@{hash_prompt(PROMPT_ARQ_POR_TIPO[tipo])}",
         "redator":  f"{_PROMPT_POR_TIPO_DOC[tipo]}@{hash_prompt(_PROMPT_POR_TIPO_DOC[tipo])}",
         "acri":     f"acri_prompt.md@{hash_prompt('acri_prompt.md')}",
-        "audio":    f"script_audio_prompt.md@{hash_prompt('script_audio_prompt.md')}",
+        "audio":    (f"script_audio_diretriz_prompt.md@{hash_prompt('script_audio_diretriz_prompt.md')}"
+                     if tipo == "diretriz" else
+                     f"script_audio_prompt.md@{hash_prompt('script_audio_prompt.md')}"),
         "gancho":   f"gancho_abertura_prompt.md@{hash_prompt('gancho_abertura_prompt.md')}",
     }
 
@@ -263,7 +300,8 @@ def _gerar(prompt_file, contexto, max_tokens):
     # PISO DE TAMANHO: saída vazia/truncada não pode passar como boa. RETENTAMOS 1x antes de desistir — é a
     # rede de segurança contra o retorno vazio pontual (foi o que derrubava o ACRI; NÃO era thinking, medido 27/07).
     minimo = 3000 if prompt_file.startswith("redator_") else \
-        {"acri_prompt.md": 400, "script_audio_prompt.md": 900}.get(prompt_file, 1)
+        {"acri_prompt.md": 400, "script_audio_prompt.md": 900,
+         "script_audio_diretriz_prompt.md": 3000}.get(prompt_file, 1)
     # A PERÍCIA tem cadeia própria (gpt-5.6-terra), decidida por medição em 01/Ago. O resto
     # (ACRI, roteiro de áudio, gancho) segue na ESCRITA — não foram testados, não se mexe às cegas.
     cadeia = M.PERICIA if prompt_file.startswith("redator_") else M.ESCRITA
@@ -384,7 +422,7 @@ def processar(pdf, staging):
     # ela lê `fatos["tipo_documento"]` ANTES de olhar `desenho`.
     fatos["tipo_documento"] = tipo_do_documento(pdf)
     r = N.score(fatos)
-    ents, sobe = decidir_entregaveis(r["aplic"])
+    ents, sobe = decidir_entregaveis(r["aplic"], fatos.get("tipo_documento"))
     # ROTA FORA DA ESCALA CLÍNICA (01/Ago/2026): pré-clínico e 'não classificável' não recebem nota —
     # 'Rigor None/10' seria mentira com cara de número. Diz-se o que é: por que não há nota.
     # VEREDITO ABERTO (02/Ago/2026): o redator deixa de receber o NÚMERO NU e passa a receber os
@@ -431,7 +469,8 @@ def processar(pdf, staging):
                 gerar_pdf_de_pasta(dst)
             except Exception as e:
                 print(f"       ⚠️  PDF da análise não gerado ({type(e).__name__}: {e}) — rende na Mac")
-    if r["aplic"] >= 7:                                        # Visual Abstract (8 seções) — AUTOMÁTICO
+    _diretriz = eh_diretriz(fatos.get("tipo_documento"))
+    if r["aplic"] >= 7 or _diretriz:                           # Visual Abstract — diretriz SEMPRE (05/Ago)
         if os.path.exists(os.path.join(dst, base + "_visual.png")) and \
            os.path.getsize(os.path.join(dst, base + "_visual.png")) >= 50000:
             print("       ↻ Visual Abstract já pronto — reaproveitado")
@@ -440,13 +479,19 @@ def processar(pdf, staging):
                 _gerar_visual_abstract(fatos, r, dst, base)
             except Exception as e:
                 print(f"       ⚠️  Visual Abstract não gerado ({type(e).__name__}: {e}) — rende na Mac")
-    if r["aplic"] >= 8:                                        # áudio
+    if r["aplic"] >= 8 or _diretriz:                           # áudio — diretriz SEMPRE (05/Ago)
         from voz_utils import cacar_ingles, falar
         mp3 = os.path.join(dst, base + "_audio.mp3")
         if os.path.exists(mp3) and os.path.getsize(mp3) >= 100000:
             print("       ↻ áudio já pronto — reaproveitado")
         else:
-            roteiro = _peca(dst, base + "_roteiro_audio.txt", 900, lambda: _gerar("script_audio_prompt.md", contexto, 8000))
+            # 05/Ago — ÁUDIO POR TIPO. A diretriz ganhou roteiro próprio, LONGO (6-8 min, 900-1200
+            # palavras, contra ~500 do artigo) e com uma obrigação que os outros não têm: dizer a
+            # NOTA e a JUSTIFICATIVA dela. Ordem do Dr. Eduardo: uma diretriz sobe mesmo com nota
+            # baixa, e o ouvinte precisa saber por que ela é fraca e por que mesmo assim importa.
+            _pa = "script_audio_diretriz_prompt.md" if _diretriz else "script_audio_prompt.md"
+            _min = 3000 if _diretriz else 900
+            roteiro = _peca(dst, base + "_roteiro_audio.txt", _min, lambda: _gerar(_pa, contexto, 16000 if _diretriz else 8000))
             if cacar_ingles(roteiro):
                 open(os.path.join(dst, "_REVISAR_termos_ingles.txt"), "w").write(", ".join(cacar_ingles(roteiro)))
             falar(roteiro, mp3)                                # config do .env; ElevenLabs = só Radar
@@ -455,14 +500,14 @@ def processar(pdf, staging):
                   lambda: _gerar("gancho_abertura_prompt.md", contexto, 2000).strip()[:200])
         except Exception as e:
             print(f"       ⚠️  gancho de abertura não gerado ({type(e).__name__}: {e})")
-    _conferir_entregaveis(dst, base, r["aplic"])              # BURACO ZERO: faltou algo → erro, volta pra fila
+    _conferir_entregaveis(dst, base, r["aplic"], fatos.get("tipo_documento"))  # BURACO ZERO: faltou algo → erro, volta pra fila
     json.dump(_vnow, open(os.path.join(dst, "_versoes.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)                   # QUAL prompt fez cada peça deste pacote
     open(os.path.join(dst, "_OK"), "w").write("")             # só aqui: artigo COMPLETO de verdade
     return base, r["aplic"], r["muda_conduta"], ents, sobe
 
 
-def _conferir_entregaveis(dst, base, nota):
+def _conferir_entregaveis(dst, base, nota, tipo_doc=None):
     """BURACO ZERO no nível do artigo: só é 'pronto' se TUDO que a porta manda existir e ter tamanho.
     Antes o _OK era escrito mesmo faltando peça (ex.: nota ≥7 sem Visual Abstract), e o artigo saía da
     fila incompleto — depois era recusado no Publicador. Agora falha aqui e volta pra fila."""
@@ -474,13 +519,14 @@ def _conferir_entregaveis(dst, base, nota):
     faltando = []
     if not _ok(base + "_CANONICO.md", 200):
         faltando.append("canônico")
-    if nota >= 6:
+    _dir = eh_diretriz(tipo_doc)
+    if nota >= 6 or _dir:
         if not _ok(base + "_ACRI.txt", 400):      faltando.append("ACRI")
         if not _ok(base + "_analise.md", 3000):   faltando.append("perícia (≥3k)")
         if not _ok(base + "_analise.pdf", 10000): faltando.append("PDF da perícia")
-    if nota >= 7 and not _ok(base + "_visual.png", 50000):
+    if (nota >= 7 or _dir) and not _ok(base + "_visual.png", 50000):
         faltando.append("Visual Abstract")
-    if nota >= 8 and not _ok(base + "_audio.mp3", 100000):
+    if (nota >= 8 or _dir) and not _ok(base + "_audio.mp3", 100000):
         faltando.append("áudio")
     if faltando:
         raise RuntimeError(f"INCOMPLETO (nota {nota}) — faltou: {', '.join(faltando)}. "

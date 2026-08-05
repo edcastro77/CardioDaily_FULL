@@ -244,6 +244,15 @@ def montar(pasta):
         gancho = mg.group(1).strip()
     elif a_bloco:
         gancho = _frases(a_bloco)[:1] and _frases(a_bloco)[0] or a_bloco[:160]
+    # ═══ 05/Ago — O GANCHO ERA IDÊNTICO AO CONTEXTO em 9 das 18 diretrizes ═══
+    # São campos com finalidades DIFERENTES: o gancho é a isca da lista (uma frase, para o
+    # assinante clicar); o contexto é o "por que isto importa" do card. Quando o bloco A do ACRI
+    # tem uma frase só, o `_frases(a_bloco)[0]` devolvia o bloco INTEIRO — e os dois campos
+    # ficavam com o mesmo texto. Repetir a mesma frase em dois lugares não é buraco de dado,
+    # é buraco EDITORIAL: o leitor lê duas vezes a mesma coisa e o gancho perde a função.
+    if gancho and a_bloco and gancho.strip() == a_bloco.strip():
+        _fr = _frases(a_bloco)
+        gancho = _fr[0].strip() if len(_fr) > 1 else (a_bloco.strip()[:150].rsplit(" ", 1)[0] + "…")
 
     # bullets: frases acionáveis do bloco Impacto; completa com aplicabilidade se faltar
     bullets = _frases(i_bloco)
@@ -287,8 +296,38 @@ def montar(pasta):
                        else _porta("", 8, "gancho de abertura"))
 
     # campos extras que a tabela REAL usa (a tabela NÃO tem 'slug')
-    ano = _data_valida(_campo(canon, "ano")) or _data_valida(_n.get("ano", ""))   # 04/Ago: 2ª fonte, o nome do PubMed
+    # ═══ 05/Ago — O MÊS ESTAVA SENDO JOGADO FORA (29 de 29 linhas em AAAA-01-01) ═══
+    # O canônico guarda só o ANO (4 dígitos), então `_data_valida` devolvia AAAA-01-01. O focused
+    # update do ESC é de NOVEMBRO e estava gravado como janeiro — erro de até 11 meses, que quebra
+    # ordenação por data, "artigo da semana" e qualquer agenda de envio.
+    # O MÊS existe: está no nome do arquivo (`AAAA-MM-Revista-Titulo`), posto lá pelo classificador
+    # com metadado do PubMed. A 2ª fonte já era usada para o ano; passa a dar o mês também.
+    _ano_canon = _campo(canon, "ano")
+    _aaaa_mm = (f"{_n['ano']}-{_n['mes']}" if _n.get("ano") and _n.get("mes") else "")
+    # se o canônico só tem o ANO e o nome tem ANO-MÊS do MESMO ano, o nome é mais preciso
+    if _aaaa_mm and len((_ano_canon or "").strip()) == 4 and _ano_canon.strip() == _n.get("ano"):
+        ano = _data_valida(_aaaa_mm)
+    else:
+        ano = _data_valida(_ano_canon) or _data_valida(_aaaa_mm) or _data_valida(_n.get("ano", ""))
     tipo = _campo(canon, "tipo")
+    # ═══ 05/Ago — DUAS COLUNAS PARA A MESMA PERGUNTA, DISCORDANDO ═══
+    # Medido no Supabase: as 18 diretrizes tinham `tipo_documento: diretriz` E
+    # `tipo_estudo: artigo_original` NA MESMA LINHA. O `tipo` vem do campo `tipo` do canônico,
+    # que o extrator da diretriz não preenche — sobrava o padrão do artigo original.
+    # É o padrão que já mordeu duas vezes hoje (muda_conduta em 3 caminhos, desfecho_duro em 2):
+    # quando duas colunas respondem a mesma coisa, uma hora elas divergem.
+    # Quem manda é a PASTA (LEI 8). O `tipo_estudo` passa a ser DERIVADO dela, não paralelo.
+    # ⚠️ a fonte NÃO é o canônico: ele guarda `tipo: "artigo_original"` até numa diretriz —
+    # quem o escreve não recebe o tipo da pasta. A fonte certa é o `tipo_documento` calculado
+    # ACIMA nesta mesma função, a partir dos FATOS + da pasta (notas_prototipo.tipo_do_documento).
+    _tipo_doc = (tipo_documento or "").strip().lower()
+    _ROTULO_POR_TIPO = {
+        "diretriz": "diretriz_pratica_clinica",
+        "meta": "revisao_sistematica_meta_analise",
+        "revisao_narrativa": "revisao_narrativa",
+    }
+    if _tipo_doc in _ROTULO_POR_TIPO:
+        tipo = _ROTULO_POR_TIPO[_tipo_doc]
     mrig = re.search(r"nota_trabalho_estatistico:\s*(\d+)", canon)
     rigor = int(mrig.group(1)) if mrig else None
 
@@ -346,7 +385,6 @@ def montar(pasta):
         "tipo_documento": tipo_documento,
         "veredito_dominios": veredito_dominios,  # jsonb: os domínios medidos que produziram a nota
         "publicar_no_site": False,              # sobe como rascunho; você libera no Administrador/site
-        "descartado": False,
         "created_at": datetime.date.today().isoformat(),
         "_fracao_ejecao": fracao_ejecao,        # METADADO (prefixo _ → NÃO sobe): trava de inversão FE no contrato
     }

@@ -211,6 +211,45 @@ reprovaram no Degrau 2 — todas por misturar ECR com observacional**, com a fer
 ele mostra os números e QUEM DECIDE É O DONO. Afrouxar régua para caber mais artigo é trocar o
 produto por volume — e o produto é justamente o filtro.
 
+**A ÚNICA EXCEÇÃO — A DIRETRIZ NÃO TEM PORTA (05/Ago/2026)**
+
+*"As diretrizes — precisamos manter esta classificação mas não teremos nenhum impedimento para
+subir. Mesmo com as limitações, é o que tem para hoje."* — Dr. Eduardo
+
+**POR QUE NÃO É BRECHA:** a LEI 10 funciona porque, para uma meta ruim, existe outra melhor —
+reter não custa nada ao leitor. Com diretriz é o contrário: não existe "outra diretriz de
+fibrilação atrial", existe **A** diretriz. Se ela é fraca, o médico precisa saber que é fraca
+**e mesmo assim precisa dela**, porque é o documento pelo qual ele será cobrado. Reter não
+protege ninguém: esconde o que rege a prática.
+
+| | diretriz | meta · revisão · artigo original |
+|---|---|---|
+| porta de publicação | **nenhuma** — sobe em qualquer nota | nota ≥ 6 |
+| ACRI + perícia | sempre | nota ≥ 6 |
+| Visual Abstract | sempre | nota ≥ 7 |
+| áudio | sempre, com **roteiro próprio** (6–8 min, 900–1.200 palavras) | nota ≥ 8 |
+| a nota | aparece **com justificativa** (6 domínios AGREE + % nível C + % Classe I em C) | idem |
+
+O roteiro `script_audio_diretriz_prompt.md` tem uma obrigação que os outros não têm: **dizer a
+nota EM VOZ ALTA e explicar em uma frase o que a puxou para baixo**, traduzido do jargão AGREE
+("ninguém de fora leu antes de publicar", "a maior parte é opinião de especialista"). E, se a
+nota for baixa, fechar com a razão de estar no ar assim mesmo.
+
+Medido em 04/Ago: **13 de 31 diretrizes ficavam retidas com nota 4 e 5** — ESC, AHA, ESPEN, NICE.
+
+⚠️ **A exceção é SÓ da diretriz.** Palavras dele: *"ESTA REGRA SÓ VALE PARA DIRETRIZ."*
+Trava: `teste_diretriz_nao_tem_porta` reprova se a porta voltar OU se a exceção vazar para os
+outros três tipos.
+
+**AS PALAVRAS-CHAVE SÃO PORTUGUÊS — os prompts pediam INGLÊS (05/Ago)**
+
+O focused update de dislipidemia do ESC subiu com `dyslipidaemia`, `LDL cholesterol`,
+`bempedoic acid`. O cardiologista brasileiro digita `dislipidemia`, `colesterol LDL`, `ácido
+bempedoico` — e não achava nada. A diretriz é o documento mais buscado do acervo e era o pior
+indexado. Não era o modelo errando: **três prompts pediam "EM INGLÊS", com todas as letras.**
+Achado em um, corrigido em três (LEI 9). Regra: 8–12 termos em português, cobrindo doença ·
+intervenção/droga · população · desfecho, específicos (nada de "cardiologia" ou "manejo").
+
 ### LEI 1: NUNCA PROPOR ABANDONAR PARTE DO PROJETO
 - O Claude NUNCA deve sugerir abandonar, descontinuar, remover ou desistir de qualquer funcionalidade planejada ou em desenvolvimento do CardioDaily.
 - Se uma abordagem tecnica nao funciona, o Claude deve propor ALTERNATIVAS, nunca eliminacao.

@@ -108,7 +108,12 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
 
   "o_que_ensina": "<2 a 4 frases: o que esta revisão ensina de mais útil para a prática, com os
      números que ela traz, atribuídos à fonte que ela cita. Se ela fala por cima, DIGA isso>",
-  "keywords": ["<5 a 10 termos clínicos específicos EM INGLÊS>"],
+  "keywords": ["<8 a 12 termos em PORTUGUÊS BRASILEIRO, como o médico busca — `fibrilação atrial`,
+     não `atrial fibrillation`. Exceção: sigla consagrada (TAVI, SGLT2, DOAC, FEVE) e nome de
+     ensaio (RECOVERY, DAPA-HF). Cubra 4 eixos sem repetir: doença · intervenção/droga ·
+     população · desfecho ou conduta. ESPECÍFICO: 'cardiologia', 'tratamento' e 'manejo' casam
+     com tudo e não filtram nada. Classe da droga E princípio ativo, quando ambos existirem.
+     05/Ago: este campo pedia INGLÊS e o acervo ficou invisível para quem paga a assinatura.>"],
   "aplicabilidade": "<em QUEM se aplica e ressalvas do Brasil (acesso, custo, ANVISA). 1-2 frases>"
 }
 

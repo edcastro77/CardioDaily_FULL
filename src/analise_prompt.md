@@ -44,6 +44,12 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
   "sem_evidencia_conflitante_melhor": <true se não há evidência de MAIOR qualidade conflitante; false se há>,
   "beneficio_supera_risco": <true se o benefício supera claramente o risco/dano (ex.: sangramento)>,
   "financiamento_papel": "<'indústria fora da análise/escrita' | 'indústria envolvida' | 'público' | 'outro'>",
+  // ⚠️ 05/Ago: ESTE CAMPO ERA EXTRAÍDO E JOGADO FORA. Agora vale até 10% da nota (1,0 ponto):
+  //     'indústria envolvida' ................. −1,0  (o financiador desenhou, analisou ou escreveu)
+  //     'indústria fora da análise/escrita' ... −0,3  (patrocinou, mas ficou fora — declarado)
+  //     'público' | 'outro' ................... 0
+  // Use 'indústria fora da análise/escrita' SÓ se o artigo AFIRMA a separação. Se ele diz apenas
+  // "financiado pela X" e cala sobre o papel, é 'indústria envolvida': o silêncio não é garantia.
   "achados_principais": "<1-3 frases com os NÚMEROS centrais: desfecho primário, HR/RR/ARR, IC 95%, p>",
   "relevancia_clinica": {
     "desfecho_primario": "<nome do desfecho primário>",
@@ -59,6 +65,25 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
     "classificacao": "<um de: robusto | provavel | incerto | ausencia_de_efeito_demonstrada | significativo_mas_abaixo_do_mcid | nao_relevante | nao_avaliavel>",
     "frase_chave": "<UMA frase objetiva: foi estatisticamente significativo? foi clinicamente importante segundo MCID/limiar? o IC95% sustenta essa relevância?>"
   },
+  // ⚠️ ATENÇÃO — 05/Ago/2026: OS CAMPOS ACIMA DEIXARAM DE SER DECORATIVOS.
+  //
+  // Até hoje o motor de nota lia UM deles: `classificacao`. Você fazia a conta campo por campo e
+  // o código perguntava só "e aí, como você classifica?" — a conta era jogada fora e ficava o
+  // rótulo, que é justamente a parte em que um modelo é menos confiável.
+  //
+  // Agora o MOTOR CONFERE A SUA CONTA, e ela pode REBAIXAR o seu rótulo:
+  //     efeito_excede_limiar = false ................... nota no máximo 6
+  //     excede, mas ic_sustenta_relevancia = false ..... nota no máximo 7
+  //     'robusto' com mcid_reportado = false ........... nota no máximo 8 (é juízo, não medida)
+  //     'robusto' com tipo_desfecho substituto ......... nota no máximo 8
+  //
+  // O caminho inverso NÃO existe: se você disser 'incerto' e a conta for boa, continua 'incerto'.
+  // Cautela não se desfaz por número. Logo:
+  //   · não force `efeito_excede_limiar` para true só porque o p<0,05 — são coisas diferentes;
+  //   · se o estudo NÃO declara limiar, `mcid_reportado: false` e `mcid_valor: "não reportado"`.
+  //     NÃO invente um limiar plausível: inventar aqui infla a nota de um estudo que não mediu;
+  //   · `null` continua sendo "não dá para avaliar" — e `null` NÃO capa nota nenhuma. Só `false`
+  //     capa. Confundir os dois é punir o silêncio do artigo em vez do defeito dele.
   "qualidade_nhlbi": {
     "_": "CHECKLIST FORMAL por desenho (NHLBI/NIH). Responda APENAS os campos do instrumento do desenho deste artigo; os demais = null. Use true/false quando o artigo informa; null quando NÃO REPORTA (não confunda 'não reportado' com 'não fez').",
 
@@ -136,7 +161,12 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
      F7 = série de casos NÃO consecutiva
      F8 = desfecho primário trocado após o início (não pré-especificado)>"],
 
-  "keywords": ["<5 a 10 termos clínicos específicos EM INGLÊS para indexação/reaproveitamento>"],
+  "keywords": ["<8 a 12 termos em PORTUGUÊS BRASILEIRO, como o médico busca — `fibrilação atrial`,
+     não `atrial fibrillation`. Exceção: sigla consagrada (TAVI, SGLT2, DOAC, FEVE) e nome de
+     ensaio (RECOVERY, DAPA-HF). Cubra 4 eixos sem repetir: doença · intervenção/droga ·
+     população · desfecho ou conduta. ESPECÍFICO: 'cardiologia', 'tratamento' e 'manejo' casam
+     com tudo e não filtram nada. Classe da droga E princípio ativo, quando ambos existirem.
+     05/Ago: este campo pedia INGLÊS e o acervo ficou invisível para quem paga a assinatura.>"],
   "aplicabilidade": "<em QUEM eu aplico e em quem NÃO aplico; ressalvas do Brasil (acesso, custo, tecnologia). 1-2 frases>"
 }
 

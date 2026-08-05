@@ -237,6 +237,58 @@ não vai oscilar com novos estudos — é o que autoriza a nota 10.
 
 ---
 
+## INDEPENDÊNCIA EDITORIAL — QUEM PAGOU, E O QUE FEZ (05/Ago/2026)
+
+Este prompt não perguntava NADA sobre dinheiro. Medido em 05/Ago: a diretriz tinha 6 campos sobre
+financiamento e conflito (20% da nota), a revisão tinha 2 (15%), o artigo original tinha 1 (e o
+ignorava) — e a meta, zero. Uma meta patrocinada pelo fabricante da droga tirava a mesma nota de
+uma meta acadêmica independente.
+
+O AMSTAR-2 cobra as DUAS pontas, e você também:
+
+  `conflitos_declarados` — a revisão declara os conflitos dos AUTORES DELA? `false` se o
+      documento não traz uma linha sobre isso (em 2026, isso é achado, não detalhe).
+  `financiamento_industria` — quem pagou a revisão foi a indústria? `null` se não diz.
+  `autores_industria_fora_da_analise` — o financiador ficou EXPLICITAMENTE fora do desenho, da
+      análise estatística e da redação? Só `true` se o artigo AFIRMA isso; `null` se cala.
+  `financiamento_dos_incluidos_relatado` — **AMSTAR-2 item 10**: a revisão relatou a fonte de
+      financiamento DOS ESTUDOS INCLUÍDOS? Quase ninguém cumpre. Quem cumpre merece o crédito.
+
+Não confunda: uma meta financiada pela indústria com análise independente declarada é MUITO
+diferente de uma em que o fabricante desenhou, analisou e escreveu. É por isso que são campos
+separados, e não um só.
+
+---
+
+## AS PALAVRAS-CHAVE — É COMO O ASSINANTE ACHA O ARTIGO (05/Ago/2026)
+
+**Este prompt não dizia NADA sobre `keywords`**, embora o schema peça o campo. Resultado medido
+no Supabase: das 11 metas publicadas, 7 vieram com termo em inglês e 9 com português — cada uma
+de um jeito, porque ninguém mandou. E na diretriz, que TINHA instrução, a instrução dizia
+"EM INGLÊS": 18 de 18 saíram com `dyslipidaemia`, `LDL cholesterol`, `bempedoic acid`.
+
+O cardiologista brasileiro digita `dislipidemia`, `colesterol LDL`, `ácido bempedoico`.
+Palavra-chave errada não é detalhe de catálogo: é o artigo existir e ninguém achar.
+
+**8 a 12 termos, em PORTUGUÊS BRASILEIRO**, como o médico busca.
+Exceção: sigla consagrada (`TAVI`, `SGLT2`, `DOAC`, `FEVE`, `CRM`) e nome de ensaio (`RECOVERY`).
+
+Cubra QUATRO eixos, sem repetir o mesmo:
+  · **doença/condição** — `fibrilação atrial`, `insuficiência cardíaca`, `estenose aórtica`
+  · **intervenção/droga** — `ablação por cateter`, `anticoagulante oral direto`, `rivaroxabana`
+  · **população** — `prevenção secundária`, `idoso`, `doença renal crônica`
+  · **desfecho/conduta** — `mortalidade cardiovascular`, `sangramento maior`, `AVC isquêmico`
+
+**ESPECÍFICO.** `cardiologia`, `meta-análise`, `tratamento` e `manejo` casam com metade do acervo
+e não filtram nada. Se o termo serve para qualquer artigo, não é palavra-chave.
+
+**Classe da droga E princípio ativo**, quando ambos existirem — quem busca `anticoagulante` e
+quem busca `apixabana` é o mesmo médico em dois momentos.
+
+**Não invente tema que a meta não cobre.** A palavra-chave promete conteúdo.
+
+---
+
 ## A REGRA DO NNT/NNH
 
 NNT = 1/ARR. Só existe com RISCO BASAL declarado + HORIZONTE DE TEMPO + a mesma escala do desfecho.

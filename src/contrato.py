@@ -15,7 +15,7 @@ CAMPOS = [
     "keywords", "contexto_tema", "aplicabilidade_pratica", "impacto_conduta",
     "bullets_praticos", "gancho_lista", "mcid_avaliacao", "resumo_markdown",
     "caminho_pdf", "caminho_audio", "caminho_visual_abstract",
-    "publicar_no_site", "descartado", "created_at",
+    "publicar_no_site", "created_at",
 ]
 
 # Temas válidos (do site: cardiodaily.ts → TEMAS).
