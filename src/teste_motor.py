@@ -1796,6 +1796,46 @@ def teste_mcid_confere_a_conta():
     checa("MCID: campos ausentes não capam sozinhos (null ≠ false)", t >= 8, f"veio {t}")
     return "5 conferências · a conta rebaixa, nunca promove"
 
+
+def teste_revisao_valoriza_tabela():
+    """A TABELA COMPARATIVA vale ponto na revisão narrativa (05/Ago/2026).
+
+    ═══ O CAMPO QUE ERA EXTRAÍDO E IGNORADO ═══
+
+    `tem_tabela_comparativa` estava no `SCHEMA_FATOS_REVISAO` desde que a trilha nasceu e NENHUM
+    bloco do sistema o lia. Achado na varredura dos 4 schemas — a que o Dr. Eduardo mandou fazer
+    depois de dizer, com razão, que eu só olhava o curto prazo.
+
+    A ironia: é a TAREFA #25 da lista dele, pendente desde 30/Jul — "Perícia com TABELAS". Ele
+    sabe que tabela é o que separa revisão útil de prosa; o extrator já perguntava; o motor não
+    escutava. Uma revisão que compara as opções LADO A LADO entrega conduta pronta para o plantão;
+    uma que descreve em prosa obriga o leitor a montar a tabela na cabeça.
+
+    REGRA: VALORIZA, não capa. +1 em `conduta_acionavel` (30% da utilidade), igual ao
+    `traz_valores_corte_ou_doses`. Mesma lógica do NNT na meta: crédito a quem organizou,
+    sem reprovar quem não organizou.
+    """
+    def rev(**qr):
+        base = dict(n_condutas_acionaveis=6, traz_valores_corte_ou_doses=True)
+        return {"qualidade_revisao": {**base, **qr}}
+
+    com = N.dominios_revisao_util(rev(tem_tabela_comparativa=True))["conduta_acionavel"]
+    sem = N.dominios_revisao_util(rev(tem_tabela_comparativa=False))["conduta_acionavel"]
+    mudo = N.dominios_revisao_util(rev(tem_tabela_comparativa=None))["conduta_acionavel"]
+
+    checa("revisão: tabela comparativa VALORIZA", com > sem, f"com={com} sem={sem}")
+    checa("revisão: quem NÃO tem tabela não é punido", sem == mudo,
+          f"sem={sem} não-informado={mudo} — `false` não pode valer menos que o silêncio")
+    checa("revisão: o bônus não estoura o teto 10", com <= 10, f"veio {com}")
+
+    # o campo tem de continuar existindo no schema (senão o bônus vira letra morta)
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import analise as A
+    q = A.SCHEMA_FATOS_REVISAO["properties"]["qualidade_revisao"]["properties"]
+    checa("revisão: 'tem_tabela_comparativa' está no schema", "tem_tabela_comparativa" in q)
+    return "tabela comparativa: +1 em conduta_acionavel, sem punir quem não tem"
+
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,
               teste_tetos_da_lei_0, teste_teto_estatistico, teste_rigor_conhece_o_desenho,
@@ -1818,7 +1858,8 @@ if __name__ == "__main__":
               teste_escala_de_aplicabilidade_da_meta, teste_carimbo_ve_o_motor,
               teste_diretriz_nao_tem_porta, teste_keywords_em_portugues,
               teste_ficha_sem_contradicao, teste_contrato_espelha_a_tabela,
-              teste_independencia_editorial, teste_mcid_confere_a_conta]
+              teste_independencia_editorial, teste_mcid_confere_a_conta,
+              teste_revisao_valoriza_tabela]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:
         antes = len(falhas)

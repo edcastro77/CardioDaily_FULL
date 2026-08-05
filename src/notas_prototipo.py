@@ -1131,6 +1131,22 @@ def dominios_revisao_util(a):
                                     [(10, 10), (6, 8), (3, 6), (1, 4), (0, 2)], 5)
     if q.get("traz_valores_corte_ou_doses"):
         d["conduta_acionavel"] = min(d["conduta_acionavel"] + 1, 10)
+    # ═══ 05/Ago — A TABELA COMPARATIVA (o campo que era extraído e ignorado) ═══
+    # `tem_tabela_comparativa` estava no schema desde que a trilha da revisão nasceu, e NENHUM
+    # bloco do sistema o lia. Achado na varredura dos 4 schemas que o Dr. Eduardo mandou fazer.
+    #
+    # E a ironia é que ele é a TAREFA #25 da lista dele — "Perícia com TABELAS (características
+    # basais, desfechos, limitações)", pendente desde 30/Jul. O dono sabe que tabela é o que separa
+    # revisão útil de prosa; o extrator já perguntava; o motor não escutava.
+    #
+    # Uma revisão que compara as opções LADO A LADO entrega conduta pronta para o plantão. Uma que
+    # descreve em prosa obriga o leitor a montar a tabela na cabeça — que é justamente o trabalho
+    # que ele não tem tempo de fazer às 3 da manhã.
+    #
+    # VALORIZA, não capa: +1 ponto, igual ao `traz_valores_corte_ou_doses` acima. Mesma lógica do
+    # NNT na meta-análise — quem organizou merece o crédito, quem não organizou não é reprovado.
+    if q.get("tem_tabela_comparativa"):
+        d["conduta_acionavel"] = min(d["conduta_acionavel"] + 1, 10)
 
     # b) MAGNITUDE (0,20) — "extremamente eficientes" com NÚMERO, não só com adjetivo
     d["magnitude"] = 9 if q.get("traz_magnitude_efeito") else \

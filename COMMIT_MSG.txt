@@ -1,123 +1,177 @@
-A ESCADA DE AVALIAÇÃO CRÍTICA DE META-ANÁLISES — 04/Ago/2026
+A VARREDURA DOS 4 SCHEMAS — 05/Ago/2026
 
-O motor da meta foi reorganizado a partir de uma especificação do Dr. Eduardo, escrita para
-ele e para os residentes do Hospital Rio Doce. E a régua nova foi rodada nas 24 metas do lote.
+O Dr. Eduardo mandou parar de consertar peça por peça e revisar os quatro schemas coluna por
+coluna: *"com certeza sua memória ou estrutura o impedem de pesar no objetivo final — você só se
+concentra em atividades de curto prazo"*.
 
-═══ POR QUE — O CASO TOCILIZUMABE ═══
+Ele estava certo. Nenhum dos achados abaixo aparece olhando uma peça de cada vez; todos aparecem
+olhando a LINHA INTEIRA. Este commit é o resultado.
 
-Em 2021 as meta-análises diziam que o tocilizumabe não valia o investimento na COVID-19. A nota
-técnica do Ministério da Saúde (CCATES, abril/2021) concluiu, com "certeza moderada", que a droga
-reduzia ventilação mecânica mas NÃO reduzia mortalidade — apoiada num conjunto que MISTURAVA ECRs
-com estudos observacionais. O RECOVERY, um único ensaio com N adequado e desenho válido, encerrou
-a discussão sozinho: reduzia mortalidade.
+═══════════════════════════════════════════════════════════════════════════════
+1 · O QUE A VARREDURA ACHOU EM CADA SCHEMA
+═══════════════════════════════════════════════════════════════════════════════
 
-"Uma meta-análise só é tão boa quanto os estudos que a compõem. Somar estudos pequenos,
-retrospectivos, heterogêneos e enviesados propaga e amplifica esses erros numa estimativa
-matematicamente bonita, mas clinicamente enganosa." — GIGO.
+DIRETRIZ — três contradições na mesma linha do banco:
+  · `tipo_documento: diretriz` E `tipo_estudo: artigo_original`, 18 de 18. O `tipo_estudo` vinha
+    do CANÔNICO, que grava "artigo_original" mesmo numa diretriz. Duas colunas respondendo a
+    mesma pergunta — o padrão do `muda_conduta` (3 caminhos, 04/Ago) e do `desfecho_duro`.
+    Agora `tipo_estudo` é DERIVADO de `tipo_documento`, que vem da pasta (LEI 8).
+  · `data_publicacao` sempre AAAA-01-01, 29 de 29 linhas. O focused update do ESC é de NOVEMBRO
+    e estava gravado como janeiro — erro de até 11 meses, que quebra ordenação e agenda de envio.
+    O mês existia no NOME do arquivo (posto pelo classificador, com metadado do PubMed).
+  · `gancho_lista` IDÊNTICO a `contexto_tema` em 9 de 18. Buraco editorial: o leitor lê a mesma
+    frase duas vezes e o gancho perde a função.
 
-Por isso a Escada é uma camada POR CIMA dos 6 domínios ponderados. A ponderação mede o CAPRICHO
-da revisão; a Escada mede se a MATÉRIA-PRIMA presta.
+ARTIGO ORIGINAL — 11 campos órfãos, extraídos e jogados fora:
+  · `financiamento_papel` — a marca registrada do CardioDaily ("ceticismo metodológico,
+    especialmente estudos patrocinados pela indústria" — CLAUDE.md). Extraído e IGNORADO.
+  · 9 campos de MCID (mcid_valor, mcid_reportado, mcid_fonte_metodo, efeito_observado,
+    efeito_excede_limiar, ic_sustenta_relevancia, para_desfecho_duro, tipo_desfecho,
+    desfecho_primario). O modelo fazia a conta campo por campo e o motor lia UM: `classificacao`.
 
-═══ 1 · A ESCADA (notas_prototipo.py · analise.py · analise_meta_prompt.md) ═══
+META — o único schema que não perguntava NADA sobre financiamento.
 
-  Degrau 2 · misturou ECR com observacional no primário ...... FATAL, teto 5
-  Degrau 4 · perdeu significância no Trim-and-Fill ........... FATAL, teto 5
-  Degrau 3 · I²>50% sem sensibilidade/subgrupo/meta-regressão . teto 6
-  Degrau 5 · desfecho SUBSTITUTO (Lp(a), GLS, FEVE) .......... teto 8
-  Degrau 1 · sem PROSPERO ................................... desconto no domínio
+REVISÃO — o mais saudável (3 órfãos em 28). Um deles: `tem_tabela_comparativa`.
 
-  Mantida a porteira da Cochrane (cap. 13): k<10 não cobra Egger.
-  12 campos novos no SCHEMA_FATOS_META, todos pedidos explicitamente no prompt.
+═══════════════════════════════════════════════════════════════════════════════
+2 · INDEPENDÊNCIA EDITORIAL — cada motor tratava dinheiro de um jeito, e ninguém decidiu
+═══════════════════════════════════════════════════════════════════════════════
 
-═══ 2 · A ESCALA DE APLICABILIDADE — os crivos GRADUAM, não só capam ═══
+  ANTES:  DIRETRIZ 6 campos/20%  ·  REVISÃO 2 campos/15%  ·  ORIGINAL 1 campo IGNORADO  ·  META 0
 
-  0/4 → 4    1/4 → 5    2/4 → 6    3/4 → 8    4/4 → 9 ou 10
+Um RCT patrocinado, com o financiador desenhando o estudo e escrevendo o manuscrito, tirava a
+MESMA nota de um ensaio acadêmico independente.
 
-ERRO MEU, QUE ELE PEGOU: eu tinha feito os 4 crivos apenas CAPAREM em 8. Quem falhava nos QUATRO
-ficava com a mesma nota de quem falhava em UM — o algoritmo de beira do leito virava um
-interruptor, quando na escada dele é uma ESCALA. A prova do absurdo foi um PROTOCOLO de revisão
-sistemática (BMJ Open): zero estudos, zero efeito, reprovou nos 4 crivos e ficou com 8, porque os
-domínios de MÉTODO eram bons. Ele viu: "mas o protocolo passa pela escala de aplicabilidade".
-Agora vai para 4 e é recusado.
+RÉGUA DO DR. EDUARDO (05/Ago): diretriz até 20% · os outros três até 10%.
+  · DIRETRIZ mantém os 20% do domínio AGREE `independencia`.
+  · REVISÃO fica nos 15% que ELE aprovou em 02/Ago — baixar seria revogar decisão dele sem
+    que ele pedisse (LEI 3). Registrado, não esquecido.
+  · ORIGINAL e META ganham `desconto_independencia` de até 1,0 ponto (=10%):
+        financiador desenhou/analisou/escreveu ....... −1,0
+        patrocinou, mas ficou fora (declarado) ....... −0,3
+        público ou sem indústria ..................... 0
+  · a META ganhou 4 campos novos, incluindo o AMSTAR-2 item 10 (financiamento dos INCLUÍDOS).
 
-O NNT<25 VALORIZA mas NÃO é régua (correção expressa dele).
+═══════════════════════════════════════════════════════════════════════════════
+3 · MCID CONFERIDO — a CONTA manda no RÓTULO, e nunca o contrário
+═══════════════════════════════════════════════════════════════════════════════
 
-═══ 3 · A BICONDICIONAL: 9/10 ⟺ MUDA CONDUTA ═══
+Palavras dele: *"devemos usar este esquema que é muito bom — e deve pesar muito"*.
 
-"Toda nota 9 e 10 muda conduta! Se muda a conduta é 9 ou 10, e se é 9 ou 10 é porque muda conduta."
+O motor passa a CHECAR a conta que o extrator já fazia:
+        efeito_excede_limiar = false .................... teto 6
+        excede, mas ic_sustenta_relevancia = false ...... teto 7
+        'robusto' sem MCID declarado .................... teto 8  (é juízo, não medida)
+        'robusto' sobre desfecho substituto ............. teto 8
 
-Estavam sendo calculados por TRÊS caminhos independentes que discordavam. Medido no Supabase:
-três meta-análises publicadas com nota 9 e "muda_conduta: NÃO", ZERO com SIM. Agora a nota é a
-fonte e o checklist virou insumo que corta. Contradição impossível por construção.
+A REGRA-MÃE é ASSIMÉTRICA de propósito: os fatos REBAIXAM o rótulo, nunca o PROMOVEM. Se o
+extrator disse "incerto" e a conta é boa, continua "incerto". Cautela não se desfaz por número.
+E `null` (não avaliável) NÃO capa — só `false` capa. Punir o silêncio do artigo em vez do defeito
+dele foi erro cometido duas vezes esta semana.
 
-No caminho, dois defeitos antigos que só apareceram porque a regra ficou rígida:
-  · `a.get(k, True)` NÃO devolve o padrão quando a chave existe valendo None — a REGRA MÃE
-    ("null é não-reportado, false é não-fez") estava violada DENTRO do motor. Reprovava o
-    melhor RCT possível.
-  · o checklist exigia `efeito_relevante_consistente` E o MCID — mesma pergunta, duas vezes.
-  · `desfecho_duro` (topo) e `desfecho_primario_duro` (bloco meta): o crivo lia só o novo e
-    derrubava a IPD do NEJM, cujo desfecho MORTALIDADE está no campo antigo.
+O prompt do artigo original passa a AVISAR que esses campos deixaram de ser decorativos, com a
+instrução explícita de não inventar limiar para inflar nota de estudo que não mediu.
 
-═══ 4 · O CARD MOSTRAVA UMA NOTA E O BANCO OUTRA (visual_abstract_generator.py) ═══
+═══════════════════════════════════════════════════════════════════════════════
+4 · A REVISÃO VALORIZA A TABELA COMPARATIVA
+═══════════════════════════════════════════════════════════════════════════════
 
-"Mas por que eles dão notas diferentes?" — card "NAC: 3/10", registro "nota 8", mesma linha.
+`tem_tabela_comparativa` estava no schema e ninguém lia — sendo que é a TAREFA #25 da lista dele,
+pendente desde 30/Jul ("Perícia com TABELAS"). Agora vale +1 em `conduta_acionavel` (30% da
+utilidade), igual ao `traz_valores_corte_ou_doses`. VALORIZA, não capa — mesma lógica do NNT.
 
-O Visual Abstract PERGUNTA a nota ao modelo e depois tentava sobrescrevê-la com a do pipeline.
-A intenção estava certa. Mas lia de um `analysis.json` que NÃO EXISTE MAIS — artefato do
-`article_analyzer.py`, aposentado pela LEI 5. Medido: ZERO analysis.json nos 26 pacotes. Logo o
-override nunca rodava e o que ia ao PNG era o palpite do modelo, sozinho.
-Agora lê o `_CANONICO.md`. O modelo escreve os TEXTOS; a NOTA vem de quem tem autoridade.
+═══════════════════════════════════════════════════════════════════════════════
+5 · A COLUNA `descartado` FOI APAGADA DA TABELA
+═══════════════════════════════════════════════════════════════════════════════
 
-═══ 5 · O ÚLTIMO PONTO SEM REDE DE SEGURANÇA (visual_abstract_generator.py) ═══
+Nada jamais escreveu `true`: o ficha_site gravava False fixo e ninguém lia. E depois da decisão de
+04/Ago (artigo reprovado tem a LINHA APAGADA), ela perdeu o último sentido possível.
 
-"Está tudo com o gpt terra?" — a varredura mostrou que não. Extração, perícia, ACRI e áudio já
-eram terra → sonnet-5 → grok. O Visual Abstract chamava o SDK da Anthropic DIRETO, com
-`model="claude-sonnet-5"` chumbado: fora do modelos.py, sem cadeia, sem fallback. Se a Anthropic
-caísse no meio de um lote de 55, o artigo INTEIRO falhava — enquanto todo o resto tinha para onde ir.
+A ORDEM IMPORTOU: a varredura achou SEIS blocos usando a coluna, e o `ALTER TABLE` só veio DEPOIS
+de os seis serem limpos — senão o painel de curadoria e o backfill quebrariam (filtravam
+`descartado=eq.false`) e o publicador também (validava o tipo no preflight).
+    ficha_site · publicador · contrato · administrador (×2) · painel_curadoria · backfill
+Tabela agora: 29 colunas.
 
-Agora usa `llm_client.gerar(M.ESCRITA, ...)`, a mesma porta do resto da casa. De quebra saiu o
-retry manual duplicado (3 tentativas, 10s/20s) — o llm_client já faz backoff, timeout e troca de
-provedor.
+═══════════════════════════════════════════════════════════════════════════════
+6 · AS PALAVRAS-CHAVE — dois buracos diferentes, achados em sequência
+═══════════════════════════════════════════════════════════════════════════════
 
-E as mensagens de tela que MENTIAM foram corrigidas: era o "🔍 Extraindo dados via Claude Sonnet
-5..." do Visual Abstract que fazia o dono achar que a EXTRAÇÃO DOS FATOS era sonnet, quando é terra.
+  · TRÊS prompts pediam os termos "EM INGLÊS", com todas as letras. O focused update de
+    dislipidemia do ESC subiu com `dyslipidaemia`, `LDL cholesterol`, `bempedoic acid`. Medido:
+    18 de 18 diretrizes com termo em inglês, só 4 com português. O cardiologista brasileiro
+    digita `dislipidemia` e não achava nada — a diretriz é o documento mais buscado do acervo
+    e era o pior indexado.
+  · o prompt da META não dizia NADA (e o schema pedia o campo). Das 11 publicadas, 7 com inglês
+    e 9 com português — cada uma de um jeito, porque ninguém mandou.
 
-A corrente inteira, medida:
-   classificação   CLASSIFICACAO   luna  → haiku → sonnet-5   (decisão dele; acurácia medida com luna)
-   extração FATOS  EXTRACAO        terra → sonnet-5 → grok
-   perícia         PERICIA         terra → sonnet-5 → grok
-   ACRI/áudio      ESCRITA         terra → sonnet-5 → grok
-   Visual Abstract ESCRITA         terra → sonnet-5 → grok
+Corrigido nos 4 prompts E nos 4 schemas (description). Campo sem instrução é campo preenchido
+a esmo — e a esmo, em inglês.
 
-═══ 6 · AS TRAVAS (teste_motor.py — 40 verdes) ═══
+═══════════════════════════════════════════════════════════════════════════════
+7 · A DIRETRIZ NÃO TEM PORTA — a única exceção da LEI 10
+═══════════════════════════════════════════════════════════════════════════════
 
-  · teste_escada_da_meta ................. 4 crivos, 2 falhas fatais, 2 tetos
-  · teste_bicondicional_nota_e_conduta ... 39 casos, nenhuma contradição
-  · teste_escala_de_aplicabilidade_da_meta  a tabela exata, e o protocolo indo para 4
+*"As diretrizes — precisamos manter esta classificação mas não teremos nenhum impedimento para
+subir. Mesmo com as limitações, é o que tem para hoje."*
 
-Cada uma foi PROVADA por sabotagem: quebrei a regra de propósito e conferi que a trava acusa.
-A do desfecho substituto NÃO mordia (a regra estava duplamente garantida e o teste olhava só o
-número final) — apertei para olhar o degrau, não a nota.
+Não é brecha: para uma meta ruim existe outra melhor, e reter não custa nada ao leitor. Não existe
+"outra diretriz de fibrilação atrial" — existe A diretriz. Se é fraca, o médico precisa saber que
+é fraca E mesmo assim precisa dela, porque é por ela que será cobrado.
 
-═══ O QUE A RÉGUA FEZ COM AS 24 METAS (medido, rodado na máquina dele) ═══
+  · sobe em QUALQUER nota, com pacote completo (ACRI · perícia · visual · áudio)
+  · áudio com ROTEIRO PRÓPRIO: 6-8 min, 900-1.200 palavras (o dobro do artigo), e uma obrigação
+    que os outros não têm — dizer a nota EM VOZ ALTA e traduzir o jargão AGREE
+    ("ninguém de fora leu antes de publicar", "a maior parte é opinião de especialista")
+  · a exceção é SÓ da diretriz: *"ESTA REGRA SÓ VALE PARA DIRETRIZ."*
+Medido: 13 de 31 diretrizes ficavam retidas com nota 4 e 5 — ESC, AHA, ESPEN, NICE.
 
-  distribuição: 9→1 · 8→4 · 7→1 · 6→6 · 5→10 · 4→2
-  média 5,92  ·  publicáveis (≥6): 12 de 24  ·  violações da bicondicional: 0
+═══════════════════════════════════════════════════════════════════════════════
+8 · O PORTÃO PASSA A RETRATAR
+═══════════════════════════════════════════════════════════════════════════════
 
-  4 reprovaram no Degrau 2 — TODAS por misturar ECR com observacional, com a ferramenta dupla
-  (RoB 2 + ROBINS-I) escrita no próprio artigo. O erro do tocilizumabe, 4 vezes em 24.
+Ele publicava e nunca retratava. Um artigo reprovado de 8 para 5 saía para _RECUSADOS no disco e
+CONTINUAVA no banco valendo 8, pronto para ir ao ar — o inverso exato da LEI 10. Foi assim que a
+contradição `nota 9 · muda_conduta NÃO` reapareceu depois de a gente matá-la: era linha velha.
+Agora o `publicador` apaga a linha antiga quando o contrato recusa (opção A, decisão dele).
 
-  E a fotografia da literatura: só ECR de baixo risco 5/24 · Trim-and-Fill 1/24 · TSA 2/24.
+═══════════════════════════════════════════════════════════════════════════════
+9 · O CARIMBO DO STAGING SÓ VIGIAVA OS PROMPTS
+═══════════════════════════════════════════════════════════════════════════════
 
-Decisão do dono, registrada como LEI 10 no CLAUDE.md:
-"CardioDaily publica muito menos e reprova muito mais — ESTA É A REGRA!"
+Ele rodou a Chave 2 depois de a régua da meta ser reescrita e a rodada terminou em SEGUNDOS —
+"reusado (staging pronto)" nos 24. Desconfiou sozinho: *"foi muito rápido, está certo isso?"*.
+Não estava: nenhum PROMPT tinha mudado, o que mudou foi o MOTOR — e o motor não estava no carimbo.
+Republicou as notas da régua velha. Agora `versoes_atuais` carimba também `notas_prototipo.py` e
+`analise.py`. AGRAVANTE MEU: numa auditoria que ELE pediu, conferi prompts, schemas, redatores,
+bateria e cadeias — e não conferi o carimbo, que era o que decidia se a rodada faria algo.
 
-═══ O QUE ESTE COMMIT NÃO RESOLVE ═══
+═══════════════════════════════════════════════════════════════════════════════
+AS TRAVAS — 48 verdes, cada uma PROVADA POR SABOTAGEM
+═══════════════════════════════════════════════════════════════════════════════
 
-  · o `analise_meta_prompt.md` mudou → os 24 pacotes têm carimbo velho e serão reanalisados
-  · lentidão: 129s/artigo (perícia 65s · PDF 60s · visual 30s · áudio 27s). O conserto do
-    Visual Abstract tira ~30s; faltam o PDF (WeasyPrint sobe do zero a cada artigo) e o
-    paralelismo entre artigos
-  · 2 pacotes órfãos no STAGING de rodadas antigas, sem `tipo_documento`
+  teste_diretriz_nao_tem_porta ......... porta volta → 30 falhas · exceção vaza → 12 falhas
+  teste_keywords_em_portugues .......... 4 prompts + 4 schemas
+  teste_ficha_sem_contradicao .......... tipo · mês · gancho (as 3 sabotagens mordem)
+  teste_contrato_espelha_a_tabela ...... a coluna morta não renasce
+  teste_independencia_editorial ........ desconto zerado → 5 falhas
+  teste_mcid_confere_a_conta ........... rótulo aceito de volta → 5 falhas
+  teste_revisao_valoriza_tabela ........ valoriza sem punir quem não tem
+  teste_carimbo_ve_o_motor ............. carimbo cego → 2 falhas
 
-Bateria: APROVADO · 40 travas
+Quebrei cada regra de propósito e conferi que a bateria acusa. Trava que não morde não é trava.
+
+═══════════════════════════════════════════════════════════════════════════════
+O QUE ESTE COMMIT NÃO RESOLVE
+═══════════════════════════════════════════════════════════════════════════════
+
+  · NADA disto rodou com dado real ainda. É "testei aqui": função pura, fatos de mentira.
+    O carimbo mudou → as 24 metas e as 31 diretrizes serão REANALISADAS na próxima Chave 2.
+  · `achados_principais` (original) e `temas_principais`/`o_que_ensina` (revisão) seguem órfãos —
+    são texto que o redator talvez use pelo contexto. NÃO MEDI, então não afirmo.
+  · lentidão: 129s/artigo. O Visual Abstract tirou ~30s; faltam o PDF (WeasyPrint sobe do zero
+    a cada artigo) e o paralelismo entre artigos.
+  · tarefa #37 (PROVA DA EXTRAÇÃO) continua aberta — e ficou mais urgente: a régua agora depende
+    de 9 campos de MCID que só o extrator produz.
+
+Bateria: APROVADO · 48 travas · Tabela: 29 colunas
