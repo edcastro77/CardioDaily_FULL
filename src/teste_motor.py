@@ -1836,6 +1836,165 @@ def teste_revisao_valoriza_tabela():
     checa("revisão: 'tem_tabela_comparativa' está no schema", "tem_tabela_comparativa" in q)
     return "tabela comparativa: +1 em conduta_acionavel, sem punir quem não tem"
 
+
+def teste_mcid_so_onde_faz_sentido():
+    """O bloco de RELEVÂNCIA CLÍNICA existe em ORIGINAL e META — e NÃO em diretriz/revisão.
+
+    ═══ DECISÃO DO DR. EDUARDO, 05/Ago — "OPÇÃO A" ═══
+
+    Ele perguntou se os 9 campos de MCID seriam extraídos nos QUATRO schemas. A medição mostrou:
+        ORIGINAL .. 12 campos, completo        DIRETRIZ .. não tem o bloco
+        META ...... 9 campos (faltavam 3)      REVISÃO ... não tem o bloco
+
+    A META ganhou os 3 que faltavam (`mcid_fonte_metodo`, `para_desfecho_duro`,
+    `ic_sustenta_relevancia`): uma meta TEM efeito agregado com magnitude e IC, a pergunta se
+    aplica a ela inteira.
+
+    DIRETRIZ e REVISÃO ficaram DE FORA, e isto é decisão, não esquecimento. Elas não têm UM
+    efeito: uma diretriz tem dezenas de recomendações, cada uma com seu desfecho e sua magnitude.
+    Obrigar o modelo a responder "qual o efeito_observado?" faria com que ele escolhesse UMA
+    recomendação arbitrária para representar o documento — e o motor caparia a nota da diretriz
+    inteira com base nesse recorte. É a mesma classe de erro que derrubou a IPD de betabloqueador
+    do NEJM para 4/10: **o instrumento não serve para o objeto**.
+
+    E as duas já têm a pergunta equivalente, na granularidade certa:
+        REVISÃO  → `traz_magnitude_efeito` ("trouxe o número ou só o adjetivo?")
+        DIRETRIZ → `riscos_beneficios_considerados` + os tetos de % nível C e Classe I em nível C
+
+    Esta trava existe para que ninguém "complete" os 4 schemas achando que é simetria.
+    """
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import analise as A
+
+    DOZE = ["desfecho_primario", "tipo_desfecho", "efeito_observado", "mcid_reportado",
+            "mcid_valor", "mcid_fonte_metodo", "para_desfecho_duro", "efeito_excede_limiar",
+            "ic_sustenta_relevancia", "ic_exclui_beneficio_relevante", "classificacao",
+            "frase_chave"]
+
+    # ── TEM: original e meta, com os 12 ──
+    for nome in ("SCHEMA_FATOS", "SCHEMA_FATOS_META"):
+        rc = (getattr(A, nome)["properties"].get("relevancia_clinica") or {}).get("properties") or {}
+        checa(f"{nome}: tem o bloco relevancia_clinica", bool(rc))
+        falta = [c for c in DOZE if c not in rc]
+        checa(f"{nome}: os 12 campos do MCID", not falta, f"faltam {falta}")
+        prompt = "analise_prompt.md" if nome == "SCHEMA_FATOS" else "analise_meta_prompt.md"
+        t = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), prompt),
+                 encoding="utf-8").read()
+        mudos = [c for c in DOZE if c not in t]
+        checa(f"{prompt}: explica os 12 campos", not mudos, f"não cita {mudos}")
+
+    # ── NÃO TEM, DE PROPÓSITO: diretriz e revisão ──
+    for nome, alternativa in (("SCHEMA_FATOS_DIRETRIZ", "riscos_beneficios_considerados"),
+                              ("SCHEMA_FATOS_REVISAO", "traz_magnitude_efeito")):
+        s = getattr(A, nome)
+        checa(f"{nome}: NÃO tem relevancia_clinica (opção A, 05/Ago)",
+              "relevancia_clinica" not in s["properties"],
+              "o bloco foi acrescentado: um documento multi-recomendação não tem UM efeito, e o "
+              "motor caparia a nota inteira por um recorte arbitrário")
+        # e a pergunta equivalente TEM de existir — senão a dimensão some de vez
+        todos = []
+        def varre(d):
+            for k, v in (d.get("properties") or {}).items():
+                todos.append(k)
+                if isinstance(v, dict) and v.get("type") == "object":
+                    varre(v)
+        varre(s)
+        checa(f"{nome}: mantém o equivalente '{alternativa}'", alternativa in todos,
+              "sem MCID e sem o equivalente, a magnitude do efeito sumiu do tipo")
+    return "MCID em ORIGINAL e META (12 campos) · diretriz e revisão com o equivalente"
+
+
+def teste_mcid_cardiodaily():
+    """QUANDO O ARTIGO CALA, O CARDIODAILY APLICA O LIMIAR DELE (opção B, 05/Ago/2026).
+
+    ═══ O QUE A MEDIÇÃO MOSTROU, ANTES DE GASTAR UM CENTAVO ═══
+    Nas 24 meta-análises do lote:
+        mcid_reportado = false ........... 21 de 24
+        efeito_excede_limiar = null ...... 22 de 24
+        ic_sustenta_relevancia = null .... 24 de 24   ← NUNCA respondido
+
+    Os tetos 6 e 7 da régua nova eram DECORATIVOS: `null` não capa (de propósito) e o extrator
+    respondia `null` corretamente, porque **21 de 24 metas não dizem o que consideram
+    clinicamente relevante**. Não era falha do extrator: é a fotografia da literatura.
+
+    Decisão dele: quem decide o que importa para o paciente é o cardiologista, não o autor.
+    Os limiares vivem em `mcid_cardiodaily.py` — números, não código de motor.
+
+    DUAS REGRAS QUE ESTA TRAVA GUARDA:
+      · a régua da casa entra no SILÊNCIO do artigo, NUNCA por cima do que ele mediu;
+      · se a casa mediu, a nota não é punida por "sem limiar declarado" — seria cobrar duas
+        vezes a mesma ausência.
+    """
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import mcid_cardiodaily as MC
+
+    # ── a tabela existe e tem números de verdade ──
+    checa("MCID casa: ARR/ano relevante é 1,0%", MC.ARR_ANO_RELEVANTE == 1.0,
+          f"veio {MC.ARR_ANO_RELEVANTE} — é a régua dele, não muda sozinha")
+    checa("MCID casa: NNT impactante = 25 (valoriza, não é régua)", MC.NNT_IMPACTANTE == 25)
+    for chave in ("ldl", "pas", "feve", "nt-probnp", "kccq", "tc6m", "vo2", "lp(a)"):
+        v = MC.LIMIAR_SUBSTITUTO.get(chave)
+        checa(f"MCID casa: limiar de '{chave}' existe e é > 0", v and v[0] > 0, f"veio {v}")
+
+    # ── reconhece o desfecho pelo NOME, escrito como o extrator escreve ──
+    for nome, esperado in (("LDL-colesterol", 30.0), ("NT-proBNP aos 12 meses", 30.0),
+                           ("KCCQ-OSS", 5.0), ("teste de caminhada de 6 minutos", 30.0),
+                           ("pressão arterial sistólica", 5.0)):
+        lim = MC.limiar_do_desfecho(nome)
+        checa(f"MCID casa: reconhece '{nome[:26]}'", lim and lim[0] == esperado,
+              f"veio {lim}")
+    checa("MCID casa: NÃO inventa limiar para desfecho desconhecido",
+          MC.limiar_do_desfecho("escore de fragilidade de Rockwood") is None,
+          "limiar inventado é pior que limiar ausente")
+
+    # ── contínuo que casa com a tabela É substituto (o furo do LDL) ──
+    checa("MCID casa: LDL declarado como 'continuo' É substituto",
+          MC.eh_substituto("continuo", "LDL-colesterol"),
+          "olhar só o tipo_desfecho deixava LDL chegar a teto 10")
+    checa("MCID casa: mortalidade NÃO é substituto",
+          not MC.eh_substituto("tempo_ate_evento", "mortalidade total"))
+
+    # ── o motor aplica: desfecho duro ──
+    def duro(arr, ic, anos):
+        return {"desfecho_duro": True, "relevancia_clinica": {
+            "classificacao": "robusto", "desfecho_primario": "mortalidade total",
+            "tipo_desfecho": "tempo_ate_evento", "mcid_reportado": False,
+            "arr_pct": arr, "arr_ic_inf_pct": ic, "seguimento_anos": anos}}
+    t, _ = N.mcid_conferido(duro(3.0, 2.2, 1.0))
+    checa("MCID casa: ARR 3,0%/ano com IC 2,2% → sem teto", t == 10, f"veio {t}")
+    t, _ = N.mcid_conferido(duro(0.8, 0.2, 3.0))
+    checa("MCID casa: ARR 0,27%/ano → teto 6", t <= 6, f"veio {t}")
+    t, _ = N.mcid_conferido(duro(2.4, 1.8, 2.0))
+    checa("MCID casa: ponto passa, IC não sustenta → teto 7", t == 7, f"veio {t}")
+
+    # ── e substituto: mede, mas o teto 8 continua ──
+    sub = {"relevancia_clinica": {"classificacao": "robusto", "desfecho_primario": "LDL-colesterol",
+                                  "tipo_desfecho": "continuo", "mcid_reportado": False,
+                                  "delta_substituto": 42.0}}
+    t, mot = N.mcid_conferido(sub)
+    checa("MCID casa: substituto medido continua com teto 8", t == 8, f"veio {t}")
+    checa("MCID casa: e o motivo cita o limiar da casa",
+          any("limiar CardioDaily" in m for m in mot), mot)
+
+    # ── A REGRA-MÃE 1: não entra por cima do que o ARTIGO mediu ──
+    do_artigo = {"desfecho_duro": True, "relevancia_clinica": {
+        "classificacao": "robusto", "desfecho_primario": "mortalidade total",
+        "tipo_desfecho": "tempo_ate_evento", "mcid_reportado": True, "mcid_valor": "ARR 5%",
+        "efeito_excede_limiar": False,        # o ARTIGO julgou: não excede
+        "arr_pct": 9.0, "arr_ic_inf_pct": 8.0, "seguimento_anos": 1.0}}  # e a casa acharia que sim
+    t, _ = N.mcid_conferido(do_artigo)
+    checa("MCID casa: o limiar DO ARTIGO prevalece sobre o da casa", t <= 6,
+          f"veio {t} — a régua da casa entra no silêncio, não por cima do autor")
+
+    # ── A REGRA-MÃE 2: sem número, a casa não mede (e o silêncio não vira teto) ──
+    t, mot = N.mcid_conferido({"desfecho_duro": True, "relevancia_clinica": {
+        "classificacao": "robusto", "desfecho_primario": "mortalidade", "mcid_reportado": False}})
+    checa("MCID casa: sem número, a casa NÃO inventa medida",
+          not any("limiar CardioDaily" in m for m in mot), mot)
+    return "limiares da casa: ARR ≥1%/ano + 20 substitutos · entram só no silêncio do artigo"
+
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,
               teste_tetos_da_lei_0, teste_teto_estatistico, teste_rigor_conhece_o_desenho,
@@ -1859,7 +2018,8 @@ if __name__ == "__main__":
               teste_diretriz_nao_tem_porta, teste_keywords_em_portugues,
               teste_ficha_sem_contradicao, teste_contrato_espelha_a_tabela,
               teste_independencia_editorial, teste_mcid_confere_a_conta,
-              teste_revisao_valoriza_tabela]
+              teste_revisao_valoriza_tabela, teste_mcid_so_onde_faz_sentido,
+              teste_mcid_cardiodaily]
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:
         antes = len(falhas)

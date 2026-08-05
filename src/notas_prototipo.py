@@ -255,11 +255,78 @@ TETO_MCID_SURROGATE    = 8   # rótulo alto sobre desfecho substituto
 _SURROGATE = ("surrogate", "biomarcador", "biomarker", "prom", "substituto")
 
 
+def _limiar_cardiodaily(a):
+    """Quando o ARTIGO não declara MCID, o CARDIODAILY aplica o SEU (opção B, 05/Ago).
+
+    ═══ POR QUE ═══
+    Medido nas 24 metas: `mcid_reportado = false` em 21, `efeito_excede_limiar = null` em 22,
+    `ic_sustenta_relevancia = null` em 24 de 24 — NUNCA respondido. Os tetos 6 e 7 da régua nova
+    eram decorativos, porque `null` não capa (de propósito) e o extrator não tinha contra o que
+    comparar. **21 de 24 meta-análises não dizem o que consideram clinicamente relevante.**
+
+    Decisão do Dr. Eduardo: quem decide o que importa para o paciente é o cardiologista, não o
+    autor do artigo. Os limiares vivem em `mcid_cardiodaily.py` — um arquivo de NÚMEROS, que ele
+    edita sem tocar em motor.
+
+    Devolve (excede, ic_sustenta, explicacao) — cada um True/False/None. `None` continua sendo
+    "não dá para saber", e continua NÃO capando: aqui a gente só preenche o silêncio quando TEM
+    o número. Sem número, o silêncio permanece.
+    """
+    try:
+        import mcid_cardiodaily as MC
+    except Exception:
+        return None, None, ""
+    rc = a.get("relevancia_clinica") or {}
+    td = (rc.get("tipo_desfecho") or "").strip().lower()
+    nome = rc.get("desfecho_primario") or ""
+
+    # ── DESFECHO DURO: a régua é a ARR POR ANO ──
+    duro = bool(a.get("desfecho_duro")) or td in ("binario", "tempo_ate_evento", "composto")
+    if duro and not MC.eh_substituto(td, nome):
+        arr = _n(rc.get("arr_pct"))
+        anos = _n(rc.get("seguimento_anos")) or 1.0
+        if arr is None or anos <= 0:
+            return None, None, ""
+        arr_ano = abs(arr) / anos
+        excede = arr_ano >= MC.ARR_ANO_RELEVANTE
+        # o IC sustenta se o limite INFERIOR (o mais conservador) também passa do limiar
+        ic_inf = _n(rc.get("arr_ic_inf_pct"))
+        sustenta = None if ic_inf is None else (abs(ic_inf) / anos) >= MC.ARR_ANO_RELEVANTE
+        txt = (f"limiar CardioDaily p/ desfecho duro: ARR {arr_ano:.2f}%/ano "
+               f"{'≥' if excede else '<'} {MC.ARR_ANO_RELEVANTE}%/ano")
+        return excede, sustenta, txt
+
+    # ── DESFECHO SUBSTITUTO: a tabela de limiares consagrados ──
+    lim = MC.limiar_do_desfecho(nome)
+    if not lim:
+        return None, None, ""
+    valor, unidade, fonte = lim
+    delta = _n(rc.get("delta_substituto"))
+    if delta is None:
+        return None, None, ""
+    excede = abs(delta) >= valor
+    txt = (f"limiar CardioDaily p/ {nome[:40]}: Δ {abs(delta):g} {unidade} "
+           f"{'≥' if excede else '<'} {valor:g} ({fonte[:40]})")
+    return excede, None, txt
+
+
 def mcid_conferido(a):
     """Confere a CONTA do MCID contra o rótulo. Devolve (teto, [motivos])."""
-    rc = a.get("relevancia_clinica") or {}
+    rc = dict(a.get("relevancia_clinica") or {})
     c = (rc.get("classificacao") or "").strip().lower()
     teto, motivos = 10, []
+
+    # ═══ 05/Ago — O ARTIGO CALOU? O CARDIODAILY RESPONDE (opção B) ═══
+    # Só preenche o que estava em `null`: se o extrator conseguiu julgar contra o limiar DO ARTIGO,
+    # aquilo vale — o autor sabe do desfecho dele. O limiar da casa entra no SILÊNCIO, não por cima.
+    if rc.get("efeito_excede_limiar") is None or rc.get("ic_sustenta_relevancia") is None:
+        _ex, _sus, _txt = _limiar_cardiodaily({**a, "relevancia_clinica": rc})
+        if _txt:
+            if rc.get("efeito_excede_limiar") is None and _ex is not None:
+                rc["efeito_excede_limiar"] = _ex
+            if rc.get("ic_sustenta_relevancia") is None and _sus is not None:
+                rc["ic_sustenta_relevancia"] = _sus
+            motivos.append(_txt)
 
     # 1 · o efeito passa do limiar? (o fato manda no rótulo)
     if rc.get("efeito_excede_limiar") is False:
@@ -270,14 +337,31 @@ def mcid_conferido(a):
         teto = min(teto, TETO_MCID_IC_NAO_SUSTENTA)
         motivos.append("o efeito pontual excede o limiar, mas o IC 95% não sustenta a relevância")
     # 3 · rótulo alto SEM limiar declarado é opinião, não medida
-    if c in ("robusto", "provavel") and rc.get("mcid_reportado") is False and not rc.get("mcid_valor"):
+    #     ⚠️ 05/Ago: NÃO dispara se o limiar do CARDIODAILY foi aplicado com sucesso. Se a casa
+    #     mediu contra a régua dela (`mcid_cardiodaily.py`), a relevância deixou de ser juízo —
+    #     virou medida, só que com o nosso metro em vez do metro do autor. Punir aí seria cobrar
+    #     duas vezes a mesma ausência: o artigo não declarou, e nós resolvemos.
+    _casa_mediu = any("limiar CardioDaily" in m for m in motivos)
+    if (c in ("robusto", "provavel") and rc.get("mcid_reportado") is False
+            and not rc.get("mcid_valor") and not _casa_mediu):
         teto = min(teto, TETO_MCID_SEM_LIMIAR)
         motivos.append(f"'{c}' sem MCID/limiar declarado — é juízo, não medida")
     # 4 · rótulo alto sobre desfecho SUBSTITUTO
+    #     ⚠️ 05/Ago: olhar só o `tipo_desfecho` deixava LDL passar. O extrator escreve
+    #     `tipo_desfecho: "continuo"` para LDL, PA, FEVE, KCCQ — o que é verdade e não diz nada
+    #     sobre ser substituto. Quem sabe é o NOME do desfecho, e o `mcid_cardiodaily` tem a
+    #     tabela: contínuo que casa com a lista de substitutos É substituto.
+    #     Pego ao testar: 'LDL −42 mg/dL' chegava a teto 10.
     td = (rc.get("tipo_desfecho") or "").strip().lower()
-    if c in ("robusto", "provavel") and any(s in td for s in _SURROGATE):
+    _nome = rc.get("desfecho_primario") or ""
+    try:
+        import mcid_cardiodaily as _MC
+        _eh_sub = _MC.eh_substituto(td, _nome)
+    except Exception:
+        _eh_sub = any(s in td for s in _SURROGATE)
+    if c in ("robusto", "provavel") and _eh_sub:
         teto = min(teto, TETO_MCID_SURROGATE)
-        motivos.append(f"desfecho substituto ({td}) não sustenta '{c}'")
+        motivos.append(f"desfecho substituto ({_nome[:30] or td}) não sustenta '{c}'")
     return teto, motivos
 
 

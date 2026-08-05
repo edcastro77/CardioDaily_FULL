@@ -227,6 +227,39 @@ Para escalas/PROM, procure MCID, MID, minimal important difference, responder th
 Para desfecho DURO (morte, IAM, AVC, hospitalização por IC, sangramento), NÃO force MCID de escala — use diferença
 absoluta de risco, NNT/NNH e o limiar GRADE. Se o MCID/limiar não for reportado, escreva "não reportado" (não invente).
 
+### OS NÚMEROS CRUS — o CardioDaily aplica o limiar DELE quando o artigo cala (05/Ago/2026)
+
+Medido nas 24 meta-análises do lote: **21 de 24 não declaram limiar de importância clínica.**
+`efeito_excede_limiar` voltava `null` em 22, e `ic_sustenta_relevancia` em 24 de 24 — nunca
+respondido. Você estava certo em responder `null`: sem limiar do artigo, não havia contra o que
+comparar.
+
+Decisão do Dr. Eduardo: **quem decide o que importa para o paciente é o cardiologista, não o autor
+do artigo.** Quando o artigo cala, o motor aplica a régua da casa (`mcid_cardiodaily.py`):
+
+    DESFECHO DURO ....... ARR ≥ 1,0 %/ano é relevante
+    LDL ................. ≥30 mg/dL      ·  Lp(a) ......... ≥25 %
+    PA sistólica ........ ≥5 mmHg        ·  FEVE .......... ≥5 pontos %
+    NT-proBNP ........... ≥30 %          ·  KCCQ .......... ≥5 pontos
+    6 min de caminhada .. ≥30 metros     ·  VO2 pico ...... ≥1,0 mL/kg/min
+
+**Para isso ele precisa dos NÚMEROS, não do seu julgamento.** Preencha sempre que o artigo trouxer:
+
+  `arr_pct` — a redução ABSOLUTA de risco, em pontos percentuais (ex.: 2.4 para "de 8,1% para
+      5,7%"). Se o artigo só dá RR/HR e as taxas dos dois braços, CALCULE a diferença.
+  `arr_ic_inf_pct` — o limite INFERIOR do IC95% da ARR, o mais conservador. É ele que decide se
+      o IC SUSTENTA a relevância ou se só o ponto animou.
+  `seguimento_anos` — mediana de seguimento em anos (18 meses = 1.5). Sem isto não dá para
+      converter a ARR em ARR/ano, e ARR sem tempo não significa nada.
+  `delta_substituto` + `delta_substituto_unidade` — para desfecho substituto: a variação absoluta
+      e a unidade (mg/dL · mmHg · pontos · metros · % · mL/kg/min).
+
+⚠️ Se o artigo NÃO traz o número, deixe `null`. **Não estime, não converta de gráfico, não deduza.**
+Número inventado aqui vira nota inventada — e a régua da casa só entra no SILÊNCIO do artigo, nunca
+por cima do que ele mediu. Se o artigo declarou o próprio MCID, o dele vale: o autor conhece o
+desfecho dele melhor que a nossa tabela.
+
+
 ═══ REGRA DO NNT/NNH — NÃO EXISTE "SEMPRE CALCULE" (04/Ago/2026) ═══
 
 NNT = 1 / ARR. Logo o NNT SÓ EXISTE se as TRÊS coisas estiverem declaradas:

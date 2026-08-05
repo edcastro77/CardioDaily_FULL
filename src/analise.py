@@ -112,6 +112,17 @@ SCHEMA_FATOS = {
             "type": "object",
             "properties": {
                 "desfecho_primario": _S, "tipo_desfecho": _S, "efeito_observado": _S,
+            # ═══ 05/Ago — OS NÚMEROS CRUS, para o motor aplicar o LIMIAR DO CARDIODAILY ═══
+            # Medido: 21 de 24 metas NÃO declaram MCID. Sem limiar do artigo, o extrator respondia
+            # `efeito_excede_limiar: null` — corretamente, pois não tinha contra o que comparar — e
+            # os tetos 6 e 7 nunca disparavam. Decisão do Dr. Eduardo (opção B): quando o artigo
+            # cala, o CardioDaily aplica O SEU limiar (`mcid_cardiodaily.py`).
+            # Para isso o motor precisa dos NÚMEROS, não do julgamento:
+            "arr_pct": _NUM,               # redução ABSOLUTA de risco, em pontos percentuais
+            "arr_ic_inf_pct": _NUM,        # limite INFERIOR do IC95% da ARR (o mais conservador)
+            "seguimento_anos": _NUM,       # para converter a ARR em ARR/ano
+            "delta_substituto": _NUM,      # a variação do desfecho substituto (valor absoluto)
+            "delta_substituto_unidade": _S,  # mg/dL · mmHg · pontos · metros · % · mL/kg/min
                 "mcid_reportado": _B, "mcid_valor": _S, "mcid_fonte_metodo": _S,
                 "para_desfecho_duro": _S,
                 "efeito_excede_limiar": {"type": ["boolean", "null"]},
@@ -276,6 +287,28 @@ SCHEMA_FATOS_META = {
                 "desfecho_primario": _S, "tipo_desfecho": _S, "efeito_observado": _S,
                 "mcid_reportado": _B, "mcid_valor": _S,
                 "efeito_excede_limiar": _B3,
+            # ═══ 05/Ago — OS 3 QUE FALTAVAM PARA A META TER O MCID COMPLETO ═══
+            # A varredura dos 4 schemas mostrou que a meta tinha 9 dos 12 campos de relevância
+            # clínica. Uma meta-análise TEM efeito agregado com magnitude e IC — a pergunta do MCID
+            # se aplica a ela inteira, e o motor agora CONFERE a conta (não aceita só o rótulo).
+            # Diretriz e revisão narrativa NÃO ganham este bloco (decisão dele, opção A, 05/Ago):
+            # elas não têm UM efeito, e forçar a pergunta faria o modelo escolher uma recomendação
+            # arbitrária para representar o documento inteiro — o erro do instrumento errado.
+            # ═══ 05/Ago — OS NÚMEROS CRUS, para o motor aplicar o LIMIAR DO CARDIODAILY ═══
+            # Medido: 21 de 24 metas NÃO declaram MCID. Sem limiar do artigo, o extrator respondia
+            # `efeito_excede_limiar: null` — corretamente, pois não tinha contra o que comparar — e
+            # os tetos 6 e 7 nunca disparavam. Decisão do Dr. Eduardo (opção B): quando o artigo
+            # cala, o CardioDaily aplica O SEU limiar (`mcid_cardiodaily.py`).
+            # Para isso o motor precisa dos NÚMEROS, não do julgamento:
+            "arr_pct": _NUM,               # redução ABSOLUTA de risco, em pontos percentuais
+            "arr_ic_inf_pct": _NUM,        # limite INFERIOR do IC95% da ARR (o mais conservador)
+            "seguimento_anos": _NUM,       # para converter a ARR em ARR/ano
+            "delta_substituto": _NUM,      # a variação do desfecho substituto (valor absoluto)
+            "delta_substituto_unidade": _S,  # mg/dL · mmHg · pontos · metros · % · mL/kg/min
+            "mcid_fonte_metodo": _S,       # fonte (revisão | estudo prévio | diretriz | consenso)
+                                           # + método (anchor-based | distribution-based)
+            "para_desfecho_duro": _S,      # diferença absoluta agregada, NNT/NNH e tamanho GRADE
+            "ic_sustenta_relevancia": _B3, # o IC95% INTEIRO fica além do limiar, ou só o ponto?
                 "ic_exclui_beneficio_relevante": _B3,
                 "classificacao": {"type": "string",
                                   "enum": ["robusto", "provavel", "incerto",

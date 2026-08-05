@@ -297,6 +297,93 @@ nunca têm o mesmo risco basal, e um NNT único aplicado a todos é uma média q
 nenhum. Só use se o próprio artigo o derivar de um risco basal declarado — e diga de qual.
 Se o IC 95% do efeito cruza o nulo, o NNT NÃO SE APLICA.
 
+## A RELEVÂNCIA CLÍNICA — E POR QUE ELA DEIXOU DE SER DECORATIVA (05/Ago/2026)
+
+Até hoje o motor lia UM campo deste bloco: `classificacao`. Você fazia a conta — comparava o
+efeito agregado com o limiar de importância clínica, campo por campo — e o código perguntava só
+"e aí, como você classifica?". **A conta era jogada fora e ficava o rótulo**, que é justamente a
+parte em que um modelo é menos confiável.
+
+Agora o MOTOR CONFERE A SUA CONTA, e ela pode REBAIXAR o seu rótulo:
+
+    efeito_excede_limiar = false ..................... nota no máximo 6
+    excede, mas ic_sustenta_relevancia = false ....... nota no máximo 7
+    'robusto' com mcid_reportado = false ............. nota no máximo 8  (é juízo, não medida)
+    'robusto' sobre desfecho substituto .............. nota no máximo 8
+
+**O caminho inverso NÃO existe.** Se você disser `incerto` e a conta for boa, continua `incerto`.
+Cautela não se desfaz por número.
+
+### OS 12 CAMPOS, e o que cada um quer
+
+  `desfecho_primario` — o desfecho AGREGADO principal da meta (não o de um estudo incluído).
+  `tipo_desfecho` — continuo | binario | tempo_ate_evento | ordinal | composto | biomarcador |
+      PROM | surrogate. Este campo CAPA: `robusto` sobre substituto não passa de 8.
+  `efeito_observado` — o efeito agregado ABSOLUTO e relativo, com IC95%
+      (ex.: "RR 0,82; IC95% 0,74–0,91; ARR 2,1%").
+
+  `mcid_reportado` — a REVISÃO declara um limiar de importância clínica? `false` se não declara.
+      **Não invente um limiar plausível**: inventar aqui infla a nota de uma meta que não mediu.
+  `mcid_valor` — o valor + unidade. "não reportado" se ausente.
+  `mcid_fonte_metodo` — de onde veio o limiar (a própria revisão | estudo prévio | diretriz |
+      consenso) e por qual método (anchor-based | distribution-based | consenso | não informado).
+      "n/a" se não há limiar. Um MCID tirado de consenso vale menos que um ancorado em paciente.
+
+  `para_desfecho_duro` — SÓ para binário/tempo-até-evento: a diferença ABSOLUTA agregada, o
+      NNT/NNH e o tamanho de efeito no critério GRADE (pequeno | moderado | importante).
+      "n/a" se contínuo ou PROM.
+
+  `efeito_excede_limiar` — o efeito PONTUAL agregado passa do limiar? `null` se não avaliável.
+  `ic_sustenta_relevancia` — o IC95% **INTEIRO** fica além do limiar na direção favorável?
+      `false` se cruza o limiar ou a nulidade. É a diferença entre "o ponto animou" e "a evidência
+      sustenta" — e numa meta ela aparece muito: o IC agregado exclui o nulo e ainda assim não
+      alcança o que importa para o paciente.
+  `ic_exclui_beneficio_relevante` — o oposto: o limite MAIS FAVORÁVEL do IC ainda fica AQUÉM do
+      limiar? É o que separa "não achamos efeito" de "provamos que não há efeito relevante".
+
+  `classificacao` — o rótulo final.
+  `frase_chave` — uma frase: foi significativo? foi clinicamente importante? o IC sustenta isso?
+
+⚠️ `null` é "não dá para avaliar" e **NÃO capa nota nenhuma**. Só `false` capa. Confundir os dois
+é punir o silêncio do artigo em vez do defeito dele.
+
+---
+
+
+### OS NÚMEROS CRUS — o CardioDaily aplica o limiar DELE quando o artigo cala (05/Ago/2026)
+
+Medido nas 24 meta-análises do lote: **21 de 24 não declaram limiar de importância clínica.**
+`efeito_excede_limiar` voltava `null` em 22, e `ic_sustenta_relevancia` em 24 de 24 — nunca
+respondido. Você estava certo em responder `null`: sem limiar do artigo, não havia contra o que
+comparar.
+
+Decisão do Dr. Eduardo: **quem decide o que importa para o paciente é o cardiologista, não o autor
+do artigo.** Quando o artigo cala, o motor aplica a régua da casa (`mcid_cardiodaily.py`):
+
+    DESFECHO DURO ....... ARR ≥ 1,0 %/ano é relevante
+    LDL ................. ≥30 mg/dL      ·  Lp(a) ......... ≥25 %
+    PA sistólica ........ ≥5 mmHg        ·  FEVE .......... ≥5 pontos %
+    NT-proBNP ........... ≥30 %          ·  KCCQ .......... ≥5 pontos
+    6 min de caminhada .. ≥30 metros     ·  VO2 pico ...... ≥1,0 mL/kg/min
+
+**Para isso ele precisa dos NÚMEROS, não do seu julgamento.** Preencha sempre que o artigo trouxer:
+
+  `arr_pct` — a redução ABSOLUTA de risco, em pontos percentuais (ex.: 2.4 para "de 8,1% para
+      5,7%"). Se o artigo só dá RR/HR e as taxas dos dois braços, CALCULE a diferença.
+  `arr_ic_inf_pct` — o limite INFERIOR do IC95% da ARR, o mais conservador. É ele que decide se
+      o IC SUSTENTA a relevância ou se só o ponto animou.
+  `seguimento_anos` — mediana de seguimento em anos (18 meses = 1.5). Sem isto não dá para
+      converter a ARR em ARR/ano, e ARR sem tempo não significa nada.
+  `delta_substituto` + `delta_substituto_unidade` — para desfecho substituto: a variação absoluta
+      e a unidade (mg/dL · mmHg · pontos · metros · % · mL/kg/min).
+
+⚠️ Se o artigo NÃO traz o número, deixe `null`. **Não estime, não converta de gráfico, não deduza.**
+Número inventado aqui vira nota inventada — e a régua da casa só entra no SILÊNCIO do artigo, nunca
+por cima do que ele mediu. Se o artigo declarou o próprio MCID, o dele vale: o autor conhece o
+desfecho dele melhor que a nossa tabela.
+
+---
+
 ## O RESULTADO NULO — LEIA ISTO ANTES DE PREENCHER A RELEVÂNCIA CLÍNICA
 
 Esta é a regra mais importante deste bloco, e é a que o CardioDaily errou até 04/Ago/2026.
