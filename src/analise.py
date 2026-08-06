@@ -118,7 +118,12 @@ SCHEMA_FATOS = {
             # os tetos 6 e 7 nunca disparavam. Decisão do Dr. Eduardo (opção B): quando o artigo
             # cala, o CardioDaily aplica O SEU limiar (`mcid_cardiodaily.py`).
             # Para isso o motor precisa dos NÚMEROS, não do julgamento:
-            "arr_pct": _NUM,               # redução ABSOLUTA de risco, em pontos percentuais
+            # ⚠️ 06/Ago — DOIS CAMPOS, PORQUE O ARTIGO REPORTA DE DUAS FORMAS.
+            # `arr_pct` é ACUMULADO (o motor DIVIDE por seguimento_anos para anualizar).
+            # `arr_ano_pct` já é POR ANO (o motor NÃO divide). Preencha UM, nunca os dois.
+            "arr_pct": _NUM,               # ARR ACUMULADA no seguimento, em pontos percentuais
+            "arr_ano_pct": _NUM,           # ARR JÁ POR ANO (diferença de TAXAS de incidência)
+            "arr_ano_ic_inf_pct": _NUM,    # limite INFERIOR do IC95% da ARR/ano
             "arr_ic_inf_pct": _NUM,        # limite INFERIOR do IC95% da ARR (o mais conservador)
             "seguimento_anos": _NUM,       # para converter a ARR em ARR/ano
             "delta_substituto": _NUM,      # a variação do desfecho substituto (valor absoluto)
@@ -300,7 +305,12 @@ SCHEMA_FATOS_META = {
             # os tetos 6 e 7 nunca disparavam. Decisão do Dr. Eduardo (opção B): quando o artigo
             # cala, o CardioDaily aplica O SEU limiar (`mcid_cardiodaily.py`).
             # Para isso o motor precisa dos NÚMEROS, não do julgamento:
-            "arr_pct": _NUM,               # redução ABSOLUTA de risco, em pontos percentuais
+            # ⚠️ 06/Ago — DOIS CAMPOS, PORQUE O ARTIGO REPORTA DE DUAS FORMAS.
+            # `arr_pct` é ACUMULADO (o motor DIVIDE por seguimento_anos para anualizar).
+            # `arr_ano_pct` já é POR ANO (o motor NÃO divide). Preencha UM, nunca os dois.
+            "arr_pct": _NUM,               # ARR ACUMULADA no seguimento, em pontos percentuais
+            "arr_ano_pct": _NUM,           # ARR JÁ POR ANO (diferença de TAXAS de incidência)
+            "arr_ano_ic_inf_pct": _NUM,    # limite INFERIOR do IC95% da ARR/ano
             "arr_ic_inf_pct": _NUM,        # limite INFERIOR do IC95% da ARR (o mais conservador)
             "seguimento_anos": _NUM,       # para converter a ARR em ARR/ano
             "delta_substituto": _NUM,      # a variação do desfecho substituto (valor absoluto)

@@ -673,7 +673,9 @@ def teste_diretriz_exemplar():
     checa("diretriz exemplar: 20% nível C não capa", r["teto_nivel_c"] == 10,
           f"veio {r['teto_nivel_c']}")
     checa("diretriz exemplar: aplicabilidade 10", r["aplic"] == 10, f"veio {r['aplic']}")
-    checa("diretriz exemplar: muda conduta", r["muda_conduta"] == "SIM")
+    # 06/Ago — A DIRETRIZ NÃO RESPONDE "muda conduta", RESPONDE "confie quanto?"
+    checa("diretriz exemplar: RECOMENDADA", r["muda_conduta"] == "RECOMENDADA",
+          f"veio {r['muda_conduta']}")
 
 
 def teste_diretriz_nivel_c():
@@ -809,7 +811,12 @@ def teste_revisao_pode_chegar_a_10():
     checa("revisão usa o motor REVISAO", r["motor"] == "REVISAO", f"veio {r['motor']}")
     checa("revisão exemplar CHEGA a 10", r["aplic"] == 10, f"veio {r['aplic']}")
     checa("revisão exemplar: rigor alto", r["trabalho"] >= 9, f"veio {r['trabalho']}")
-    checa("revisão exemplar: muda conduta", r["muda_conduta"] == "SIM")
+    # 06/Ago — ELE MUDOU ESTA REGRA: *"este termo muda conduta se aplica a um RCT — as revisões
+    # irão me ajudar a ORGANIZAR O CONHECIMENTO"*. A NOTA continua podendo chegar a 10 (decisão
+    # dele de 02/Ago, que segue valendo acima); o que sai é o CAMPO, que faz uma pergunta que a
+    # revisão não responde.
+    checa("revisão NÃO responde 'muda conduta'", r["muda_conduta"].startswith("N/A"),
+          f"veio {r['muda_conduta']} — revisão não testa intervenção, não há conduta a mudar")
     checa("NÃO existe teto por categoria", r["teto_desenho"] == 10, f"veio {r['teto_desenho']}")
     # e a rota não pode jogá-la fora, mesmo com desenho não classificável
     r = N.score(_revisao(desenho="nao_classificavel"))
@@ -1689,6 +1696,224 @@ def teste_contrato_espelha_a_tabela():
         except Exception:
             pass
     return f"colunas mortas fora do código: {', '.join(MORTAS)}"
+
+
+def teste_acri_nao_diz_sim_nao_para_todo_mundo():
+    """BLOCO 7 (LEI 9) — o ACRI é a peça que o ASSINANTE LÊ, e ela mandava SIM/NÃO para todos.
+
+    A varredura de 06/Ago achou, no `acri_prompt.md`:
+        "Depois o título curto · revista · ano · **Nota X/10 · muda conduta SIM/NÃO**."
+
+    Consertar o MOTOR e deixar o PROMPT pedindo SIM/NÃO é o erro que a LEI 9 nomeia: o bloco que
+    sobrou continua rodando, e roda em silêncio. Aqui roda impresso, na frente do assinante.
+    """
+    import os as _os
+    txt = open(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                             "acri_prompt.md"), encoding="utf-8").read()
+    checa("ACRI não pede SIM/NÃO cego", "muda conduta SIM/NÃO**." not in txt,
+          "o prompt ainda manda imprimir SIM/NÃO em diretriz e revisão")
+    for termo in ("RECOMENDADA COM RESSALVAS", "revisão narrativa"):
+        checa(f"ACRI sabe o caso: {termo}", termo in txt, "o prompt não cobre este tipo")
+
+
+def teste_arr_por_ano_nao_e_dividida_de_novo():
+    """06/Ago — TAXA DE INCIDÊNCIA ≠ RISCO CUMULATIVO. São denominadores diferentes.
+
+    ═══ O DEFEITO ═══
+    Existia UM campo, `arr_pct`, e o motor SEMPRE dividia por `seguimento_anos`. Isso está certo
+    para incidência ACUMULADA (denominador em pessoas) e ERRADO para densidade de incidência
+    (denominador em pessoas-TEMPO), onde o "por ano" já está dentro do número.
+
+        acumulada .... "16,3% vs 21,2% em 18,2 meses"       → 4,9 pts ÷ 1,52 = 3,2 %/ano  ✓
+        taxa ......... "141 vs 330 por 100.000 pessoas-ano" → 0,189 %/ano, NÃO dividir
+
+    O número 2,0 é 2,0: nada nele diz qual é. O erro andava nos DOIS sentidos — uma ARR de 2,0%/ano
+    em 5 anos virava 0,4%/ano e reprovava um ensaio que muda conduta; e o inverso aprovava lixo.
+
+    ═══ O QUE FOI MEDIDO ANTES DE CONSERTAR ═══
+    129 pacotes · `arr_pct` preenchido em 8 · dupla divisão em ZERO. O defeito ainda não mordeu.
+    Mas o mecanismo apareceu nos primeiros 20 artigos originais, com as palavras do extrator no
+    JAMA Coffee: *"NNT não calculável, pois não foram fornecidos riscos cumulativos"* — ele tinha
+    "189 por 100.000 pessoas-ano" na mão e desistiu, porque o campo pedia o que o artigo não dava.
+    """
+    def _art(**rc):
+        base = dict(classificacao="robusto", tipo_desfecho="composto",
+                    desfecho_primario="morte CV/IAM/AVC", mcid_reportado=False)
+        base.update(rc)
+        return dict(pergunta="intervencao", desenho="rct", open_label=False, poder_ok=True,
+                    desfecho_duro=True, extrapolavel=True, retrospectivo=False,
+                    desenho_apropriado=True, qualidade_entrada=True, follow_up_completo=True,
+                    eventos_min_grupo=800, falhas_fatais=[], tipo_documento="original",
+                    financiamento_papel="público", relevancia_clinica=base)
+
+    # ── O CASO QUE INVERTIA: 2,0 %/ano num estudo de 5 anos ──
+    # anticoagulação em FA: AVC 1,5%/ano vs 3,5%/ano. A diferença É 2,0 %/ano, EXCEDE o limiar.
+    r = N.score(_art(arr_ano_pct=2.0))
+    checa("ARR/ano de 2,0 excede o limiar (não é dividida)", r["aplic"] >= 9,
+          f"nota={r['aplic']} — a taxa foi dividida de novo e virou 0,4%/ano")
+
+    # o mesmo número, gravado como ACUMULADO em 5 anos, TEM de ser dividido → 0,4%/ano → teto 6
+    r2 = N.score(_art(arr_pct=2.0, seguimento_anos=5.0))
+    checa("a mesma 2,0 ACUMULADA em 5 anos é capada", r2["aplic"] <= 6,
+          f"nota={r2['aplic']} — parou de dividir o acumulado, e isso aprova lixo")
+
+    # ── o JAMA Coffee, com o número que o extrator tinha e não usou ──
+    c = N.score(_art(arr_ano_pct=0.189, tipo_desfecho="tempo_ate_evento",
+                     desfecho_primario="Demência incidente"))
+    checa("Coffee: 0,189 %/ano NÃO excede → teto 6", c["aplic"] <= 6, f"nota={c['aplic']}")
+
+    # ── 06/Ago: A CONTA IMPRESSA PARA O REDATOR TEM DE FECHAR ──
+    # O campo `teto_mcid` do retorno vinha só do teto POR RÓTULO e ignorava a CONTA conferida.
+    # O redator recebia "MCID 10 · rigor 9" e a nota 6 — aritmética que não fecha, com o delator
+    # dizendo o contrário na linha seguinte. Ou ele inventa a explicação, ou desiste.
+    checa("o campo teto_mcid reflete a conta, não só o rótulo", c["teto_mcid"] <= 6,
+          f"campo diz {c['teto_mcid']} e a nota é {c['aplic']} — a conta do veredito não fecha")
+    ver = N.veredito_completo(c)
+    import re as _re
+    m = _re.search(r"MENOR entre:(.+)", ver)
+    if m:
+        nums = [int(x) for x in _re.findall(r"\b(\d{1,2})\b", m.group(1))]
+        checa("algum domínio do veredito produz a nota", nums and min(nums) == c["aplic"],
+              f"domínios {nums} · nota {c['aplic']}")
+
+    # ── o texto do delator diz QUAL base foi usada (auditável) ──
+    _, _, txt = N._limiar_cardiodaily(_art(arr_ano_pct=2.0))
+    checa("o delator declara a base 'taxa/ano'", "taxa/ano" in txt, f"veio {txt!r}")
+    _, _, txt2 = N._limiar_cardiodaily(_art(arr_pct=2.0, seguimento_anos=5.0))
+    checa("e declara a divisão quando é acumulada", "acumulada" in txt2, f"veio {txt2!r}")
+
+    # ── precedência: se vierem os dois (não deviam), o já-anualizado manda ──
+    d = N.score(_art(arr_ano_pct=2.0, arr_pct=2.0, seguimento_anos=5.0))
+    checa("os dois preenchidos: o ARR/ano tem precedência", d["aplic"] >= 9, f"nota={d['aplic']}")
+
+    # ── BLOCO 4 da LEI 9: o PROMPT tem de PEDIR o campo, senão o schema fica vazio ──
+    # Sabotagem de 06/Ago: tirei `arr_ano_pct` do prompt e a bateria PASSOU. Motor certo + schema
+    # certo + prompt calado = campo eternamente null, e a régua vira decoração. Foi exatamente
+    # isto que aconteceu com as palavras-chave da meta (05/Ago): o schema pedia, o prompt não
+    # dizia nada, e cada artigo saiu de um jeito.
+    import os as _os
+    _d = _os.path.dirname(_os.path.abspath(__file__))
+    for _p in ("analise_prompt.md", "analise_meta_prompt.md"):
+        _t = open(_os.path.join(_d, _p), encoding="utf-8").read()
+        checa(f"{_p} pede arr_ano_pct", "`arr_ano_pct`" in _t,
+              "o schema pede e o prompt não fala — campo nasce null")
+        checa(f"{_p} explica pessoas-ano", "pessoas-ano" in _t.lower(),
+              "sem o exemplo do denominador, o modelo não sabe qual campo usar")
+
+    # ── e o schema pede os campos novos, nos DOIS lugares (bloco 4 da LEI 9) ──
+    import analise as _A
+    for nome in ("SCHEMA_FATOS", "SCHEMA_FATOS_META"):
+        s = getattr(_A, nome, None)
+        if s is None:
+            continue
+        # ⚠️ chave EXATA, com aspas. `campo in str(schema)` é frouxo: `arr_ano_pct` é substring de
+        # `arr_ano_pct_off`, e a sabotagem de 06/Ago passou por isso. Trava que não morde não é trava.
+        txt = str(s)
+        for campo in ("arr_ano_pct", "arr_ano_ic_inf_pct"):
+            checa(f"{nome} pede {campo}", f"'{campo}'" in txt or f'"{campo}"' in txt,
+                  "o motor lê um campo que o schema não pede — nasce null para sempre")
+
+
+def teste_diretriz_recomenda_em_vez_de_mudar_conduta():
+    """06/Ago — A DIRETRIZ SEMPRE MUDA ALGO. O QUE VARIA É QUANTO CONFIAR NELA.
+
+    ═══ O CASO, IMPRESSO ═══
+    O Dr. Eduardo mandou o PDF que o CardioDaily JÁ PUBLICOU — "Imagem Vascular na
+    Cardio-Oncologia", statement ESC 2026 — e o veredito na peça dizia:
+
+            min(…) = 6/10          MUDA CONDUTA: NÃO
+
+    No MESMO documento: `aplicável no Brasil 10/10`, e mensagens-chave que são ordens diretas
+    ("faça ECG de 12 derivações e estratificação HFA-ICOS"; "eco basal é recomendado, classe I").
+    A peça mandava fazer cinco coisas e dizia que não mudava conduta.
+
+    ═══ POR QUE A PERGUNTA ERA ERRADA ═══
+    Palavras dele: *"ninguém escreve uma diretriz que não muda nada — então o que muda é o GRAU
+    COM QUE PODEMOS ACREDITAR NELA."* Perguntar se uma diretriz muda conduta é perguntar se chove
+    na chuva. O que o médico precisa é do peso: aquele statement tem 68,8% das recomendações em
+    nível C e metade das Classe I apoiadas em nível C — é isso que o 6 está dizendo.
+
+    ⚠️ NÃO É PORTA. A LEI 10 continua: a diretriz sobe em QUALQUER nota, inclusive NÃO RECOMENDADA.
+    A recomendação avisa; não retém.
+    """
+    r = N.score(_diretriz())
+    checa("diretriz responde com RECOMENDAÇÃO, não com SIM/NÃO",
+          r["muda_conduta"] not in ("SIM", "NÃO"), f"veio {r['muda_conduta']}")
+
+    # ── a escala inteira, nota por nota (é a régua dele; se mudar, tem de ser por decisão dele) ──
+    for nota, esperado in ((10, "RECOMENDADA"), (8, "RECOMENDADA"),
+                           (7, "RECOMENDADA COM RESSALVAS"), (6, "RECOMENDADA COM RESSALVAS"),
+                           (5, "REFERÊNCIA, NÃO AUTORIDADE"), (4, "REFERÊNCIA, NÃO AUTORIDADE"),
+                           (3, "NÃO RECOMENDADA"), (0, "NÃO RECOMENDADA")):
+        checa(f"diretriz nota {nota} → {esperado}",
+              N.recomendacao_da_diretriz(nota) == esperado,
+              f"veio {N.recomendacao_da_diretriz(nota)}")
+
+    # ── o caso real dele: o statement de cardio-oncologia, nota 6 ──
+    checa("statement cardio-oncologia (6) = RECOMENDADA COM RESSALVAS",
+          N.recomendacao_da_diretriz(6) == "RECOMENDADA COM RESSALVAS")
+    checa("e a nota 6 vem com o PORQUÊ, não só o rótulo",
+          "opinião" in N.motivo_da_recomendacao(6))
+
+    # ── A LEI 10: recomendação NÃO É PORTA ──
+    from analisador import decidir_entregaveis
+    pecas, sobe = decidir_entregaveis(3, tipo="diretriz")
+    checa("diretriz NÃO RECOMENDADA ainda sobe (LEI 10)", sobe,
+          "a recomendação virou porta — a exceção da diretriz foi revogada")
+
+
+def teste_revisao_nao_diz_muda_conduta():
+    """06/Ago — A REVISÃO ORGANIZA CONHECIMENTO; ELA NÃO MUDA CONDUTA.
+
+    ═══ O QUE FOI MEDIDO NO LOTE REAL ═══
+    Rodando as 119 revisões, a distribuição das notas saiu assim:
+
+        revisao_narrativa .... 19 em nota 8 · 8 em nota 9   (27 de 48 acima de 7)
+        original ............. 4 em nota 8 · ZERO em 9      (PLATO, TRITON e DAPA-HF em 8)
+
+    Pela bicondicional (04/Ago), as 8 revisões em 9 foram gravadas com `muda_conduta: SIM` — e os
+    três RCTs que mudaram a cardiologia moderna, com `NÃO`. O CardioDaily estava afirmando que uma
+    revisão de fisiopatologia muda a conduta e que o ticagrelor não muda.
+
+    ═══ O QUE ERROU, E O QUE NÃO ERROU ═══
+    A NOTA não errou: ela mede o que o Dr. Eduardo mandou medir em 02/Ago — qualidade da base
+    (viés de seleção) × utilidade prática (conduta acionável, custo Brasil). Uma revisão pode e
+    deve chegar a 10 quando organiza excepcionalmente bem. Ele reafirmou isso hoje:
+    *"a pontuação reflete a qualidade do material utilizado e a quantidade de informações
+    aplicáveis que ela de fato entrega"*.
+
+    O que errou foi o CAMPO. `muda_conduta` responde a uma pergunta de INTERVENÇÃO — houve braço,
+    houve desfecho, a prática deve mudar? Uma revisão não tem nada disso. Nota 10 nela significa
+    "organiza excepcionalmente bem", não "prescreva".
+
+    Fui EU quem aplicou a bicondicional aqui em 04/Ago sem varrer o que ela significaria numa
+    revisão — a LEI 9, que ele escreveu depois de eu cometer exatamente este erro.
+
+    ⚠️ A BICONDICIONAL NÃO FOI ENFRAQUECIDA. Ela continua inteira onde nasceu: intervenção e
+    diretriz. Esta trava reprova nos DOIS sentidos.
+    """
+    r = N.score(_revisao())
+    checa("revisão: nota pode chegar a 10 (decisão de 02/Ago, mantida)", r["aplic"] == 10,
+          f"veio {r['aplic']} — o teto dele foi revogado sem ele pedir")
+    checa("revisão: muda_conduta é N/A", r["muda_conduta"].startswith("N/A"),
+          f"veio {r['muda_conduta']}")
+
+    # e uma revisão FRACA também não diz "NÃO muda conduta" — ela simplesmente não responde
+    fraca = N.score(_revisao(conduta_acionavel=False, traz_valores_corte_ou_doses=False))
+    checa("revisão fraca também não responde a pergunta", fraca["muda_conduta"].startswith("N/A"),
+          f"veio {fraca['muda_conduta']} — 'NÃO' insinua que a pergunta cabia")
+
+    # ── O OUTRO SENTIDO: a bicondicional segue INTEIRA na intervenção ──
+    rct = dict(pergunta="intervencao", desenho="rct", open_label=False, poder_ok=True,
+               desfecho_duro=True, extrapolavel=True, retrospectivo=False, desenho_apropriado=True,
+               qualidade_entrada=True, follow_up_completo=True, eventos_min_grupo=800,
+               falhas_fatais=[], tipo_documento="original", financiamento_papel="público",
+               relevancia_clinica=dict(classificacao="robusto", tipo_desfecho="composto",
+                                       desfecho_primario="morte CV/IAM/AVC", arr_pct=1.9,
+                                       seguimento_anos=1.0, mcid_reportado=False))
+    s = N.score(rct)
+    checa("RCT nota ≥9 continua dizendo SIM", s["aplic"] >= 9 and s["muda_conduta"] == "SIM",
+          f"nota={s['aplic']} conduta={s['muda_conduta']} — a bicondicional foi enfraquecida")
 
 
 def teste_independencia_nao_cruza_o_nove():

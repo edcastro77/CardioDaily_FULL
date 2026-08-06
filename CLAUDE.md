@@ -255,6 +255,103 @@ tinha rodado uma única vez: não estava na lista chumbada do runner. É o mesmo
 **aprova por não ter olhado.** O runner agora VARRE o módulo e recolhe toda função `teste_*`; a
 lista sobrevive só para fixar a ordem de leitura do relatório.
 
+**`muda_conduta` SÓ EXISTE ONDE A PERGUNTA CABE (06/Ago/2026)**
+
+A bicondicional de 04/Ago foi aplicada nos QUATRO motores. Nos dois em que a pergunta não cabia,
+ela produziu afirmação clínica falsa — medido no lote real de 06/Ago:
+
+| tipo | o que saiu | por quê estava errado |
+|---|---|---|
+| **revisão narrativa** | 8 revisões com nota 9 e `muda_conduta: SIM` | revisão não testa intervenção; não há conduta a mudar |
+| **diretriz** | statement ESC de cardio-oncologia: `6/10 · MUDA CONDUTA: NÃO` — impresso, acima de cinco ordens diretas ao leitor | diretriz muda conduta POR DEFINIÇÃO |
+
+**REVISÃO** — palavras dele: *"este termo muda conduta se aplica a um RCT. As revisões irão me
+ajudar a ORGANIZAR O CONHECIMENTO. E a pontuação reflete a qualidade do material utilizado e a
+quantidade de informações aplicáveis que ele de fato entrega."*
+A NOTA não mudou: continua podendo chegar a 10 (decisão dele de 02/Ago, que revogou a minha
+proposta de teto 6). O que saiu foi o CAMPO → `N/A (revisão organiza conhecimento, não testa
+intervenção)`. Nota 10 significa "organiza excepcionalmente bem", não "prescreva".
+
+**DIRETRIZ** — palavras dele: *"a diretriz muda várias coisas, pela atualização. Ninguém escreve
+uma diretriz que não muda nada. Então o que muda é o GRAU COM QUE PODEMOS ACREDITAR NELA, baseado
+na nota que o motor calcula. Podemos ajustar o nome e recomendar ou não recomendar."*
+A nota AGREE passa a responder **"confie quanto?"**, em 4 faixas (`RECOMENDACAO_DIRETRIZ`):
+
+| nota | veredito | o porquê que acompanha |
+|---|---|---|
+| ≥8 | **RECOMENDADA** | base sólida; pode seguir |
+| 6–7 | **RECOMENDADA COM RESSALVAS** | parte relevante é opinião — leia com olho crítico |
+| 4–5 | **REFERÊNCIA, NÃO AUTORIDADE** | é o documento que existe; não é prova, é consenso |
+| ≤3 | **NÃO RECOMENDADA** | método frágil demais para sustentar o que recomenda |
+
+⚠️ **A recomendação AVISA, não RETÉM.** A LEI 10 continua: a diretriz sobe em QUALQUER nota,
+inclusive NÃO RECOMENDADA. Trava: `teste_diretriz_recomenda_em_vez_de_mudar_conduta` reprova se a
+recomendação virar porta.
+
+**A bicondicional NÃO foi enfraquecida** — ela continua inteira na intervenção (RCT e meta), e as
+travas reprovam nos dois sentidos. A coluna `muda_conduta` foi REUSADA (decisão dele: sem ALTER
+TABLE) e guarda quatro vocabulários diferentes conforme o tipo.
+
+**O QUE EU ERREI, E É A LEI 9 DE NOVO:** implementei a bicondicional em 04/Ago nos quatro motores
+sem varrer o que ela significaria em cada um. A lei que ele escreveu depois de eu cometer este
+erro, cometido outra vez.
+
+**O VISUAL ABSTRACT ERA O ÚLTIMO PONTO OLHANDO O `desenho` (06/Ago)**
+
+`📋 Tipo detectado: artigo original` em **48 de 48 revisões**. O gerador escolhia o molde pelo campo
+`desenho` dos FATOS — e o extrator da revisão não preenche `desenho` (`None` → `""` → cai no else →
+"original"). 48 cards de revisão desenhados com o molde de RCT: MÉTODOS, POPULAÇÃO, PRINCIPAIS
+RESULTADOS, "NNT não calculável" — numa peça que não tem população nem desfecho.
+
+É o defeito que o próprio CLAUDE.md nomeia na LEI 8 (*"a escolha do prompt olhava a PASTA e a
+escolha do motor olhava o campo `desenho` dos FATOS"*). Em 03/Ago consertamos o prompt e o motor;
+o Visual Abstract ficou com a fonte velha, e ninguém notou porque **ele não quebra: escolhe o molde
+errado e desenha bonito.** Segundo defeito empilhado: o analisador dizia `revisao_narrativa` e o
+gerador só reconhecia `revisao` — mesmo com o tipo certo, cairia no adivinhador.
+Fonte agora: `fatos["tipo_documento"]`, a MESMA que o motor usa.
+
+**TAXA DE INCIDÊNCIA ≠ RISCO CUMULATIVO — DOIS CAMPOS (06/Ago/2026, opção A)**
+
+O artigo reporta a diferença de risco de duas formas, com DENOMINADORES diferentes:
+
+| forma | exemplo | denominador | o campo |
+|---|---|---|---|
+| incidência ACUMULADA | "16,3% vs 21,2% em 18,2 meses" | pessoas | `arr_pct` + `seguimento_anos` (o motor DIVIDE) |
+| densidade de incidência | "141 vs 330 por 100.000 **pessoas-ano**" | pessoas-TEMPO | `arr_ano_pct` (o motor **NÃO** divide) |
+
+Existia UM campo e o motor SEMPRE dividia. O número `2,0` é `2,0` — nada nele diz qual é, e o motor
+não tinha como perceber. O erro andava nos DOIS sentidos: uma ARR de 2,0 %/ano num estudo de 5 anos
+virava 0,4 %/ano e **reprovava um ensaio que muda conduta**; risco cumulativo lido como taxa
+**aprovava o que devia reprovar**.
+
+**Medido antes de consertar:** 129 pacotes · `arr_pct` preenchido em 8 · dupla divisão em ZERO. O
+defeito ainda não tinha mordido — mas o mecanismo apareceu nos primeiros 20 originais, com as
+palavras do extrator no JAMA Coffee: *"NNT não calculável, pois não foram fornecidos riscos
+cumulativos"*, tendo "189 por 100.000 pessoas-ano" na primeira linha do resultado. Ele desistiu
+porque o campo pedia o que o artigo não dava. Coorte longa em cardiologia quase sempre reporta em
+pessoas-ano (Framingham, NHS, HPFS, UK Biobank), e faltavam 235 artigos originais na fila.
+
+Trava: `teste_arr_por_ano_nao_e_dividida_de_novo` — e ela cobre os TRÊS blocos (motor · schema ·
+prompt), porque motor certo + schema certo + **prompt calado** = campo null para sempre. Foi assim
+que as palavras-chave da meta nasceram sem instrução em 05/Ago.
+
+**A CONTA IMPRESSA PARA O REDATOR NÃO FECHAVA (06/Ago)**
+
+O `veredito_completo` imprime `APLICABILIDADE = o MENOR entre: desenho · externa · falha fatal ·
+MCID · rigor`. O campo `teto_mcid` vinha só do teto POR RÓTULO (01/Ago) e ignorava a CONTA conferida
+(05/Ago). Com o JAMA Coffee saía:
+
+```
+APLICABILIDADE = o MENOR entre: desenho 10 · externa 10 · falha fatal 10 · MCID 10 · rigor 9
+Nota 6/10
+   • MCID conferido → teto 6: ARR 0,19 %/ano < 1,0 %/ano
+```
+
+**Nenhum número da conta produz 6**, e o delator contradiz a linha de cima. O VEREDITO ABERTO existe
+para o redator explicar a nota a partir dos domínios (medido em 02/Ago: com o número nu, 86% dos
+parágrafos mudavam) — e ele recebia domínios que não somam a nota. Ou inventa, ou desiste.
+Agora `tm = min(tm, _t_mcid)`, e a trava confere que `min(domínios) == nota`.
+
 **A ÚNICA EXCEÇÃO — A DIRETRIZ NÃO TEM PORTA (05/Ago/2026)**
 
 *"As diretrizes — precisamos manter esta classificação mas não teremos nenhum impedimento para

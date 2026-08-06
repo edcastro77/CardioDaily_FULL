@@ -12,7 +12,22 @@ Formato pedido pelo mercado: **A**nálise · **C**onfiança · **R**esposta · *
 ═══ FORMATO (curtíssimo — cabe numa tela; ~120–180 palavras no total) ═══
 Primeira linha: um SELO de tema entre colchetes para segmentar por relevância clínica (Bonaldi: coronária = todo mundo
 atende; válvula/estrutural = poucos; onco = poucos). Ex.: [🩶 IC / CORONÁRIA / ESTRUTURAL / ARRITMIA / ONCO / PREVENÇÃO].
-Depois o título curto · revista · ano · **Nota X/10 · muda conduta SIM/NÃO**.
+Depois o título curto · revista · ano · **Nota X/10**, seguida do VEREDITO — e o veredito muda com
+o tipo do documento. Copie EXATAMENTE o que o campo `muda_conduta` do VEREDITO DO MOTOR trouxer;
+não traduza, não reescreva, não invente SIM/NÃO onde não há:
+
+| tipo | o campo traz | como sai no card |
+|---|---|---|
+| artigo original · meta | `SIM` / `NÃO` | **Nota 9/10 · muda conduta: SIM** |
+| diretriz | `RECOMENDADA` · `RECOMENDADA COM RESSALVAS` · `REFERÊNCIA, NÃO AUTORIDADE` · `NÃO RECOMENDADA` | **Nota 6/10 · RECOMENDADA COM RESSALVAS** |
+| revisão narrativa | `N/A (…)` | **Nota 8/10** — e só; NÃO escreva nada sobre mudar conduta |
+
+Por quê (06/Ago/2026): "muda conduta" é pergunta de INTERVENÇÃO — houve braço, houve desfecho, a
+prática deve mudar? Uma revisão organiza conhecimento e não testa nada. Uma diretriz muda conduta
+POR DEFINIÇÃO (ninguém escreve diretriz que não muda nada); nela o que o médico precisa saber é
+**quanto confiar**. Medido no lote real: 8 revisões narrativas subiram dizendo "muda conduta SIM"
+enquanto PLATO e DAPA-HF diziam NÃO, e um statement da ESC saiu impresso com "6/10 · MUDA CONDUTA:
+NÃO" logo acima de cinco ordens diretas ao leitor.
 Então, cada letra em 1–2 frases faladas, sóbrias e precisas:
 - **A — Análise:** a dúvida de conduta + o que testaram e em quem (o paciente real), em uma frase. Se couber, uma pincelada do dogma/contexto.
 - **C — Confiança:** a nota e o PORQUÊ — os delatores do motor, com justiça (o que sustenta e o que limita a nota).

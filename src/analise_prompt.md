@@ -245,12 +245,33 @@ do artigo.** Quando o artigo cala, o motor aplica a régua da casa (`mcid_cardio
 
 **Para isso ele precisa dos NÚMEROS, não do seu julgamento.** Preencha sempre que o artigo trouxer:
 
-  `arr_pct` — a redução ABSOLUTA de risco, em pontos percentuais (ex.: 2.4 para "de 8,1% para
-      5,7%"). Se o artigo só dá RR/HR e as taxas dos dois braços, CALCULE a diferença.
-  `arr_ic_inf_pct` — o limite INFERIOR do IC95% da ARR, o mais conservador. É ele que decide se
-      o IC SUSTENTA a relevância ou se só o ponto animou.
-  `seguimento_anos` — mediana de seguimento em anos (18 meses = 1.5). Sem isto não dá para
-      converter a ARR em ARR/ano, e ARR sem tempo não significa nada.
+  ⚠️ **O ARTIGO REPORTA A DIFERENÇA DE DUAS FORMAS, E SÃO CAMPOS DIFERENTES.** Olhe o DENOMINADOR:
+
+  **(1) INCIDÊNCIA ACUMULADA** — denominador em PESSOAS. "16,3% vs 21,2% dos pacientes tiveram o
+      desfecho em 18,2 meses". A diferença é ACUMULADA no período todo. Use:
+      `arr_pct` = 4.9  ·  `seguimento_anos` = 1.52   (o motor divide para anualizar)
+
+  **(2) DENSIDADE DE INCIDÊNCIA (taxa)** — denominador em PESSOAS-TEMPO. "141 vs 330 por 100.000
+      PESSOAS-ANO", "2,1 vs 3,4 eventos por 100 pacientes-ano". O "por ano" JÁ ESTÁ no número.
+      Use: `arr_ano_pct` = 0.189   ← e deixe `arr_pct` em null. **O motor NÃO divide este campo.**
+      (189 por 100.000 pessoas-ano = 0,189 pontos percentuais por ano. Converta para %/ano.)
+
+  **NUNCA preencha os dois.** Escolha pelo denominador que o artigo usou.
+
+  🔴 **NÃO DESISTA SÓ PORQUE NÃO HÁ RISCO CUMULATIVO.** Medido em 06/Ago: num estudo do JAMA que
+  dava "diferença de taxas de 189 por 100.000 pessoas-ano", a extração respondeu *"NNT não
+  calculável, pois não foram fornecidos riscos cumulativos comparáveis por grupo"* e deixou tudo
+  em null. O número estava na primeira linha do resultado. Diferença de taxas É a ARR anualizada —
+  ela vai em `arr_ano_pct`, e é exatamente o que a régua da casa precisa.
+
+  `arr_pct` — ARR ACUMULADA, em pontos percentuais (ex.: 2.4 para "de 8,1% para 5,7%").
+      Se o artigo só dá RR/HR e as taxas dos dois braços, CALCULE a diferença.
+  `arr_ic_inf_pct` — limite INFERIOR do IC95% da ARR acumulada, o mais conservador. É ele que decide
+      se o IC SUSTENTA a relevância ou se só o ponto animou.
+  `seguimento_anos` — mediana de seguimento em anos (18 meses = 1.5). Obrigatório junto com
+      `arr_pct`: ARR acumulada sem tempo não significa nada.
+  `arr_ano_pct` — a ARR JÁ POR ANO (diferença de TAXAS). Vai sozinha, sem `seguimento_anos`.
+  `arr_ano_ic_inf_pct` — limite INFERIOR do IC95% dessa ARR/ano.
   `delta_substituto` + `delta_substituto_unidade` — para desfecho substituto: a variação absoluta
       e a unidade (mg/dL · mmHg · pontos · metros · % · mL/kg/min).
 

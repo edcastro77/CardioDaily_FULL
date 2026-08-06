@@ -289,16 +289,52 @@ def _limiar_cardiodaily(a):
     # ── DESFECHO DURO: a régua é a ARR POR ANO ──
     duro = bool(a.get("desfecho_duro")) or td in ("binario", "tempo_ate_evento", "composto")
     if duro and not MC.eh_substituto(td, nome):
-        arr = _n(rc.get("arr_pct"))
-        anos = _n(rc.get("seguimento_anos")) or 1.0
-        if arr is None or anos <= 0:
-            return None, None, ""
-        arr_ano = abs(arr) / anos
+        # ═══ 06/Ago — DUAS FORMAS DE REPORTAR, DOIS CAMPOS (opção A, decisão do Dr. Eduardo) ═══
+        #
+        # O artigo dá a diferença de risco de dois jeitos, com DENOMINADORES diferentes:
+        #
+        #   INCIDÊNCIA ACUMULADA (denominador = pessoas)
+        #       "16,3% vs 21,2% dos pacientes em 18,2 meses" → 4,9 pontos ACUMULADOS
+        #       precisa dividir pelo tempo:  4,9 / 1,52 = 3,2 %/ano   ← DAPA-HF, e o motor acerta
+        #
+        #   DENSIDADE DE INCIDÊNCIA (denominador = pessoas-TEMPO)
+        #       "141 vs 330 por 100.000 PESSOAS-ANO" → 0,189 %/ano, o "por ano" JÁ está no número
+        #       dividir de novo é dividir duas vezes
+        #
+        # Até hoje existia UM campo (`arr_pct`) e o motor SEMPRE dividia. O número 2,0 é 2,0: não há
+        # nada nele que diga se é acumulado ou anual, e o motor não tinha como perceber. O erro
+        # andava nos dois sentidos — uma ARR de 2,0%/ano em 5 anos de seguimento virava 0,4%/ano e
+        # reprovava um ensaio que muda conduta; e risco cumulativo lido como taxa aprovava o que
+        # devia reprovar.
+        #
+        # MEDIDO em 06/Ago, nos 129 pacotes: `arr_pct` preenchido em 8, e ZERO com dupla divisão.
+        # O defeito ainda não mordeu. Mas o mecanismo apareceu, com as palavras do extrator, já nos
+        # primeiros 20 artigos originais (JAMA Coffee): *"diferença de taxas de 189 por 100.000
+        # pessoas-ano; NNT não calculável, pois não foram fornecidos riscos cumulativos"* — ele
+        # TINHA o número e desistiu, porque o campo pedia acumulado e o artigo oferecia taxa.
+        # Coorte longa em cardiologia quase sempre reporta em pessoas-ano (Framingham, NHS, HPFS,
+        # UK Biobank), e faltam 235 artigos originais na fila.
+        #
+        # A REGRA: `arr_ano_pct` tem PRECEDÊNCIA e NÃO é dividido. Se o extrator preencheu os dois
+        # (não devia), o já-anualizado manda — é o mais específico, e não depende de `seguimento_anos`
+        # estar certo.
+        arr_ano = _n(rc.get("arr_ano_pct"))
+        ic_ano = _n(rc.get("arr_ano_ic_inf_pct"))
+        if arr_ano is not None:
+            arr_ano, base = abs(arr_ano), "taxa/ano"
+            ic_ano = None if ic_ano is None else abs(ic_ano)
+        else:
+            arr = _n(rc.get("arr_pct"))
+            anos = _n(rc.get("seguimento_anos")) or 1.0
+            if arr is None or anos <= 0:
+                return None, None, ""
+            arr_ano, base = abs(arr) / anos, f"acumulada ÷ {anos:g} ano(s)"
+            ic_inf = _n(rc.get("arr_ic_inf_pct"))
+            ic_ano = None if ic_inf is None else abs(ic_inf) / anos
         excede = arr_ano >= MC.ARR_ANO_RELEVANTE
         # o IC sustenta se o limite INFERIOR (o mais conservador) também passa do limiar
-        ic_inf = _n(rc.get("arr_ic_inf_pct"))
-        sustenta = None if ic_inf is None else (abs(ic_inf) / anos) >= MC.ARR_ANO_RELEVANTE
-        txt = (f"limiar CardioDaily p/ desfecho duro: ARR {arr_ano:.2f}%/ano "
+        sustenta = None if ic_ano is None else ic_ano >= MC.ARR_ANO_RELEVANTE
+        txt = (f"limiar CardioDaily p/ desfecho duro: ARR {arr_ano:.2f}%/ano ({base}) "
                f"{'≥' if excede else '<'} {MC.ARR_ANO_RELEVANTE}%/ano")
         return excede, sustenta, txt
 
@@ -1061,6 +1097,49 @@ def falhas_fatais_diretriz(a):
     return sorted(set(achadas))
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# A RECOMENDAÇÃO DA DIRETRIZ — 4 faixas, decisão do Dr. Eduardo em 06/Ago/2026
+# ═══════════════════════════════════════════════════════════════════════════════════════
+#
+# A nota AGREE deixa de responder "muda conduta?" (pergunta sem sentido numa diretriz) e passa a
+# responder a que o médico realmente faz: **confio nisto o quanto?**
+#
+# As frases são para serem lidas em voz alta no áudio e caberem no card. Nada de jargão AGREE aqui
+# — o jargão fica na justificativa, traduzido ("a maior parte é opinião de especialista").
+#
+# ⚠️ ISTO NÃO É UMA PORTA. A LEI 10 continua valendo: **a diretriz sobe em QUALQUER nota**, mesmo
+# NÃO RECOMENDADA. Palavras dele em 05/Ago: não existe "outra diretriz de fibrilação atrial",
+# existe A diretriz — se é fraca, o médico precisa saber que é fraca E mesmo assim precisa dela,
+# porque é por ela que vai ser cobrado. A recomendação AVISA; ela não retém.
+RECOMENDACAO_DIRETRIZ = (
+    (8, "RECOMENDADA",
+        "base sólida; pode seguir"),
+    (6, "RECOMENDADA COM RESSALVAS",
+        "útil, mas parte relevante das recomendações é opinião — leia com olho crítico"),
+    (4, "REFERÊNCIA, NÃO AUTORIDADE",
+        "é o documento que existe sobre o tema; não é prova, é consenso"),
+    (0, "NÃO RECOMENDADA",
+        "método frágil demais para sustentar as recomendações que faz"),
+)
+
+
+def recomendacao_da_diretriz(nota):
+    """A nota AGREE vira a frase que o cardiologista usa. Devolve só o rótulo (é o que vai para a
+    coluna `muda_conduta` — reuso decidido por ele, para não precisar de ALTER TABLE)."""
+    for piso, rotulo, _ in RECOMENDACAO_DIRETRIZ:
+        if nota >= piso:
+            return rotulo
+    return RECOMENDACAO_DIRETRIZ[-1][1]
+
+
+def motivo_da_recomendacao(nota):
+    """A frase de apoio — o PORQUÊ, para a perícia, o card e o áudio."""
+    for piso, _, motivo in RECOMENDACAO_DIRETRIZ:
+        if nota >= piso:
+            return motivo
+    return RECOMENDACAO_DIRETRIZ[-1][2]
+
+
 def score_diretriz(a):
     """Motor da DIRETRIZ. Mesmo contrato de saída do motor original — a corrente não pode quebrar."""
     s, dom, frase = nota_diretriz(a)
@@ -1094,11 +1173,31 @@ def score_diretriz(a):
     aplic = min(td, tc, tci, tb, tf, s)
     return {"trabalho": s, "aplic": aplic, "teto_desenho": td, "teto_externa": tb,
             "teto_falha_fatal": tf, "teto_mcid": 10,
-            # ESCOLHA MINHA: numa diretriz o documento INTEIRO é conduta; o gatilho é a nota.
-            "muda_conduta": "SIM" if aplic >= 9 else "NÃO",   # 04/Ago — A REGRA MAIS IMPORTANTE:
-            # nota 9/10 ⟺ muda conduta. Bicondicional, palavras do Dr. Eduardo: "se muda a
-            # conduta é 9 ou 10, e se é 9 ou 10 é porque muda conduta". Era >= 8 aqui e um
-            # CHECKLIST separado na REGRA 4 — dois caminhos, e 3 metas subiram 9 com "NÃO".
+            # ═══ 06/Ago — A DIRETRIZ NÃO RESPONDE "MUDA CONDUTA". ELA RESPONDE "CONFIE QUANTO?" ═══
+            #
+            # Palavras do Dr. Eduardo: *"a diretriz muda várias coisas — pela atualização. Ninguém
+            # escreve uma diretriz que não muda nada. Então o que muda é o GRAU COM QUE PODEMOS
+            # ACREDITAR NELA, baseado na nota que o motor calcula. Podemos ajustar o nome e
+            # recomendar ou não recomendar."*
+            #
+            # O CASO QUE ORIGINOU. Ele mandou o PDF do "Imagem Vascular na Cardio-Oncologia"
+            # (statement ESC 2026) que o CardioDaily já publicou, e o veredito impresso na peça diz:
+            #
+            #       min(…) = 6/10        MUDA CONDUTA: NÃO
+            #
+            # No mesmo documento: `aplicável no Brasil 10/10`, e mensagens-chave que são ordens
+            # diretas — "faça ECG de 12 derivações e estratificação HFA-ICOS", "eco basal é
+            # recomendado para risco alto (classe I)". A peça mandava fazer cinco coisas e dizia
+            # que não mudava conduta. Não era teoria: já tinha saído impresso.
+            #
+            # POR QUE A PERGUNTA ERA ERRADA. Uma diretriz existe PARA mudar conduta — é a definição
+            # dela. Perguntar se muda é perguntar se chove na chuva. O que varia, e o que o médico
+            # precisa saber, é QUANTO acreditar: o statement acima tem 68,8% das recomendações em
+            # nível C e metade das Classe I apoiadas em nível C. É isso que a nota 6 está dizendo.
+            #
+            # A ESCALA (4 faixas, decisão dele em 06/Ago) — a nota AGREE vira uma frase que o
+            # cardiologista usa: recomendo, recomendo com ressalva, é o que existe, não recomendo.
+            "muda_conduta": recomendacao_da_diretriz(aplic),
             "rota": ROTA_CLINICA, "falhas_fatais": ff, "motor": "DIRETRIZ",
             "nhlbi": {"cumpre": 0, "falha": 0, "nao_reporta": 0, "teto": 10, "criterios_falhos": []},
             "teto_nivel_c": tc, "pct_nivel_c": p_c,
@@ -1312,11 +1411,29 @@ def score_revisao(a):
     return {"trabalho": s, "aplic": aplic, "teto_desenho": 10, "teto_externa": 10,
             "teto_falha_fatal": 10, "teto_mcid": 10, "teto_atualidade": ta, "defasagem_anos": dfg,
             "utilidade": u,
-            # numa revisão o que "muda conduta" é ela entregar conduta pronta E ser confiável
-            "muda_conduta": "SIM" if aplic >= 9 else "NÃO",   # 04/Ago — A REGRA MAIS IMPORTANTE:
-            # nota 9/10 ⟺ muda conduta. Bicondicional, palavras do Dr. Eduardo: "se muda a
-            # conduta é 9 ou 10, e se é 9 ou 10 é porque muda conduta". Era >= 8 aqui e um
-            # CHECKLIST separado na REGRA 4 — dois caminhos, e 3 metas subiram 9 com "NÃO".
+            # ═══ 06/Ago — A REVISÃO NÃO TEM `muda_conduta`. ELA ORGANIZA CONHECIMENTO. ═══
+            #
+            # Palavras do Dr. Eduardo: *"este termo muda conduta se aplica a um RCT — as revisões
+            # irão me ajudar a ORGANIZAR O CONHECIMENTO. E a pontuação reflete a qualidade do
+            # material utilizado e a quantidade de informações aplicáveis que ela de fato entrega."*
+            #
+            # O QUE ACONTECEU. Em 02/Ago ele corrigiu a minha proposta de teto 6 e autorizou a
+            # revisão a chegar a 10 — por UTILIDADE PRÁTICA ("quanto ela me ajuda"). Em 04/Ago veio
+            # a bicondicional (nota ≥9 ⟺ muda conduta), e eu a apliquei aqui sem varrer o que ela
+            # significaria numa revisão. Resultado medido em 06/Ago, no lote real: 8 revisões
+            # narrativas com nota 9 gravadas dizendo `muda_conduta: SIM`, enquanto PLATO, TRITON e
+            # DAPA-HF diziam NÃO. O CardioDaily afirmava que uma revisão de fisiopatologia muda a
+            # conduta e que o ticagrelor não muda.
+            #
+            # Não foi a NOTA que errou — a nota faz o que ele mandou: mede base × utilidade. Foi o
+            # CAMPO, que responde a uma pergunta que a revisão não faz. Uma revisão não testa
+            # intervenção, não tem braço, não tem desfecho: não há conduta a mudar, há conhecimento
+            # a organizar. Nota 10 aqui significa "organiza excepcionalmente bem", não "prescreva".
+            #
+            # A bicondicional continua INTEIRA onde ela nasceu: intervenção (RCT e meta de
+            # intervenção) e diretriz. Mesmo tratamento que o motor do ORIGINAL já dá quando
+            # `pergunta != "intervencao"`.
+            "muda_conduta": "N/A (revisão organiza conhecimento, não testa intervenção)",
             "rota": ROTA_CLINICA, "falhas_fatais": [], "motor": "REVISAO",
             "nhlbi": {"cumpre": 0, "falha": 0, "nao_reporta": 0, "teto": 10, "criterios_falhos": []},
             "dominios_revisao_rigor": dom_r, "dominios_revisao_util": dom_u,
@@ -1589,6 +1706,19 @@ def score(a):
         aplic = min(aplic, _t_mcid)
         for _m in _mot_mcid:
             fl.append(f"MCID conferido → teto {_t_mcid}: {_m}")
+    # ═══ 06/Ago — A CONTA QUE O REDATOR RECEBIA NÃO FECHAVA ═══
+    # `tm` vem do `teto_mcid(a)` (o teto pelo RÓTULO, de 01/Ago); `_t_mcid` vem do `mcid_conferido`
+    # (a CONTA conferida, de 05/Ago). Só o primeiro ia para o campo `teto_mcid` do retorno — e é
+    # esse campo que o `veredito_completo` imprime para o redator. Resultado, com o JAMA Coffee:
+    #
+    #     APLICABILIDADE = o MENOR entre: desenho 10 · externa 10 · falha fatal 10 · MCID 10 · rigor 9
+    #     Nota 6/10
+    #
+    # Nenhum dos números da conta produz 6. O delator dizia "MCID conferido → teto 6" na linha de
+    # baixo, contradizendo a linha de cima. O VEREDITO ABERTO existe justamente para o redator
+    # explicar a nota a partir dos domínios (medido em 02/Ago: com o número nu, 86% dos parágrafos
+    # mudavam) — e ele estava recebendo domínios que não somam a nota. Ou ele inventa, ou desiste.
+    tm = min(tm, _t_mcid)
 
     # ═══ 05/Ago — INDEPENDÊNCIA EDITORIAL: até 10% (1,0 ponto) ═══
     # Régua do Dr. Eduardo. A DIRETRIZ tem os 20% dela no domínio AGREE e a REVISÃO tem 15% no

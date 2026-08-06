@@ -540,8 +540,31 @@ def _gerar_visual_abstract(fatos, r, dst, base):
     assets/visual_abstract.png e é copiado p/ <base>_visual.png (onde a ficha_site procura: *_visual*)."""
     import shutil
     from pathlib import Path
-    des = (fatos.get("desenho") or "").lower()
-    tipo = "metanalise" if "meta" in des else ("revisao" if ("revis" in des or "guide" in des or "diretriz" in des) else "original")
+    # ═══ 06/Ago — O VISUAL ABSTRACT ERA O ÚLTIMO PONTO OLHANDO O `desenho` DOS FATOS ═══
+    #
+    # A LEI 8 diz, com todas as letras: *"o tipo é decidido UMA vez, no classificador, e todo o
+    # resto OBEDECE"*, e o CLAUDE.md nomeia exatamente este defeito — *"a escolha do prompt olhava
+    # a PASTA e a escolha do motor olhava o campo `desenho` dos FATOS"*. Em 03/Ago consertamos o
+    # prompt e o motor. O Visual Abstract ficou com a fonte velha, e ninguém notou porque ele não
+    # quebra: ele escolhe o molde errado e desenha bonito.
+    #
+    # MEDIDO em 06/Ago, no lote das revisões: `📋 Tipo detectado: artigo original` em 48 de 48.
+    # O extrator da revisão não preenche `desenho` (o log mostra `desenho=None` em toda linha),
+    # `None` vira `""`, `""` não casa com "revis", e o else entrega "original". Resultado: 48 cards
+    # de revisão narrativa desenhados com o molde de RCT — MÉTODOS, POPULAÇÃO, PRINCIPAIS
+    # RESULTADOS, "NNT não calculável" — numa peça que não tem população nem desfecho.
+    #
+    # SEGUNDO DEFEITO, EMPILHADO: o vocabulário não batia. Aqui se diz `revisao_narrativa` (é o que
+    # `_TIPO_POR_PASTA` grava); o gerador só reconhece `("metanalise", "revisao")`. Mesmo recebendo
+    # o tipo certo, ele cairia no `_detectar_tipo_artigo` — o adivinhador. Por isso o `.get` abaixo
+    # TRADUZ, em vez de repassar cru.
+    # A fonte é `fatos["tipo_documento"]` — o campo que o analisador grava A PARTIR DA PASTA
+    # (LEI 8) e que o motor usa para escolher qual dos 4 motores roda. É a MESMA fonte, e é isso
+    # que faz dela a certa: uma pergunta, uma resposta, um lugar.
+    _TIPO_P_VISUAL = {"meta": "metanalise", "revisao_narrativa": "revisao",
+                      "diretriz": "revisao", "original": "original"}
+    _td = (fatos.get("tipo_documento") or "").strip().lower()
+    tipo = _TIPO_P_VISUAL.get(_td, "original")
     ana = os.path.join(dst, base + "_analise.md")
     if os.path.exists(ana):
         shutil.copy(ana, os.path.join(dst, "analysis.md"))     # o gerador lê analysis.md da pasta
