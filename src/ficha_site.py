@@ -304,11 +304,20 @@ def montar(pasta):
     # com metadado do PubMed. A 2ª fonte já era usada para o ano; passa a dar o mês também.
     _ano_canon = _campo(canon, "ano")
     _aaaa_mm = (f"{_n['ano']}-{_n['mes']}" if _n.get("ano") and _n.get("mes") else "")
-    # se o canônico só tem o ANO e o nome tem ANO-MÊS do MESMO ano, o nome é mais preciso
-    if _aaaa_mm and len((_ano_canon or "").strip()) == 4 and _ano_canon.strip() == _n.get("ano"):
+    # ═══ 06/Ago — E QUANDO OS DOIS ANOS DISCORDAM? O PUBMED MANDA ═══
+    # A regra de 05/Ago só pegava o mês se `_ano_canon == _n['ano']`. Quando os dois divergiam,
+    # ela DESISTIA e usava o ano do canônico — perdendo o mês E ficando com o ano pior.
+    # Pego pela trava na rodada real de 06/Ago: `Tirzepatide for Obesity` está em pasta 2025-03
+    # (nome posto pelo classificador com metadado do PubMed) e o extrator leu `ano: 2024` do PDF.
+    # A ficha gravou 2024-01-01: errou o ano E o mês, 14 meses de diferença.
+    # QUEM MANDA: o nome do arquivo, quando traz AAAA-MM. Não é preferência — é a LEI 8. O nome
+    # vem do PubMed (catálogo); o `ano` do canônico é o modelo LENDO o PDF, e um PDF traz data de
+    # submissão, de aceite, de publicação online e de edição impressa. O extrator escolhe uma.
+    # A capa já é reparada por DOI→PubMed pelo mesmo motivo (`reparar_capa.py`).
+    if _aaaa_mm:
         ano = _data_valida(_aaaa_mm)
     else:
-        ano = _data_valida(_ano_canon) or _data_valida(_aaaa_mm) or _data_valida(_n.get("ano", ""))
+        ano = _data_valida(_ano_canon) or _data_valida(_n.get("ano", ""))
     tipo = _campo(canon, "tipo")
     # ═══ 05/Ago — DUAS COLUNAS PARA A MESMA PERGUNTA, DISCORDANDO ═══
     # Medido no Supabase: as 18 diretrizes tinham `tipo_documento: diretriz` E

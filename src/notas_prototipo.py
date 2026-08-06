@@ -201,6 +201,12 @@ def _nulo_esta_demonstrado(rc, a):
 #   · a REVISÃO já tinha 15%, peso que ELE aprovou em 02/Ago. NÃO foi mexido: baixar para 10%
 #     seria eu revogar uma decisão dele sem que ele pedisse (LEI 3).
 #   · ORIGINAL e META ganham este desconto: até 1,0 ponto = 10% da escala de 0 a 10.
+# 06/Ago — A FRONTEIRA QUE O DESCONTO DE INDEPENDÊNCIA NÃO CRUZA (opção A do Dr. Eduardo).
+# Nota ≥9 significa "muda conduta" (a bicondicional). Financiamento não pode, sozinho, converter
+# um ensaio que se provou por método num ensaio que "não muda conduta" — isso é afirmação clínica
+# falsa, e foi o que aconteceu com PLATO, TRITON e DAPA-HF na primeira rodada real.
+PISO_INDEPENDENCIA = 9
+
 DESCONTO_INDEPENDENCIA = {
     "industria envolvida": 1.0,        # o financiador desenhou, analisou ou escreveu
     "indústria envolvida": 1.0,
@@ -1590,8 +1596,41 @@ def score(a):
     # que até hoje eram CEGOS a financiamento (o `financiamento_papel` era extraído e ignorado).
     _desc, _mot_ind = desconto_independencia(a)
     if _desc:
+        # ═══ 06/Ago — O DESCONTO NÃO CRUZA A FRONTEIRA DO 9 (opção A, decisão do Dr. Eduardo) ═══
+        #
+        # O QUE ACONTECEU. Na primeira rodada real dos artigos originais, TRITON-TIMI 38, PLATO e
+        # DAPA-HF — três dos ensaios que mais mudaram a cardiologia moderna — saíram assim:
+        #
+        #     teto_desenho: 10 · nota_trabalho_estatistico: 9 · desconto −1,0 → aplicabilidade 8
+        #     muda_conduta: "NÃO"
+        #
+        # O motor tinha reconhecido tudo: RCT duplo-cego, poder ok, desfecho duro, ARR/ano acima do
+        # limiar da casa. Então o desconto de indústria derrubou 9 → 8, e a BICONDICIONAL leu o 8 e
+        # concluiu que o ticagrelor não muda conduta.
+        #
+        # POR QUE ISSO ERA ESTRUTURAL, NÃO UM AJUSTE FINO. Quase todo ensaio de fase 3 em
+        # cardiologia é patrocinado (PLATO e DAPA-HF são AstraZeneca; TRITON é Daiichi Sankyo/Lilly;
+        # SPRINT e ISCHEMIA são a exceção). Desconto integral + bicondicional, juntos, tornavam
+        # quase impossível um artigo original chegar a 9 — e o CardioDaily perdia a capacidade de
+        # dizer "isto muda sua prática", que é a frase mais valiosa que ele vende.
+        #
+        # Nenhuma das duas regras estava errada sozinha. Elas se atropelavam porque o desconto
+        # entrava DEPOIS, no mesmo lugar onde a bicondicional lê.
+        #
+        # A REGRA: financiamento é RESSALVA DECLARADA, não rebaixamento de categoria. Se a nota
+        # ANTES do desconto já era ≥9 (o estudo se provou por método), o desconto desce no máximo
+        # até 9 — e o delator diz, na perícia, quanto TERIA sido descontado. O leitor vê as duas
+        # coisas: que o ensaio é bom, e quem pagou por ele.
+        # Abaixo de 9 o desconto continua valendo integral, como ele definiu em 05/Ago.
+        _antes = aplic
         aplic = max(0, int(round(aplic - _desc)))
-        fl.append(f"independência editorial −{_desc:.1f} ({_mot_ind})")
+        if _antes >= PISO_INDEPENDENCIA and aplic < PISO_INDEPENDENCIA:
+            aplic = PISO_INDEPENDENCIA
+            fl.append(f"independência editorial: {_mot_ind} — desconto de {_desc:.1f} NÃO aplicado "
+                      f"por inteiro; a nota tinha se provado por método ({_antes}) e o financiamento "
+                      f"vira ressalva declarada, não rebaixamento (piso {PISO_INDEPENDENCIA})")
+        else:
+            fl.append(f"independência editorial −{_desc:.1f} ({_mot_ind})")
 
     # ═══ 04/Ago — A BICONDICIONAL: 9/10 ⟺ MUDA CONDUTA ═══
     # *"Toda nota 9 e 10 muda conduta! Se muda a conduta é 9 ou 10, e se é 9 ou 10 é porque muda

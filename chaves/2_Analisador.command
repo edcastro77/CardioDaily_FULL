@@ -22,17 +22,18 @@ echo "════════════════════════�
 echo
 
 # ── o que vai ser feito, e quanto custa, ANTES de gastar ──
+# ── 06/Ago: A TELA MOSTRAVA DUAS ORDENS DIFERENTES ──
+# A contagem do topo listava ARTIGOS_ORIGINAIS·META·GUIDELINES·REVISOES; o menu logo abaixo
+# numerava 1)META 2)GUIDELINES 3)REVISOES 4)ARTIGOS_ORIGINAIS. O Dr. Eduardo leu a contagem,
+# contou até REVISOES, digitou 4 — e o 4 era ARTIGOS_ORIGINAIS: 255 artigos, US$ 76,50.
+# Duas ordens na mesma tela é a versão de interface do "duas fontes de verdade" da LEI 9.
+# Agora existe UMA lista, com UM número por pasta — o mesmo que se digita.
 N_TOT=0
 for d in ARTIGOS_ORIGINAIS META_ANALISES GUIDELINES REVISOES EDITORIAIS; do
   n=$(ls "$CD_CLASSIFICADOS/$d"/*.pdf 2>/dev/null | wc -l | tr -d ' ')
-  [ "$n" -gt 0 ] && printf "   %-20s %4s\n" "$d" "$n"
   N_TOT=$((N_TOT+n))
 done
 N_MINI=$(ls "$CD_CLASSIFICADOS/MINIRREVISOES"/*.pdf 2>/dev/null | wc -l | tr -d ' ')
-echo "   ────────────────────────────"
-printf "   %-20s %4s   → analisa e PUBLICA no Supabase (rascunho)\n" "fila do analisador" "$N_TOT"
-printf "   %-20s %4s   → condutas + fluxograma, NÃO sobe no Supabase\n" "minirevisões" "$N_MINI"
-echo
 if [ "$N_TOT" -eq 0 ] && [ "$N_MINI" -eq 0 ]; then
   echo "   Fila vazia — nada a fazer. Rode a Chave 1 primeiro."
   read -p "Enter para fechar. "; exit 0
@@ -42,12 +43,18 @@ fi
 # o caminho dele e é a pasta que decide prompt e motor (LEI 8). Mas rodar TUDO de uma vez significa
 # gastar ~US$ 77 nos 256 artigos originais ANTES de o código mais novo (o da meta, escrito hoje) ser
 # tocado uma única vez. O risco novo tem de ser testado primeiro, e ele é o mais barato de testar.
-echo "   ── POR ONDE COMEÇAR ──"
-echo "     1) META_ANALISES   ($(ls "$CD_CLASSIFICADOS/META_ANALISES"/*.pdf 2>/dev/null|wc -l|tr -d ' ')) ← extrator NOVO de hoje, nunca rodou. O mais barato de provar."
-echo "     2) GUIDELINES      ($(ls "$CD_CLASSIFICADOS/GUIDELINES"/*.pdf 2>/dev/null|wc -l|tr -d ' ')) motor AGREE"
-echo "     3) REVISOES        ($(ls "$CD_CLASSIFICADOS/REVISOES"/*.pdf 2>/dev/null|wc -l|tr -d ' ')) motor da revisão narrativa"
-echo "     4) ARTIGOS_ORIGINAIS ($(ls "$CD_CLASSIFICADOS/ARTIGOS_ORIGINAIS"/*.pdf 2>/dev/null|wc -l|tr -d ' ')) o mais rodado, e o mais caro"
-echo "     5) TUDO            ($N_TOT) na ordem acima"
+n_meta=$(ls "$CD_CLASSIFICADOS/META_ANALISES"/*.pdf     2>/dev/null|wc -l|tr -d ' ')
+n_guia=$(ls "$CD_CLASSIFICADOS/GUIDELINES"/*.pdf        2>/dev/null|wc -l|tr -d ' ')
+n_revi=$(ls "$CD_CLASSIFICADOS/REVISOES"/*.pdf          2>/dev/null|wc -l|tr -d ' ')
+n_orig=$(ls "$CD_CLASSIFICADOS/ARTIGOS_ORIGINAIS"/*.pdf 2>/dev/null|wc -l|tr -d ' ')
+echo "   ── A FILA · digite o número da linha ──"
+printf "     1) META_ANALISES     %4s   US\$ %d   motor da Escada\n"           "$n_meta" $((n_meta*30/100))
+printf "     2) GUIDELINES        %4s   US\$ %d   motor AGREE (sobe em qualquer nota)\n" "$n_guia" $((n_guia*30/100))
+printf "     3) REVISOES          %4s   US\$ %d   motor da revisão narrativa\n" "$n_revi" $((n_revi*30/100))
+printf "     4) ARTIGOS_ORIGINAIS %4s   US\$ %d   o mais caro\n"               "$n_orig" $((n_orig*30/100))
+printf "     5) TUDO              %4s   US\$ %d   nesta ordem\n"               "$N_TOT"  $((N_TOT*30/100))
+echo
+printf "     (minirevisões: %s — condutas + fluxograma, NÃO sobem no Supabase)\n" "$N_MINI"
 echo
 read -r -p "   Escolha [1-5]: " ESCOLHA
 case "$ESCOLHA" in

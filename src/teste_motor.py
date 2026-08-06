@@ -1603,8 +1603,16 @@ def teste_ficha_sem_contradicao():
                 "meta": "revisao_sistematica_meta_analise",
                 "revisao_narrativa": "revisao_narrativa",
                 "original": "artigo_original"}
-    mau_tipo, mau_data, mau_gancho, n = [], [], [], 0
+    mau_tipo, mau_data, mau_gancho, n, vazias = [], [], [], 0, []
     for p in pastas:
+        # ═══ 06/Ago — PASTA VAZIA NÃO É FICHA INCOERENTE, É LIXO DE INTERRUPÇÃO ═══
+        # Quando o Dr. Eduardo deu Ctrl-C na rodada dos 255, ficou uma pasta criada e sem NENHUM
+        # arquivo dentro. A `montar()` devolvia uma ficha em branco e a trava acusava "tipo_estudo
+        # incoerente" — apontando para o defeito errado. Pasta sem canônico não tem o que conferir:
+        # é contada à parte e reportada como lixo, que é o que ela é.
+        if not glob.glob(os.path.join(p, "*_CANONICO.md")):
+            vazias.append(os.path.basename(p)[:34])
+            continue
         try:
             fi = F.montar(p)
         except Exception:
@@ -1628,6 +1636,9 @@ def teste_ficha_sem_contradicao():
           "; ".join(mau_data[:3]))
     checa(f"ficha: gancho_lista ≠ contexto_tema", not mau_gancho,
           "iguais em: " + ", ".join(mau_gancho[:3]))
+    if vazias:
+        print(f"      ⚠️  {len(vazias)} pasta(s) VAZIA(s) no STAGING (lixo de rodada interrompida): "
+              + ", ".join(vazias[:3]) + ("…" if len(vazias) > 3 else ""))
     return f"{n} pacotes: tipo coerente · mês preservado · gancho distinto"
 
 
@@ -1678,6 +1689,62 @@ def teste_contrato_espelha_a_tabela():
         except Exception:
             pass
     return f"colunas mortas fora do código: {', '.join(MORTAS)}"
+
+
+def teste_independencia_nao_cruza_o_nove():
+    """06/Ago — O DESCONTO DE INDÚSTRIA NÃO CONVERTE "muda conduta" EM "não muda" (opção A).
+
+    ═══ O QUE ACONTECEU, MEDIDO NA PRIMEIRA RODADA REAL ═══
+    O Dr. Eduardo rodou os artigos originais e os três primeiros RCTs de peso saíram assim:
+
+        TRITON-TIMI 38 (Prasugrel, 2007) .... nota 8 · muda_conduta NÃO
+        PLATO (Ticagrelor, 2009) ............ nota 8 · muda_conduta NÃO
+        DAPA-HF (Dapagliflozina, 2019) ...... nota 8 · muda_conduta NÃO
+
+    Os três com `teto_desenho: 10`, `nota_trabalho_estatistico: 9`, ARR/ano acima do limiar da
+    casa, e o MESMO delator: `independência editorial −1.0 (indústria envolvida)`.
+
+    O motor tinha reconhecido tudo — RCT duplo-cego, poder ok, desfecho duro. O desconto derrubou
+    9 → 8, e a BICONDICIONAL leu o 8 e escreveu que o ticagrelor não muda conduta.
+
+    ═══ POR QUE É ESTRUTURAL ═══
+    Quase todo ensaio de fase 3 em cardiologia é patrocinado. Desconto integral + bicondicional,
+    juntos, tornavam quase impossível um artigo original chegar a 9 — e o produto perdia a frase
+    mais valiosa que vende: "isto muda sua prática".
+
+    ═══ A REGRA (decisão dele) ═══
+    Nota ≥9 ANTES do desconto → o desconto desce no máximo até 9, e o delator DIZ quanto teria
+    sido descontado. Financiamento vira ressalva declarada, não rebaixamento de categoria.
+    Abaixo de 9, o desconto continua valendo INTEIRO — a regra de 05/Ago não foi revogada.
+    """
+    base = dict(pergunta="intervencao", desenho="rct", open_label=False, poder_ok=True,
+                desfecho_duro=True, extrapolavel=True, retrospectivo=False,
+                desenho_apropriado=True, qualidade_entrada=True, follow_up_completo=True,
+                eventos_min_grupo=800, falhas_fatais=[], tipo_documento="original",
+                relevancia_clinica=dict(classificacao="robusto", tipo_desfecho="composto",
+                                        desfecho_primario="morte CV/IAM/AVC",
+                                        arr_pct=1.9, seguimento_anos=1.0, mcid_reportado=False))
+
+    limpo = N.score({**base, "financiamento_papel": "público"})
+    checa("PLATO acadêmico chega a 9", limpo["aplic"] >= 9, f"veio {limpo['aplic']}")
+
+    pago = N.score({**base, "financiamento_papel": "indústria envolvida"})
+    checa("PLATO patrocinado NÃO cai abaixo de 9", pago["aplic"] >= N.PISO_INDEPENDENCIA,
+          f"veio {pago['aplic']} — o desconto cruzou a fronteira e a bicondicional vai dizer "
+          f"que o ticagrelor não muda conduta")
+    checa("PLATO patrocinado mantém muda_conduta SIM", pago["muda_conduta"] == "SIM",
+          f"veio {pago['muda_conduta']}")
+    checa("e o delator DECLARA o desconto que não foi aplicado",
+          any("ressalva declarada" in f for f in pago.get("flags", [])),
+          "o leitor tem de ver que houve indústria, mesmo sem a nota cair")
+
+    # ── ABAIXO de 9 o desconto continua inteiro: a regra de 05/Ago não virou letra morta ──
+    b8 = {**base, "open_label": True}          # open-label → teto 8
+    s_lim = N.score({**b8, "financiamento_papel": "público"})
+    s_pag = N.score({**b8, "financiamento_papel": "indústria envolvida"})
+    checa("abaixo de 9 o desconto de indústria continua descontando",
+          s_pag["aplic"] < s_lim["aplic"],
+          f"público={s_lim['aplic']} vs indústria={s_pag['aplic']} — o piso virou anistia geral")
 
 
 def teste_independencia_editorial():
@@ -2020,6 +2087,19 @@ if __name__ == "__main__":
               teste_independencia_editorial, teste_mcid_confere_a_conta,
               teste_revisao_valoriza_tabela, teste_mcid_so_onde_faz_sentido,
               teste_mcid_cardiodaily]
+
+    # ═══ 06/Ago — A LISTA FIXA DEIXAVA TRAVA ESCRITA E NUNCA CHAMADA ═══
+    # Escrevi `teste_independencia_nao_cruza_o_nove`, rodei a bateria, saiu APROVADO — e a trava
+    # não tinha rodado UMA vez: não estava nesta lista. É o mesmo defeito do `teste_schema_do_google`
+    # (lista chumbada que omitia o SCHEMA_FATOS_META), e é o pior tipo de defeito de prova: dá
+    # APROVADO por ausência. Agora o runner VARRE o módulo e recolhe toda função `teste_*` — a lista
+    # acima fica só para fixar a ORDEM de leitura do relatório.
+    _vistos = {f.__name__ for f in testes}
+    _mod = sys.modules[__name__]
+    for _nome in sorted(vars(_mod)):
+        if _nome.startswith("teste_") and _nome not in _vistos and callable(getattr(_mod, _nome)):
+            testes.append(getattr(_mod, _nome))
+
     print("\nTESTE DO MOTOR DE RIGOR · função pura · sem LLM, sem rede, sem banco\n" + "═" * 70)
     for t in testes:
         antes = len(falhas)

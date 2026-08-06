@@ -211,6 +211,50 @@ reprovaram no Degrau 2 — todas por misturar ECR com observacional**, com a fer
 ele mostra os números e QUEM DECIDE É O DONO. Afrouxar régua para caber mais artigo é trocar o
 produto por volume — e o produto é justamente o filtro.
 
+**O DESCONTO DE INDÚSTRIA NÃO CRUZA A FRONTEIRA DO 9 (06/Ago/2026)**
+
+Na primeira rodada real dos artigos originais, os três primeiros RCTs de peso saíram assim:
+
+| estudo | nota | muda_conduta |
+|---|---|---|
+| TRITON-TIMI 38 (Prasugrel, 2007) | 8 | **NÃO** |
+| PLATO (Ticagrelor, 2009) | 8 | **NÃO** |
+| DAPA-HF (Dapagliflozina, 2019) | 8 | **NÃO** |
+
+Os três com `teto_desenho: 10`, `nota_trabalho_estatistico: 9`, ARR/ano acima do limiar da casa,
+e o MESMO delator: `independência editorial −1.0 (indústria envolvida)`. O motor reconheceu tudo;
+o desconto derrubou 9 → 8; e a **bicondicional** leu o 8 e escreveu que o ticagrelor não muda conduta.
+
+**Por que era estrutural.** Quase todo ensaio de fase 3 em cardiologia é patrocinado — PLATO e
+DAPA-HF são AstraZeneca, TRITON é Daiichi Sankyo/Lilly; SPRINT e ISCHEMIA são a exceção. Desconto
+integral + bicondicional, juntos, tornavam quase impossível um artigo original chegar a 9, e o
+produto perdia a frase mais valiosa que vende: *"isto muda sua prática"*. Nenhuma das duas regras
+estava errada sozinha — elas se atropelavam porque o desconto entrava DEPOIS, no mesmo lugar onde
+a bicondicional lê.
+
+**A regra (opção A, decisão do Dr. Eduardo):** se a nota ANTES do desconto já era ≥9, o desconto
+desce no máximo até **9**, e o delator DIZ quanto teria sido descontado. Financiamento é **ressalva
+declarada, não rebaixamento de categoria** — o leitor vê que o ensaio é bom E quem pagou por ele.
+Abaixo de 9 o desconto vale INTEIRO, como ele definiu em 05/Ago.
+Trava: `teste_independencia_nao_cruza_o_nove` (`PISO_INDEPENDENCIA = 9`).
+
+**A TELA DA CHAVE 2 MOSTRAVA DUAS ORDENS DIFERENTES (06/Ago)**
+
+A contagem do topo listava `ARTIGOS_ORIGINAIS · META · GUIDELINES · REVISOES`; o menu logo abaixo
+numerava `1)META 2)GUIDELINES 3)REVISOES 4)ARTIGOS_ORIGINAIS`. O Dr. Eduardo leu a contagem, contou
+até revisões, digitou **4** — e o 4 era artigos originais: 255 artigos, US$ 76,50. É a versão de
+interface do "duas fontes de verdade" da LEI 9, e a culpa é de quem desenhou a tela, não de quem
+digitou. Agora existe **UMA lista, com UM número por pasta** — o mesmo que se digita — e o custo
+de cada linha aparece antes da escolha.
+
+**A LISTA FIXA DE TESTES DAVA APROVADO POR AUSÊNCIA (06/Ago)**
+
+`teste_independencia_nao_cruza_o_nove` foi escrita, a bateria rodou, saiu APROVADO — e a trava não
+tinha rodado uma única vez: não estava na lista chumbada do runner. É o mesmo defeito do
+`teste_schema_do_google` (que omitia o `SCHEMA_FATOS_META`), e é o pior tipo de defeito de prova:
+**aprova por não ter olhado.** O runner agora VARRE o módulo e recolhe toda função `teste_*`; a
+lista sobrevive só para fixar a ordem de leitura do relatório.
+
 **A ÚNICA EXCEÇÃO — A DIRETRIZ NÃO TEM PORTA (05/Ago/2026)**
 
 *"As diretrizes — precisamos manter esta classificação mas não teremos nenhum impedimento para

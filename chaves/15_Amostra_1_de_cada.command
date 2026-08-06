@@ -39,30 +39,45 @@ case "$Q" in
   *) echo "   Opção inválida."; read -p "Enter. "; exit 1 ;;
 esac
 
-# ── a LISTA, para escolher em vez de pegar o primeiro da ordem alfabética ──
-# (na REVISOES o primeiro é um '2014_07_.pdf', sem título nem revista no nome — a amostra
-#  sairia ruim por motivo errado, não por causa da régua)
+# ── ESCOLHER POR BUSCA, não por número numa lista de 256 ──
+# 05/Ago: a 1ª versão listava os 20 primeiros de `sort -r`. Dois problemas medidos na hora:
+#   · o JAMA-Coffee que eu tinha sugerido estava na posição 245 de 256 — fora da lista;
+#   · os 4 PRIMEIROS eram nomes quebrados (`mortensen-et-al...`, `NEJM199909023411001`),
+#     porque letra ordena DEPOIS de dígito em ordem reversa: quem não tem nome AAAA-MM sobe.
+# Rolar 256 linhas para achar um artigo é pior do que digitar duas palavras dele.
+NTOT=$(ls -1 "$CD_CLASSIFICADOS/$PASTA"/*.pdf 2>/dev/null | wc -l | tr -d ' ')
+[ "$NTOT" -eq 0 ] && { echo "   Pasta vazia."; read -p "Enter. "; exit 1; }
 echo
-echo "   ── QUAL ARTIGO? ──  (os mais recentes primeiro)"
-IFS=$'\n' read -r -d '' -a LISTA < <(ls -1 "$CD_CLASSIFICADOS/$PASTA"/*.pdf 2>/dev/null | sort -r && printf '\0')
-if [ ${#LISTA[@]} -eq 0 ]; then echo "   Pasta vazia."; read -p "Enter. "; exit 1; fi
-i=1
-for f in "${LISTA[@]:0:20}"; do
-  printf "   %3d) %s\n" "$i" "$(basename "$f" .pdf | cut -c1-74)"
-  i=$((i+1))
-done
-[ ${#LISTA[@]} -gt 20 ] && echo "        ... (+$(( ${#LISTA[@]} - 20 )) outros — digite 0 para pegar o 1º da fila)"
+echo "   ── QUAL ARTIGO? ──  ($NTOT na pasta)"
+echo "   Digite um pedaço do nome (revista, tema, ano) — ex.: 'coffee', 'JAMA', 'delirium'."
+echo "   Enter vazio = o primeiro da fila."
 echo
-read -r -p "   Número: " NUM
-case "$NUM" in ''|*[!0-9]*) echo "   '$NUM' não é número."; read -p "Enter. "; exit 1 ;; esac
+read -r -p "   Buscar: " BUSCA
 
-if [ "$NUM" -eq 0 ]; then
-  FILTRO=""
-  ALVO="(o primeiro da fila)"
+if [ -z "$BUSCA" ]; then
+  FILTRO=""; ALVO="(o primeiro da fila)"
 else
-  ARQ="${LISTA[$((NUM-1))]}"
+  IFS=$'\n' read -r -d '' -a ACHOU < <(ls -1 "$CD_CLASSIFICADOS/$PASTA"/*.pdf 2>/dev/null \
+      | grep -i -- "$BUSCA" | sort -r && printf '\0')
+  if [ ${#ACHOU[@]} -eq 0 ]; then
+    echo "   Nada casa com '$BUSCA'. Tente outra palavra."; read -p "Enter. "; exit 1
+  fi
+  echo
+  i=1
+  for f in "${ACHOU[@]:0:15}"; do
+    printf "   %3d) %s\n" "$i" "$(basename "$f" .pdf | cut -c1-74)"
+    i=$((i+1))
+  done
+  [ ${#ACHOU[@]} -gt 15 ] && echo "        ... (+$(( ${#ACHOU[@]} - 15 )) — refine a busca)"
+  echo
+  if [ ${#ACHOU[@]} -eq 1 ]; then
+    NUM=1; echo "   (só um resultado — usando ele)"
+  else
+    read -r -p "   Número: " NUM
+    case "$NUM" in ''|*[!0-9]*) echo "   '$NUM' não é número."; read -p "Enter. "; exit 1 ;; esac
+  fi
+  ARQ="${ACHOU[$((NUM-1))]}"
   [ -z "$ARQ" ] && { echo "   Número fora da lista."; read -p "Enter. "; exit 1; }
-  # um pedaço do nome que seja único: os 40 primeiros caracteres bastam
   FILTRO="--artigo=$(basename "$ARQ" .pdf | cut -c1-40)"
   ALVO="$(basename "$ARQ" .pdf | cut -c1-64)"
 fi
