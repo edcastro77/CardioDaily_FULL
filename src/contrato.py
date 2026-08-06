@@ -82,10 +82,33 @@ def validar(ficha, checar_arquivos=True):
         v.append(f"doenca_principal fora da lista do site: '{dp}'")
 
     # 4) nota (motor de rigor) — e a PORTA: nota <6 FICA retido, não vai pro site.
+    #
+    # ═══ 06/Ago — O CONTRATO NÃO SABIA DA EXCEÇÃO DA DIRETRIZ (LEI 9, cometida por mim) ═══
+    #
+    # Em 05/Ago o Dr. Eduardo decidiu: *"as diretrizes — precisamos manter esta classificação mas
+    # não teremos NENHUM IMPEDIMENTO PARA SUBIR. Mesmo com as limitações, é o que tem para hoje."*
+    # Eu implementei isso no `decidir_entregaveis` (analisador), escrevi a trava
+    # `teste_diretriz_nao_tem_porta` mirando ali — e NÃO VARRI O CONTRATO, que é outro bloco e
+    # decide sozinho. A trava ficou verde e a porta continuou fechada, em silêncio.
+    #
+    # MEDIDO na rodada real de 06/Ago: das 31 diretrizes, **13 RECUSADAS** — ESC (imagem, atleta,
+    # HF familiar), AHA (ICFEp, atleta master, ética em transplante), ESPEN, NICE (hipertensão),
+    # AACE. Exatamente os documentos pelos quais o cardiologista é cobrado na prática.
+    #
+    # POR QUE NÃO É BRECHA (as palavras dele, 05/Ago): para uma meta ruim existe outra melhor, e
+    # reter não custa nada ao leitor. Com diretriz é o contrário — não existe "outra diretriz de
+    # fibrilação atrial", existe A diretriz. Se ela é fraca, o médico precisa saber que é fraca
+    # **e mesmo assim precisa dela**. Reter não protege ninguém: esconde o que rege a prática.
+    # O aviso vem pela RECOMENDAÇÃO (RECOMENDADA · COM RESSALVAS · REFERÊNCIA · NÃO RECOMENDADA),
+    # que informa em vez de barrar.
+    #
+    # ⚠️ A EXCEÇÃO É SÓ DA DIRETRIZ: *"ESTA REGRA SÓ VALE PARA DIRETRIZ."* Meta, revisão e artigo
+    # original continuam retidos abaixo de 6 (LEI 10 — o CardioDaily publica menos e reprova mais).
+    _eh_diretriz = str(ficha.get("tipo_documento") or "").strip().lower() == "diretriz"
     n = ficha.get("nota_aplicabilidade")
     if not isinstance(n, int) or not (1 <= n <= 10):
         v.append(f"nota_aplicabilidade inválida: {n!r} (int 1–10)")
-    elif n < 6:
+    elif n < 6 and not _eh_diretriz:
         v.append(f"nota {n} < 6: por regra o artigo FICA retido (não publica). "
                  f"Bug real: um nota 5 foi parar no Supabase em 25/07.")
 

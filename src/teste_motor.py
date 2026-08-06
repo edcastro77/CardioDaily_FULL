@@ -1509,6 +1509,26 @@ def teste_diretriz_nao_tem_porta():
     #    (senão mexer no roteiro da diretriz não invalida o staging dela — LEI 9)
     a_dir = AN.versoes_atuais("x/GUIDELINES/y.pdf")["audio"]
     a_out = AN.versoes_atuais("x/META_ANALISES/y.pdf")["audio"]
+    # ═══ 06/Ago — A PORTA VIVE EM DOIS BLOCOS, E EU SÓ TINHA OLHADO UM ═══
+    # Em 05/Ago implementei a exceção no `decidir_entregaveis` e escrevi esta trava mirando ali.
+    # O CONTRATO (`contrato.py`) decide sozinho, e continuava recusando `nota < 6` sem saber da
+    # exceção. A trava ficou VERDE e a porta continuou fechada — em silêncio, que é o pior modo.
+    # MEDIDO na rodada real de 06/Ago: 13 das 31 diretrizes RECUSADAS — ESC, AHA, ESPEN, NICE,
+    # AACE, KDIGO. Os documentos pelos quais o cardiologista é cobrado.
+    import contrato as _C
+    def _ficha(nota, tipo):
+        return {"tipo_documento": tipo, "nota_aplicabilidade": nota,
+                "nota_trabalho_estatistico": nota}
+    for nota in (1, 3, 4, 5):
+        viol = [x for x in _C.validar(_ficha(nota, "diretriz")) if "FICA retido" in x]
+        checa(f"CONTRATO: diretriz nota {nota} não é barrada pela porta", not viol,
+              f"{viol} — a exceção da LEI 10 não chegou ao contrato")
+    # e a exceção NÃO vaza: os outros três continuam retidos abaixo de 6
+    for tipo in ("original", "meta", "revisao_narrativa"):
+        viol = [x for x in _C.validar(_ficha(4, tipo)) if "FICA retido" in x]
+        checa(f"CONTRATO: {tipo} nota 4 continua barrado", viol,
+              "a exceção da diretriz vazou — a LEI 10 caiu para todo mundo")
+
     checa("diretriz: áudio usa prompt PRÓPRIO", "diretriz" in a_dir, f"veio {a_dir}")
     checa("os outros tipos: áudio segue o prompt comum", "diretriz" not in a_out, f"veio {a_out}")
     checa("carimbo distingue os dois roteiros", a_dir != a_out)
@@ -1714,6 +1734,43 @@ def teste_acri_nao_diz_sim_nao_para_todo_mundo():
           "o prompt ainda manda imprimir SIM/NÃO em diretriz e revisão")
     for termo in ("RECOMENDADA COM RESSALVAS", "revisão narrativa"):
         checa(f"ACRI sabe o caso: {termo}", termo in txt, "o prompt não cobre este tipo")
+
+
+def teste_doi_sintetico_para_quem_nao_tem():
+    """06/Ago — A COLUNA `doi` É NOT NULL, E O NICE NÃO TEM DOI.
+
+    ═══ O CASO REAL ═══
+    Na rodada das diretrizes, a linha do NICE (NG136) foi recusada pelo Postgres:
+        Supabase 400 {"code":"23502"} — Failing row contains (uuid, null, hypertension-in-adults…)
+    A segunda coluna é `doi`, e ela é NOT NULL. O publicador já sabia conviver sem DOI na hora de
+    resolver o conflito ("sem DOI cai no doc_id"), mas a linha nem chegava a entrar.
+
+    Nem todo documento tem DOI, e isso não é defeito do dado: o NICE publica por código próprio.
+    Medido: 2 de 131 pacotes sem DOI — os dois, NICE.
+
+    ═══ A DECISÃO DELE (opção A, com o prefixo que ELE escolheu) ═══
+    Gravar um identificador sintético com o prefixo **`Sintetico_`**. O prefixo é o ponto: quem
+    olhar a coluna vê na hora que não é DOI de verdade e não vai tentar resolver no doi.org.
+    Era a minha única objeção à opção A, e o prefixo dele a resolve.
+    """
+    import ficha_site as _F
+    # sem DOI → sintético COM o prefixo
+    d = _F._doi_ou_sintetico("", "hypertension-in-adults-ng136")
+    checa("sem DOI gera sintético", bool(d), "voltou vazio — o Postgres recusa a linha (23502)")
+    checa("o sintético usa o prefixo 'Sintetico_'", str(d).startswith("Sintetico_"),
+          f"veio {d!r} — sem o prefixo, alguém vai achar que é DOI de verdade")
+    checa("e é derivado do doc_id (único)", "hypertension-in-adults-ng136" in str(d), f"veio {d!r}")
+
+    # 'n/a' é ausência disfarçada — o extrator escreve isso
+    checa("'n/a' também vira sintético",
+          str(_F._doi_ou_sintetico("n/a", "x-y")).startswith("Sintetico_"))
+
+    # COM DOI → o DOI de verdade, intocado. Um sintético por cima de DOI real seria bem pior.
+    real = "10.1161/CIR.0000000000001440"
+    checa("com DOI real, nada muda", _F._doi_ou_sintetico(real, "qualquer") == real,
+          "o sintético atropelou um DOI verdadeiro")
+    checa("DOI real não ganha prefixo",
+          not _F._doi_ou_sintetico(real, "qualquer").startswith("Sintetico_"))
 
 
 def teste_arr_por_ano_nao_e_dividida_de_novo():

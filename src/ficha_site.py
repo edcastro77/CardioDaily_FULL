@@ -167,6 +167,31 @@ def _do_nome_do_arquivo(pasta):
             "titulo": tit.replace("_", " ").strip()}
 
 
+def _doi_ou_sintetico(doi, doc_id):
+    """O DOI da linha — e um SINTÉTICO quando o documento simplesmente não tem DOI.
+
+    ═══ 06/Ago/2026 — POR QUE ISTO EXISTE ═══
+    A coluna `doi` do Supabase é NOT NULL. Antes, sem DOI, gravávamos `None` e o banco recusava a
+    linha inteira com `23502` — foi o que aconteceu com a diretriz do NICE (NG136) na rodada real.
+
+    Nem todo documento tem DOI, e isso não é defeito do dado: **o NICE publica por código próprio
+    (NG136), não por DOI**, e o mesmo vale para vários documentos de sociedade e para as diretrizes
+    brasileiras. Medido em 06/Ago: 2 de 131 pacotes sem DOI — os dois, NICE.
+
+    DECISÃO DO DR. EDUARDO (opção A, 06/Ago): gravar um identificador sintético **com o prefixo
+    `Sintetico_`**. O prefixo é o ponto: qualquer um que olhe a coluna vê na hora que aquilo não é
+    um DOI de verdade, e ninguém vai tentar resolver aquilo no doi.org. Era a minha única objeção
+    à opção A, e o prefixo dele a resolve.
+
+    O sintético é derivado do `doc_id`, que já é único — então a UNIQUE(doi) continua honesta.
+    O caminho do Storage usa `doc_id`, não o DOI: nada de mídia muda.
+    """
+    d = (doi or "").strip()
+    if d and d.lower() != "n/a":
+        return d
+    return f"Sintetico_{doc_id}" if doc_id else None
+
+
 def montar(pasta):
     """Lê uma pasta do STAGING e devolve a ficha (dict com os 16 campos)."""
     base = os.path.basename(pasta.rstrip("/"))
@@ -367,9 +392,10 @@ def montar(pasta):
             return valor if valor else [f"ausente: {de_onde}"]
         return valor if (valor and str(valor).strip()) else f"ausente: {de_onde}"
 
+    _doc_id = doi if doi and doi != "n/a" else slugify(titulo)
     return {                                    # nomes = colunas REAIS da tabela artigos (Supabase)
-        "doc_id": doi if doi and doi != "n/a" else slugify(titulo),
-        "doi": doi if doi and doi != "n/a" else None,   # SEM doi → NULL (não ""): dois "" colidem na UNIQUE(doi)
+        "doc_id": _doc_id,
+        "doi": _doi_ou_sintetico(doi, _doc_id),
         "titulo": titulo,
         "revista": revista,
         "data_publicacao": _ou_selo(ano, "o documento nao traz ano legivel"),
