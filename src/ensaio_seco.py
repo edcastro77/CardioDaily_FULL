@@ -139,6 +139,33 @@ def main():
             if len(itens) > 6:
                 print(f"       … e mais {len(itens) - 6}")
 
+    # ═══ 07/Ago — O ACERVO NÃO ACOMPANHA A RÉGUA, E ISSO ACONTECE EM SILÊNCIO ═══
+    # A terra arrasada refaz o pacote quando o carimbo do motor muda — mas SÓ para quem está
+    # na fila. Artigo publicado sai da pasta, e daí em diante fica congelado com a régua do dia
+    # em que foi analisado. Foi como PLATO, TRITON e DAPA-HF ficaram com nota 8 depois de o
+    # Dr. Eduardo decidir o piso de independência: 46 minutos separaram a análise da regra.
+    # O card ia postar `NOTA 8/10` sem o selo MUDA CONDUTA — e o card não errou, ele copiou.
+    try:
+        from analisador import hash_arquivo_src as _h
+        _atual = f"notas_prototipo.py@{_h('notas_prototipo.py')}"
+        _velhos = 0
+        for _p in pastas:
+            _v = os.path.join(_p, "_versoes.json")
+            if not os.path.exists(_v):
+                continue
+            try:
+                if json.load(open(_v)).get("motor") != _atual:
+                    _velhos += 1
+            except Exception:
+                pass
+        if _velhos:
+            print()
+            print(f"   ⚠️  {_velhos} pacote(s) com CARIMBO DE MOTOR VELHO.")
+            print("      A nota deles foi calculada por uma régua anterior. Rode:")
+            print("         python3 src/reparar_notas.py        (ensaio, custo zero)")
+    except Exception:
+        pass
+
     if mudou_nota:
         print()
         print(f"   ── A NOTA MUDARIA em {len(mudou_nota)} pacote(s) ──")

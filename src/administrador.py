@@ -129,6 +129,57 @@ st.dataframe(
     use_container_width=True, hide_index=True)
 
 # ---------- ver · ouvir · aprovar (um por vez) ----------
+# ═══════════════════════════════════════════════════════════════════════════════════
+# 07/Ago — O CARD E O ACRI VÊM PARA CÁ (pedido do Dr. Eduardo)
+#
+#   *"o administrador poderia colocar o acri direto lá — desta forma eu não precisaria
+#     ficar procurando na pasta staging."*
+#
+# Este painel lê o SUPABASE; o card ACRI e o texto do ACRI vivem no DISCO, dentro do
+# pacote do artigo. A ponte entre os dois é o DOI, que existe nos dois lados. O índice é
+# construído UMA vez por sessão (`cache_data`) varrendo os canônicos — 433 arquivos de
+# texto, dezenas de milissegundos, sem rede.
+#
+# Por que não subir o card para o Storage e ler pela URL: seria coluna nova + ALTER TABLE,
+# e o card é peça de trabalho dele — não vai para o site nem para o assinante. Fica no
+# disco, aparece aqui, ele baixa e posta.
+# ═══════════════════════════════════════════════════════════════════════════════════
+import glob as _glob, os as _os, re as _re
+
+_STAGING = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                         "outputs", "STAGING")
+
+
+@st.cache_data(ttl=300)
+def indice_do_disco():
+    """{doi_minusculo: {'pasta','card','acri'}} — a ponte entre a linha do banco e o pacote."""
+    ix = {}
+    for can in _glob.glob(_os.path.join(_STAGING, "*", "*_CANONICO.md")):
+        try:
+            txt = open(can, encoding="utf-8").read(4000)
+        except Exception:
+            continue
+        m = _re.search(r'doi:\s*"([^"]+)"', txt)
+        if not m:
+            continue
+        pasta = _os.path.dirname(can)
+        base = _os.path.basename(pasta)
+        card = _os.path.join(pasta, f"{base}_card.png")
+        acri = _glob.glob(_os.path.join(pasta, "*_ACRI.txt"))
+        ix[m.group(1).strip().lower()] = {
+            "pasta": pasta,
+            "card": card if _os.path.exists(card) else "",
+            "acri": acri[0] if acri else "",
+        }
+    return ix
+
+
+def _do_disco(artigo):
+    """O pacote deste artigo, casando pelo DOI (inclusive o sintético do NICE)."""
+    d = (artigo.get("doi") or "").strip().lower()
+    return indice_do_disco().get(d, {}) if d else {}
+
+
 st.markdown("### Ver · ouvir · aprovar")
 if lista:
     rotulo = {f"[{a.get('nota_aplicabilidade')}] {a.get('titulo','')[:80]} · {a.get('revista','')}": a for a in lista}
@@ -150,6 +201,30 @@ if lista:
             st.markdown(" · ".join(links))
         if a.get("caminho_audio"):
             st.audio(a["caminho_audio"])          # OUVIR aqui mesmo
+
+        # ── O PACOTE NO DISCO: card para postar, ACRI para copiar ──
+        _pk = _do_disco(a)
+        if _pk.get("acri"):
+            try:
+                _txt = open(_pk["acri"], encoding="utf-8").read()
+            except Exception:
+                _txt = ""
+            if _txt:
+                with st.expander("📋 ACRI — copiar para o WhatsApp", expanded=True):
+                    # `st.code` porque ele traz o botão de copiar no canto, e é isso que
+                    # ele faz com o ACRI: copia e cola no grupo.
+                    st.code(_txt, language=None)
+        # O CARD não é mostrado — decisão dele em 07/Ago: *"não precisa ser o card, pode ser
+        # só o txt"*. Uma imagem de 1080×1350 em cada artigo empurra a tela toda para baixo e
+        # ele já viu o card quando gerou. Fica só o botão, para quando for postar.
+        if _pk.get("card"):
+            try:
+                with open(_pk["card"], "rb") as _f:
+                    st.download_button("⬇️ Baixar o card (1080×1350)", _f.read(),
+                                       file_name=_os.path.basename(_pk["card"]),
+                                       mime="image/png")
+            except Exception:
+                pass
     with c2:
         data = st.date_input("Enviar em", dt.date.today())
         if st.button("✅ Aprovar e agendar", use_container_width=True):

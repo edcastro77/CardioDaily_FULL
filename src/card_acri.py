@@ -40,10 +40,22 @@ O QUE ELE NÃO FAZ (de propósito)
 """
 import os
 import re
+import sys
 import json
 import glob
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
+
+# ═══ 07/Ago — SEM ISTO, NENHUMA CHAVE DE API EXISTE ═══
+# Todo programa da casa que fala com modelo carrega o .env ANTES: `analisador.py` na linha 27,
+# `rodar_em_blocos.py` na 22, `publicador.py` no `processar_pasta`. Eu esqueci, e a Chave 17
+# rodou 232 artigos sem UMA credencial no ambiente — os três modelos da cadeia recusaram e a
+# saída foi 232 linhas do mesmo erro. Custo zero (nada chegou a ser cobrado), mas o Dr. Eduardo
+# clicou e não saiu nada.
+from analisador import _carregar_env as _env
+_env()
+
 TEMPLATE = os.path.join(_HERE, "infographics", "templates", "card_acri_template.html")
 PROMPT = os.path.join(_HERE, "card_acri_prompt.md")
 
@@ -237,7 +249,10 @@ def gerar_lote(staging, nota_min=7, maximo=0, force=False):
         try:
             p, motivo = gerar_um(pasta, force=force)
         except Exception as e:
-            p, motivo = None, f"{type(e).__name__}: {str(e)[:60]}"
+            # 07/Ago: era [:60] e cortava a mensagem EXATAMENTE onde a causa começava —
+            # "Todos os modelos da cadeia falharam:\n  gpt-5.6-terra: OpenAI" tem 59 caracteres.
+            # Um diagnóstico truncado custa mais caro que uma linha de log comprida.
+            p, motivo = None, f"{type(e).__name__}: {str(e)[:240]}".replace("\n", " | ")
         if p:
             feitos.append(base)
             print(f"  ✅ {base[:60]}")

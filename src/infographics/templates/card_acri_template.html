@@ -28,7 +28,16 @@
   .titulo.medio { font-size: 54px; }
   .titulo.longo { font-size: 46px; }
 
-  .grid { display: grid; grid-template-columns: 62px 1fr; column-gap: 28px; flex: 1; align-content: start; }
+  /* ═══ 07/Ago — O VAZIO EMBAIXO DO "I" ═══
+     Era `align-content: start`: as quatro linhas se empilhavam no topo e o que sobrava virava
+     uma faixa branca de ~300px acima do rodapé. É EXATAMENTE o defeito que a proibição de 2025
+     nomeia — "o layout expande os boxes mas o conteúdo não ocupa" — e ele apareceu no primeiro
+     card real (PLATO), com as frases dentro do limite.
+     `space-between` distribui a folga ENTRE as linhas: frase curta ganha respiro, frase longa
+     não é espremida, e o card fecha cheio em qualquer comprimento de texto. É isto que faz o
+     layout ser ADAPTATIVO, que era a condição escrita para a proibição cair. */
+  .grid { display: grid; grid-template-columns: 62px 1fr; column-gap: 28px; flex: 1;
+          align-content: space-between; }
   .letra { border-bottom: 2px solid #d8d6d4; padding: 22px 0; font-weight: 800; font-size: 46px; color: #ec3013; line-height: 1; }
   .texto { border-bottom: 2px solid #d8d6d4; padding: 24px 0; font-size: 31px; line-height: 1.42; color: #201e1d; }
   .letra.ult, .texto.ult { border-bottom: none; }
