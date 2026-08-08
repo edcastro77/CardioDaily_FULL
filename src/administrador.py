@@ -52,7 +52,7 @@ def buscar():
         return None, "SUPABASE_URL / chave ausentes no .env"
     try:
         r = requests.get(f"{url}/rest/v1/artigos",
-                         params={"select": "doc_id,titulo,revista,data_publicacao,tipo_estudo,doenca_principal,"
+                         params={"select": "doc_id,doi,titulo,revista,data_publicacao,tipo_estudo,doenca_principal,"
                                            "nota_aplicabilidade,nota_trabalho_estatistico,mcid_avaliacao,"
                                            "caminho_pdf,caminho_audio,caminho_visual_abstract,publicar_no_site",
                                  "order": "nota_aplicabilidade.desc"},
@@ -166,18 +166,34 @@ def indice_do_disco():
         base = _os.path.basename(pasta)
         card = _os.path.join(pasta, f"{base}_card.png")
         acri = _glob.glob(_os.path.join(pasta, "*_ACRI.txt"))
-        ix[m.group(1).strip().lower()] = {
-            "pasta": pasta,
-            "card": card if _os.path.exists(card) else "",
-            "acri": acri[0] if acri else "",
-        }
+        reg = {"pasta": pasta,
+               "card": card if _os.path.exists(card) else "",
+               "acri": acri[0] if acri else ""}
+        ix[m.group(1).strip().lower()] = reg
+        # 07/Ago — DUAS CHAVES, porque uma só falhou em silêncio.
+        # A primeira versão casava SÓ por DOI, e o SELECT do Supabase (linha 55) nem pedia a
+        # coluna `doi` — então `_do_disco` recebia string vazia em TODO artigo e o bloco do
+        # ACRI era pulado sem uma mensagem sequer. O Dr. Eduardo abriu o painel e não achou nada.
+        # O `doc_id` é a chave que o portão usa e existe em toda linha; indexar pelos dois torna
+        # a ponte imune a um dos lados faltar.
+        try:
+            import ficha_site as _F
+            _d = (_F.montar(pasta) or {}).get("doc_id")
+            if _d:
+                ix[str(_d).strip().lower()] = reg
+        except Exception:
+            pass
     return ix
 
 
 def _do_disco(artigo):
-    """O pacote deste artigo, casando pelo DOI (inclusive o sintético do NICE)."""
-    d = (artigo.get("doi") or "").strip().lower()
-    return indice_do_disco().get(d, {}) if d else {}
+    """O pacote deste artigo no disco. Tenta DOI e, se falhar, doc_id."""
+    ix = indice_do_disco()
+    for chave in ((artigo.get("doi") or ""), (artigo.get("doc_id") or "")):
+        k = str(chave).strip().lower()
+        if k and k in ix:
+            return ix[k]
+    return {}
 
 
 st.markdown("### Ver · ouvir · aprovar")
@@ -204,6 +220,9 @@ if lista:
 
         # ── O PACOTE NO DISCO: card para postar, ACRI para copiar ──
         _pk = _do_disco(a)
+        if not _pk:
+            st.caption(f"⚠️ pacote não encontrado no STAGING "
+                       f"(doi={a.get('doi') or '—'} · doc_id={a.get('doc_id') or '—'})")
         if _pk.get("acri"):
             try:
                 _txt = open(_pk["acri"], encoding="utf-8").read()
