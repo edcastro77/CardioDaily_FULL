@@ -176,14 +176,49 @@ def _upload_storage(bucket, local_path, objeto, content_type):
     with open(local_path, "rb") as f:
         dados = f.read()
     hdr = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": content_type, "x-upsert": "true"}
-    r = requests.post(f"{url}/storage/v1/object/{bucket}/{objeto}", headers=hdr, data=dados, timeout=120)
+
+    # ═══ 06/Ago — RETRY DE REDE NO UPLOAD (a falha que mais custou clique) ═══
+    #
+    # Havia tratamento para erro de STATUS (400/404 = bucket não existe) e NENHUM para EXCEÇÃO de
+    # rede. Um `BrokenPipeError` no meio do envio subia e derrubava o artigo inteiro, que voltava
+    # para a fila. Medido em 06/Ago, em duas rodadas seguidas:
+    #
+    #     GUIDELINES ... 6 de 31 falharam  (ConnectionError · SSLError · timeout)
+    #     REVISOES ..... 5 de 89 falharam  (BrokenPipe · RemoteDisconnected, TODAS seguidas)
+    #
+    # ~5%. Nos 236 artigos originais isso seriam ~12 artigos caindo — e caindo de MADRUGADA, com
+    # o Dr. Eduardo dormindo depois de um plantão. Ele reclicaria de manhã, de graça (reusa o
+    # staging), mas é uma hora de rodada perdida por um problema de 20 linhas.
+    #
+    # POR QUE ACONTECE AQUI e não nas outras chamadas: este é o único ponto que empurra ARQUIVO —
+    # PNG de ~500 KB, áudio de ~4 MB. Conexão doméstica instável derruba upload longo muito antes
+    # de derrubar um POST de JSON. As 5 falhas vieram em sequência: foi UMA janela ruim de rede,
+    # e três tentativas com espera crescente atravessariam a janela inteira.
+    def _post(u, **kw):
+        """POST com 3 tentativas e espera crescente (2s · 6s · 18s). Só reenvia em erro de REDE —
+        erro de status é decidido pelo chamador, que sabe o que 400 e 404 significam aqui."""
+        import time
+        ultimo = None
+        for i in range(3):
+            try:
+                return requests.post(u, **kw)
+            except requests.exceptions.RequestException as e:
+                ultimo = e
+                if i < 2:
+                    espera = 2 * (3 ** i)
+                    print(f"  ↻ rede caiu no upload ({type(e).__name__}) — tentativa {i + 2}/3 "
+                          f"em {espera}s")
+                    time.sleep(espera)
+        raise ultimo
+
+    r = _post(f"{url}/storage/v1/object/{bucket}/{objeto}", headers=hdr, data=dados, timeout=120)
     if r.status_code in (200, 201):
         return url_publica
     if r.status_code in (400, 404):                      # bucket pode não existir → cria e re-tenta
-        requests.post(f"{url}/storage/v1/bucket",
-                      headers={"apikey": key, "Authorization": f"Bearer {key}"},
-                      json={"id": bucket, "name": bucket, "public": True}, timeout=15)
-        r = requests.post(f"{url}/storage/v1/object/{bucket}/{objeto}", headers=hdr, data=dados, timeout=120)
+        _post(f"{url}/storage/v1/bucket",
+              headers={"apikey": key, "Authorization": f"Bearer {key}"},
+              json={"id": bucket, "name": bucket, "public": True}, timeout=15)
+        r = _post(f"{url}/storage/v1/object/{bucket}/{objeto}", headers=hdr, data=dados, timeout=120)
         if r.status_code in (200, 201):
             return url_publica
     print(f"  ⚠️  Storage {bucket}: {r.status_code} {r.text[:120]}")
