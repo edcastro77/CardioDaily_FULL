@@ -12,6 +12,7 @@ USO:
 
 import argparse
 import os
+import voo as VOO          # plano de voo (09/Ago)
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -279,6 +280,20 @@ def run(phone_filter: str | None = None, dry_run: bool = False):
     else:
         usuarios = get_all_active()
 
+    # ═══ WAYPOINT E4 — "a lista de envio foi montada" (09/Ago) ═══
+    # `get_all_active()` faz `return r.json() if r.ok else []`. Supabase fora do ar, chave
+    # errada e "nenhum assinante" produzem EXATAMENTE o mesmo resultado: lista vazia. E o
+    # placar do fim fecha com "✅ OK: 0", que parece um dia tranquilo. Um dia inteiro sem
+    # entrega e sem ninguém saber.
+    if not usuarios:
+        VOO.marcar("E4_LISTA", ok=False, n_destinos=0,
+                   erro="lista de assinantes VAZIA — pode ser banco fora, chave errada ou zero "
+                        "assinantes; as três são indistinguíveis aqui")
+        print("⚠️  NENHUM assinante retornado.")
+        print("    Isto NÃO significa 'zero assinantes': o Supabase fora do ar devolve o mesmo.")
+        print("    Confira a credencial antes de concluir que a base está vazia.")
+    else:
+        VOO.marcar("E4_LISTA", n_destinos=len(usuarios))
     print(f"👥 {len(usuarios)} usuário(s) ativo(s)\n")
 
     totais = {"ok": 0, "parcial": 0, "erro": 0}
@@ -299,8 +314,17 @@ def run(phone_filter: str | None = None, dry_run: bool = False):
         if not dry_run:
             time.sleep(3)  # intervalo entre usuários
 
+    # ═══ WAYPOINT E5 — "a mensagem saiu para os destinatários" ═══
+    VOO.marcar("E5_ENVIOU", ok=(totais["ok"] > 0 and totais["erro"] == 0),
+               n_ok=totais["ok"], n_parcial=totais["parcial"], n_falha=totais["erro"],
+               n_destinos=len(usuarios),
+               erro=None if totais["ok"] else "nenhuma entrega confirmada")
     print(f"\n{'='*55}")
     print(f"✅ OK: {totais['ok']}  ⚠️  Parcial: {totais['parcial']}  ❌ Erro: {totais['erro']}")
+    if not totais["ok"]:
+        print("⚠️  NINGUÉM recebeu nada nesta rodada.")
+        print("    Zona de busca: Z-API sem crédito · BETA_PAUSADO=1 (envia só para o dono) ·")
+        print("    temas do filtro que não existem no banco · lista de assinantes vazia.")
     print(f"{'='*55}\n")
 
 

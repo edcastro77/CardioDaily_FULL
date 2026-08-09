@@ -171,6 +171,18 @@ def _upload_storage(bucket, local_path, objeto, content_type):
     url = os.getenv("SUPABASE_URL", "").rstrip("/")
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
     if not url or not key or not local_path or not os.path.exists(local_path):
+        # ═══ 09/Ago — ERA UM `return None` MUDO, E O ESTRAGO É PIOR DO QUE PARECE ═══
+        # Quem chama faz `if u:` — se vier None, o campo FICA COM O CAMINHO LOCAL DO MAC,
+        # e a linha sobe assim para o Supabase. O site renderiza um link para
+        # `/Users/eduardocastro/...`, que não existe para ninguém no mundo.
+        # As três causas são bem diferentes e agora aparecem separadas.
+        _VOO.marcar("P3_MIDIA", ok=False, artigo=os.path.basename(str(local_path or "")),
+                    bucket=bucket,
+                    erro=("credencial do Supabase ausente" if not (url and key)
+                          else f"arquivo local não existe: {local_path}"))
+        print(f"  ⚠️  Storage {bucket}: NÃO subiu — " +
+              ("credencial ausente" if not (url and key) else f"arquivo não existe ({os.path.basename(str(local_path or ''))})"))
+        print(f"      ⚠️ o campo vai para o banco com o CAMINHO LOCAL, que não abre fora deste Mac.")
         return None
     url_publica = f"{url}/storage/v1/object/public/{bucket}/{objeto}"
     with open(local_path, "rb") as f:
@@ -213,6 +225,7 @@ def _upload_storage(bucket, local_path, objeto, content_type):
 
     r = _post(f"{url}/storage/v1/object/{bucket}/{objeto}", headers=hdr, data=dados, timeout=120)
     if r.status_code in (200, 201):
+        _VOO.marcar("P3_MIDIA", artigo=objeto, bucket=bucket, kb=len(dados) // 1024)
         return url_publica
     if r.status_code in (400, 404):                      # bucket pode não existir → cria e re-tenta
         _post(f"{url}/storage/v1/bucket",
@@ -221,6 +234,8 @@ def _upload_storage(bucket, local_path, objeto, content_type):
         r = _post(f"{url}/storage/v1/object/{bucket}/{objeto}", headers=hdr, data=dados, timeout=120)
         if r.status_code in (200, 201):
             return url_publica
+    _VOO.marcar("P3_MIDIA", ok=False, artigo=objeto, bucket=bucket,
+                erro=f"HTTP {r.status_code}: {r.text[:200]}")
     print(f"  ⚠️  Storage {bucket}: {r.status_code} {r.text[:120]}")
     return None
 
@@ -256,7 +271,20 @@ def processar_pasta(pasta, publicar=False):
         msg = _retirar_do_supabase(ficha.get("doi"), ficha.get("doc_id"), publicar)
         if msg:
             print(f"  ↩️  {msg}")
+        # ═══ WAYPOINT P2 — "o contrato validou (ou recusou)" ═══
+        # RECUSA NÃO É FALHA: nota <6 é a LEI 10 funcionando. O que se registra é a CAUSA,
+        # para que a pergunta "por que este artigo não subiu?" nunca mais dependa de eu ir
+        # ler um arquivo de motivo de uma rodada de duas semanas atrás — que foi exatamente
+        # o erro que cometi em 09/Ago, contando 90 artigos publicados como retidos.
+        _VOO.marcar("P2_CONTRATO", ok=False, artigo=base,
+                    nota=ficha.get("nota_aplicabilidade"),
+                    tipo_documento=ficha.get("tipo_documento"),
+                    violacoes=len(violacoes),
+                    erro=" · ".join(violacoes[:3])[:380])
         return ("RECUSADO", ficha.get("nota_aplicabilidade"), violacoes)
+
+    _VOO.marcar("P2_CONTRATO", artigo=base, nota=ficha.get("nota_aplicabilidade"),
+                tipo_documento=ficha.get("tipo_documento"), violacoes=0)
 
     # passou no portão do CONTRATO → agora o PREFLIGHT de SCHEMA (roda até no dry-run: pega o erro antes)
     prob = _preflight(_payload_site(ficha))
@@ -267,13 +295,25 @@ def processar_pasta(pasta, publicar=False):
         msg = _retirar_do_supabase(ficha.get("doi"), ficha.get("doc_id"), publicar)
         if msg:
             print(f"  ↩️  {msg}")
+        _VOO.marcar("P4_BANCO", ok=False, artigo=base,
+                    erro="preflight de schema: " + " · ".join(prob[:3])[:340])
         return ("RECUSADO(schema)", ficha.get("nota_aplicabilidade"), prob)
     if publicar:
         ficha = _subir_midia(ficha)              # payload validado → sobe PNG/áudio/PDF, troca por URLs
     open(os.path.join(pasta, "_SITE.json"), "w", encoding="utf-8").write(
         json.dumps(_payload_site(ficha), ensure_ascii=False, indent=2))
     if publicar:
-        code = _upsert_supabase(_payload_site(ficha))
+        # ═══ WAYPOINT P4 — "a linha entrou na tabela artigos" ═══
+        # É o último waypoint do voo do artigo. Se ele existe, o artigo chegou. Se o P3
+        # passou e este não veio, o trecho a investigar é P3→P4, e a zona de busca é
+        # coluna NOT NULL, chave única duplicada, credencial, rede.
+        try:
+            code = _upsert_supabase(_payload_site(ficha))
+        except Exception as e:
+            _VOO.marcar("P4_BANCO", ok=False, artigo=base, erro=f"{type(e).__name__}: {e}")
+            raise
+        _VOO.marcar("P4_BANCO", artigo=base, http=code,
+                    nota=ficha.get("nota_aplicabilidade"), doi=ficha.get("doi"))
         return (f"PUBLICADO({code})", ficha.get("nota_aplicabilidade"), [])
     return ("APROVADO(dry-run)", ficha.get("nota_aplicabilidade"), [])
 

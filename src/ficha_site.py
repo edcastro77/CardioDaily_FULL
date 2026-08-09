@@ -10,6 +10,7 @@ Mapa canônico → contrato do site (interface Artigo):
   ACRI[I] → impacto_conduta, bullets_praticos      arquivos → caminho_pdf/audio/visual_abstract
 """
 import os, re, glob, unicodedata, datetime, json
+import voo as _VOO          # plano de voo (09/Ago)
 
 # selo do ACRI → tema do site (cardiodaily.ts → TEMAS)
 SELO_TEMA = {
@@ -227,8 +228,32 @@ def montar(pasta):
                                      "pct_classe_i_em_c": _r.get("pct_classe_i_em_c")} if motor == "DIRETRIZ" else {}),
                                  **({"teto_desenho": _r.get("teto_desenho"),
                                      "nhlbi": _r.get("nhlbi")} if motor == "ORIGINAL" else {})}
-        except Exception:
-            pass
+            _VOO.marcar("P1_FICHA", artigo=os.path.basename(str(pasta).rstrip("/")),
+                        motor=motor, tipo_documento=tipo_documento)
+        except Exception as e:
+            # ═══ 09/Ago — O PIOR PONTO MUDO DO SISTEMA INTEIRO ═══
+            # Era `except Exception: pass`, e o que ele engolia não era um detalhe: era o
+            # `json.load` dos FATOS **e** o `notas_prototipo.score()`. Quando qualquer um
+            # falhava, a ficha seguia com os padrões declarados acima:
+            #
+            #     motor = "ORIGINAL" · tipo_documento = "original" · fracao_ejecao = None
+            #
+            # E aí, em cascata e tudo em silêncio:
+            #   · o contrato não reconhece a diretriz → TODA diretriz com nota <6 é recusada,
+            #     anulando a decisão do Dr. Eduardo de 05/Ago (a diretriz não tem porta);
+            #   · a trava de INVERSÃO DE FRAÇÃO DE EJEÇÃO é desligada — a que impede publicar
+            #     "levosimendana para ICFEr" num ensaio de ICFEp;
+            #   · o banco grava a régua errada na coluna `motor`, e uma nota 8 de diretriz
+            #     fica indistinguível de uma nota 8 de RCT.
+            #
+            # Três decisões clínicas apagadas por uma linha de duas palavras.
+            _VOO.marcar("P1_FICHA", ok=False,
+                        artigo=os.path.basename(str(pasta).rstrip("/")),
+                        erro=f"{type(e).__name__}: {e}")
+            print(f"  ⚠️  FICHA SEM MOTOR: {os.path.basename(str(pasta).rstrip('/'))[:46]} — "
+                  f"{type(e).__name__}: {str(e)[:70]}")
+            print(f"      A linha vai como ORIGINAL/original e a trava de fração de ejeção "
+                  f"fica DESLIGADA para este artigo.")
 
     titulo = _campo(canon, "titulo")
     revista = _campo(canon, "revista")

@@ -19,6 +19,7 @@ Uso: python src/classificador_ouro.py <PASTA> [--dry-run] [--max N]
 import os
 import re
 import shutil
+import voo as VOO          # plano de voo (09/Ago) — marca posição a cada etapa crítica
 import argparse
 
 from dotenv import load_dotenv
@@ -178,6 +179,12 @@ def classificar_llm(caminho):
         print(f"   ⚠️ não li as páginas 1-3 de {os.path.basename(caminho)}: {type(e).__name__}")
         return None, "", ""
     if not texto3.strip():
+        # ═══ 09/Ago — ERA MUDO ═══
+        # `return None, "", ""` sem log. O juiz nunca é chamado, a cascata cai no último
+        # degrau, e nada indica que o artigo foi julgado sem o juiz.
+        VOO.marcar("C4_DECIDIU", ok=False, artigo=os.path.basename(caminho),
+                   erro="páginas 1-3 vieram VAZIAS — o juiz LLM não chegou a ser consultado")
+        print(f"   ⚠️ {os.path.basename(caminho)[:52]}: páginas 1-3 vazias — sem juiz LLM")
         return None, "", ""
     try:
         import llm_client, modelos as M
@@ -192,10 +199,23 @@ def classificar_llm(caminho):
         if _MODELO_USADO and _MODELO_USADO != M.CLASSIFICACAO[0]:
             print(f"        ⚠️ FALLBACK: quem respondeu foi {_MODELO_USADO}, "
                   f"não {M.CLASSIFICACAO[0]} — a acurácia medida NÃO vale para esta linha")
+        VOO.marcar("C4_DECIDIU", ok=bool(tipo), artigo=os.path.basename(caminho),
+                   camada="juiz LLM", tipo=tipo or "", confianca=conf,
+                   modelo=_MODELO_USADO or "",
+                   erro=None if tipo else "o modelo respondeu fora do formato esperado")
         return (tipo or None), conf, prova
     except Exception as e:
+        # ═══ 09/Ago — O ERRO SÓ APARECIA UMA VEZ POR PROCESSO ═══
+        # A flag `_llm_erro_mostrado` foi criada para não encher a tela, e a intenção era boa.
+        # Mas numa rodada de 383 artigos, do 2º ao 383º erro **não sobrava rastro nenhum** —
+        # e é justamente esse o cenário em que o erro é o mesmo em todos: crédito acabado,
+        # chave expirada, provedor fora do ar. O Radar de 09/Ago morreu assim.
+        # A tela continua limpa (a flag fica), mas o VOO registra TODOS, um por artigo.
+        VOO.marcar("C4_DECIDIU", ok=False, artigo=os.path.basename(caminho),
+                   erro=f"{type(e).__name__}: {e}")
         if not _llm_erro_mostrado:
             print(f"   ⚠️ classificador LLM falhou: {type(e).__name__} - {e}")
+            print(f"      (os próximos vão para o voo.jsonl — a tela não repete, o registro sim)")
             _llm_erro_mostrado = True
         return None, "", ""
 
@@ -219,11 +239,31 @@ def classificar(pasta, dry_run=True, max_n=0):
 
     for i, nome in enumerate(pdfs, 1):
         caminho = os.path.join(pasta, nome)
+        # ═══ WAYPOINT C1 — "o texto foi extraído do PDF" (09/Ago/2026) ═══
+        # Era `except Exception: texto = ""`, sem UMA linha de log. A partir daqui TODAS as
+        # camadas determinísticas da cascata (linhas 263-286) recebem string vazia e decidem
+        # no vácuo — o artigo é classificado, movido e registrado no CSV como se tudo tivesse
+        # corrido bem. O CSV grava o destino; não grava que o PDF era ilegível.
         try:
             texto = ext.extract_text(caminho)
-        except Exception:
+            if texto.strip():
+                VOO.marcar("C1_TEXTO", artigo=nome, n_chars=len(texto))
+            else:
+                # PDF que abre mas não tem camada de texto — o caso do escaneado, e é MUDO:
+                # não levanta exceção, devolve string vazia.
+                VOO.marcar("C1_TEXTO", ok=False, artigo=nome, n_chars=0,
+                           erro="PDF abriu mas veio SEM TEXTO (provável imagem escaneada)")
+                print(f"        ⚠️ {nome[:52]}: PDF sem camada de texto — a cascata vai decidir às cegas")
+        except Exception as e:
             texto = ""
+            VOO.marcar("C1_TEXTO", ok=False, artigo=nome, erro=f"{type(e).__name__}: {e}")
+            print(f"        ⚠️ {nome[:52]}: não consegui ler o PDF — {type(e).__name__}: {str(e)[:80]}")
         doi = extrair_doi(texto)
+        # ═══ WAYPOINT C2 — "o DOI foi encontrado" ═══
+        # Sem DOI não há PubMed, e sem PubMed a cascata perde a camada mais confiável.
+        # Não é erro (Framingham 1962 não tem DOI) — mas tem de ficar registrado.
+        VOO.marcar("C2_DOI", ok=bool(doi), artigo=nome, doi=doi or "",
+                   erro=None if doi else "nenhum DOI no texto extraído")
 
         # título/metadados p/ rename (grátis) — e pubtypes p/ o descarte determinístico
         pubtypes, meta, falha_rede = [], {}, False
@@ -232,6 +272,13 @@ def classificar(pasta, dry_run=True, max_n=0):
                 pubtypes, meta = pubmed_lookup(doi)
                 if not meta:
                     _, meta = europepmc_lookup(doi)
+                # ═══ WAYPOINT C3 — "o PubMed respondeu sobre este DOI" ═══
+                # `if r.ok else []` faz um 4xx ser indistinguível de "DOI não indexado".
+                # A RedeIndisponivel cobre 429/5xx/timeout; isto aqui cobre o resto.
+                VOO.marcar("C3_PUBMED", ok=bool(pubtypes or meta), artigo=nome,
+                           pubtypes=",".join(pubtypes)[:120] if pubtypes else "",
+                           erro=None if (pubtypes or meta)
+                           else "PubMed e EuropePMC não devolveram nada para este DOI")
             except RedeIndisponivel as e:
                 falha_rede = True
                 quedas_seguidas += 1
@@ -382,13 +429,30 @@ def classificar(pasta, dry_run=True, max_n=0):
         rel = os.path.relpath(dest_dir, pasta)
         cont[rel] = cont.get(rel, 0) + 1
 
+        # ═══ WAYPOINT C4 — "uma camada da cascata decidiu o tipo" ═══
+        # Em ~90% dos artigos quem decide é uma camada determinística (mapa de revista, rótulo
+        # do topo, pubtype do PubMed), e o juiz LLM nem é chamado. Registrar QUAL camada decidiu
+        # é o que permite, depois, medir a acurácia de cada uma separadamente — e saber se um
+        # lote ruim veio do mapa, do PubMed ou do modelo.
+        VOO.marcar("C4_DECIDIU", artigo=nome, camada=via, tipo=destino)
         print(f"[{i}/{len(pdfs)}] {marca} {nome[:56]}")
         print(f"        DOI: {doi or '(não achado)'} | via: {via}")
         print(f"        → {rel}/" + (f"  ({novo})" if novo != nome else ""))
 
         if not dry_run:
             os.makedirs(dest_dir, exist_ok=True)
-            shutil.move(caminho, os.path.join(dest_dir, novo))
+            # ═══ WAYPOINT C5 — "o PDF foi para a pasta do tipo" ═══
+            # Era `shutil.move` NU. Uma exceção aqui abortava `classificar()` inteiro e o
+            # diário CSV (gravado só no fim) NUNCA era escrito — perdia-se a prova da rodada
+            # toda por causa de um arquivo aberto no Preview. Agora a falha é por ARTIGO.
+            try:
+                shutil.move(caminho, os.path.join(dest_dir, novo))
+                VOO.marcar("C5_MOVEU", artigo=nome, destino=destino, novo_nome=novo)
+            except Exception as e:
+                VOO.marcar("C5_MOVEU", ok=False, artigo=nome, destino=destino,
+                           erro=f"{type(e).__name__}: {e}")
+                print(f"        ⚠️ NÃO MOVEU {nome[:48]} → {destino}: {type(e).__name__}: {str(e)[:70]}")
+                continue
 
         # DISJUNTOR: rede fora não é problema deste artigo, é da rodada. Parar é o certo.
         if quedas_seguidas >= MAX_QUEDAS_SEGUIDAS:
@@ -414,6 +478,7 @@ def classificar(pasta, dry_run=True, max_n=0):
             with open(saida, "w", newline="", encoding="utf-8-sig") as fh:
                 w = _csv.DictWriter(fh, fieldnames=list(_LOG[0].keys()))
                 w.writeheader(); w.writerows(_LOG)
+            VOO.marcar("C6_DIARIO", linhas=len(_LOG), arquivo=os.path.basename(saida))
             print(f"\n📋 diário da rodada: {saida}")
             primario = _M.CLASSIFICACAO[0]
             fb = [r for r in _LOG if r["modelo"] and r["modelo"] != primario]
@@ -426,6 +491,7 @@ def classificar(pasta, dry_run=True, max_n=0):
             if emp:
                 print(f"   🚫 {len(emp)} artigo(s) com DOI EMPRESTADO (PubMed ignorado)")
         except Exception as e:
+            VOO.marcar("C6_DIARIO", ok=False, linhas=len(_LOG), erro=f"{type(e).__name__}: {e}")
             print(f"\n⚠️ não gravei o diário: {type(e).__name__}: {e}")
 
     if dry_run:

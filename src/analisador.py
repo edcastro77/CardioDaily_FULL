@@ -8,6 +8,7 @@ Uso:  python analisador.py <pasta_CLASSIFICADOS>        (roda a corrente)
       python analisador.py --gabarito                   (só mostra a lógica das portas)
 """
 import os, sys, json, re, fitz
+import voo as VOO               # plano de voo (09/Ago)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -393,6 +394,8 @@ def processar(pdf, staging):
     reextraiu = False
     if fatos is None:
         fatos = A.extrair_fatos(pdf, tipo=tipo_do_documento(pdf))
+        VOO.marcar("A1_FATOS", artigo=base, tipo_documento=fatos.get("tipo_documento"),
+                   n_campos=len(fatos))
         # 04/Ago 04h30 — A LINHA FORA DE ORDEM QUE JOGAVA A RODADA INTEIRA FORA.
         # O `tipo_documento` era gravado 20 linhas ABAIXO, depois deste json.dump. Ou seja: NUNCA
         # entrava no arquivo. E é justamente o campo que a `_staging_serve` procura para decidir se
@@ -422,6 +425,12 @@ def processar(pdf, staging):
     # ela lê `fatos["tipo_documento"]` ANTES de olhar `desenho`.
     fatos["tipo_documento"] = tipo_do_documento(pdf)
     r = N.score(fatos)
+    # ═══ WAYPOINT A2 — "o motor calculou a nota" ═══
+    # Registra a nota E o motor. É o que permite, depois, responder "por que este artigo tem
+    # nota 8?" sem reabrir o pacote — e detectar em segundos quando um lote inteiro roda com
+    # a régua errada, como aconteceu com PLATO/TRITON/DAPA-HF em 06/Ago.
+    VOO.marcar("A2_NOTA", artigo=base, nota=r["aplic"], rigor=r["trabalho"],
+               motor=r.get("motor"), muda_conduta=r.get("muda_conduta"))
     ents, sobe = decidir_entregaveis(r["aplic"], fatos.get("tipo_documento"))
     # ROTA FORA DA ESCALA CLÍNICA (01/Ago/2026): pré-clínico e 'não classificável' não recebem nota —
     # 'Rigor None/10' seria mentira com cara de número. Diz-se o que é: por que não há nota.
@@ -499,10 +508,26 @@ def processar(pdf, staging):
             _peca(dst, base + "_gancho_abertura.txt", 20,
                   lambda: _gerar("gancho_abertura_prompt.md", contexto, 2000).strip()[:200])
         except Exception as e:
+            # ═══ 09/Ago — O GANCHO É A ÚNICA PEÇA QUE NINGUÉM CONFERE ═══
+            # Nem o `_conferir_entregaveis` (logo abaixo) nem o `contrato.validar` olham o gancho.
+            # Ele falha, imprime um aviso que rola na tela, e o artigo publica com o campo
+            # preenchido pelo selo "nao_gerado: …". O waypoint é o único registro que sobra.
+            VOO.marcar("A3_PECAS", ok=False, artigo=base, peca="gancho_abertura",
+                       erro=f"{type(e).__name__}: {e}")
             print(f"       ⚠️  gancho de abertura não gerado ({type(e).__name__}: {e})")
+    # ═══ WAYPOINT A3 — "as peças da porta foram geradas" ═══
+    # Registra o que a porta MANDOU fazer e o que EXISTE no disco. A diferença entre as duas
+    # listas é a resposta pronta para "por que este artigo não tem áudio?".
+    _feitas = [n for n, arq in (("ACRI", "_ACRI.txt"), ("pericia", "_analise.md"),
+                                ("pdf", "_analise.pdf"), ("visual", "_visual.png"),
+                                ("audio", "_audio.mp3"), ("gancho", "_gancho_abertura.txt"))
+               if os.path.exists(os.path.join(dst, base + arq))]
+    VOO.marcar("A3_PECAS", ok=True, artigo=base, nota=r["aplic"],
+               porta=",".join(ents), feitas=",".join(_feitas))
     _conferir_entregaveis(dst, base, r["aplic"], fatos.get("tipo_documento"))  # BURACO ZERO: faltou algo → erro, volta pra fila
     json.dump(_vnow, open(os.path.join(dst, "_versoes.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)                   # QUAL prompt fez cada peça deste pacote
+    VOO.marcar("A4_OK", artigo=base, nota=r["aplic"])
     open(os.path.join(dst, "_OK"), "w").write("")             # só aqui: artigo COMPLETO de verdade
     return base, r["aplic"], r["muda_conduta"], ents, sobe
 

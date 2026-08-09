@@ -32,8 +32,24 @@ read -r -p "   Começar? [s/N]: " OK
 case "$OK" in s|S|sim|SIM) ;; *) echo "   Cancelado. Nada foi gasto e nada foi movido."; read -p "Enter. "; exit 0 ;; esac
 echo
 
-python -u "$CD_FULL/src/classificador_ouro.py" "$CD_INBOX"
+# ═══ 09/Ago — O "✔" DECORATIVO ═══
+# Esta chave imprimia "✔ Classificados em:" SEM ler o código de saída — exatamente o defeito
+# que a Chave 2 documenta e corrigiu em 06/Ago e que aqui continuava vivo. Uma rodada que
+# abortava no meio terminava com o mesmo visto verde de uma rodada perfeita.
+LOGDIR="$CD_FULL/outputs/LOGS"; mkdir -p "$LOGDIR"
+DIARIO="$LOGDIR/chave1_$(date +%Y%m%d-%H%M).log"
+set -o pipefail
+python -u "$CD_FULL/src/classificador_ouro.py" "$CD_INBOX" 2>&1 | tee "$DIARIO"
+RC=${PIPESTATUS[0]}
 echo
-echo "✔ Classificados em: $CD_CLASSIFICADOS"
-echo "  Diário desta rodada: o _CLASSIFICACAO_*.csv em ARTIGOS/ — confira ANTES de rodar a Chave 2."
+if [ "$RC" -ne 0 ]; then
+  echo "⛔ O CLASSIFICADOR TERMINOU COM FALHA (código $RC)."
+  echo "   Os PDFs que não foram movidos continuam na fila, intactos."
+  echo "   O motivo está no fim do diário — e o percurso de cada artigo está no plano de voo:"
+  echo "      python3 src/caixa_preta.py          (custo zero)"
+else
+  echo "✔ Classificados em: $CD_CLASSIFICADOS"
+  echo "  Diário desta rodada: o _CLASSIFICACAO_*.csv em ARTIGOS/ — confira ANTES de rodar a Chave 2."
+fi
+echo "  Log: ${DIARIO/#$HOME/~}"
 read -p "Enter para fechar. "

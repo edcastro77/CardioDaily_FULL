@@ -18,6 +18,7 @@ import os, sys, shutil, glob, json
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 import analisador as A          # carrega o .env no import
+import voo as VOO               # plano de voo (09/Ago)
 import publicador as P
 P._carregar_env()
 
@@ -91,8 +92,21 @@ def _staging_serve(pasta, pdf):
     # O `processar()` apaga a pasta inteira quando pega o caso; aqui a gente só recusa o reuso.
     try:
         vnow, vold = A.versoes_atuais(pdf), A.versoes_gravadas(pasta)
-    except Exception:
-        vnow, vold = {}, {}
+    except Exception as e:
+        # ═══ 09/Ago — ESTE `except` DESLIGAVA A TERRA ARRASADA ═══
+        # Era `vnow, vold = {}, {}`. A linha seguinte é `if vnow and ...` — com `vnow` vazio a
+        # condição fica FALSA, o carimbo nunca é comparado, e o staging velho é reusado como se
+        # nada tivesse mudado. Ou seja: o portão que existe justamente para impedir que a régua
+        # nova conviva com o texto velho **se desligava sozinho ao menor erro**, em silêncio.
+        # É o buraco que o comentário logo acima jura estar fechado.
+        #
+        # Agora o erro é FALADO e o reuso é RECUSADO — na dúvida, refaz. Custa dinheiro; reusar
+        # um pacote de régua desconhecida custa a confiança na nota, que é o produto.
+        VOO.marcar("A2_NOTA", ok=False, artigo=os.path.basename(pasta),
+                   erro=f"carimbo ilegível ({type(e).__name__}: {e}) — reuso RECUSADO por precaução")
+        print(f"       ⚠️ carimbo ilegível em {os.path.basename(pasta)[:44]}: "
+              f"{type(e).__name__} — vou REFAZER (não reuso o que não sei de onde veio)")
+        return False, f"carimbo ilegível: {type(e).__name__}"
     if vnow and vold != vnow:
         difs = [k for k, x in vnow.items() if vold.get(k) != x]
         return False, ("sem carimbo de prompt (staging anterior a 04/Ago)" if not vold

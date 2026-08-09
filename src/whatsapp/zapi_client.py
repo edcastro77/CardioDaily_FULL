@@ -149,11 +149,17 @@ def send_article_package(phone: str, artigo: dict, biblioteca_url: str = "") -> 
     ]
     if link:
         linhas.append(f"📖 Análise completa: {link}")
-    send_text(phone, "\n".join(linhas))
+    # ═══ 09/Ago — O TEXTO ERA A ÚNICA PEÇA OBRIGATÓRIA, E ERA A ÚNICA NÃO CONFERIDA ═══
+    # `send_text(...)` sem guardar o retorno, e `ok_img`/`ok_audio` começando em True (linhas
+    # acima). Um artigo sem imagem e sem áudio — o caso comum — devolvia True SEMPRE, mesmo com
+    # a Z-API fora do ar. E quem chama usa esse True para MARCAR O ARTIGO COMO ENVIADO, o que
+    # significa que ele nunca mais é tentado. A mensagem some e o placar diz "OK".
+    ok_texto = send_text(phone, "\n".join(linhas))
     time.sleep(1)
 
     # 3. Podcast
     if audio_url:
         ok_audio = send_audio(phone, audio_url)
 
-    return ok_img and ok_audio
+    # o TEXTO é o mínimo: sem ele não houve entrega, com ou sem mídia.
+    return bool(ok_texto) and ok_img and ok_audio

@@ -23,6 +23,7 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "src"))
+import voo as VOO          # plano de voo (09/Ago) — depois do sys.path, senão não acha
 
 try:
     from dotenv import load_dotenv
@@ -215,17 +216,47 @@ def run(categoria: str | None = None, dry_run: bool = False):
     artigos = radar.buscar_por_categoria(cat_key, dias=DIAS_JANELA, max_results=MAX_ARTIGOS)
     print(f"   {len(artigos)} artigos encontrados")
     if not artigos:
+        # ═══ 09/Ago — ABORTAVA COM `return`, QUE SAI COM CÓDIGO 0 ═══
+        # O GitHub Actions marca a corrida como VERDE. O Dr. Eduardo não recebe o Radar e o
+        # painel diz que deu tudo certo.
+        VOO.marcar("E1_RADAR", ok=False, artigo=f"radar-{data_str}", tema=cat_nome,
+                   n_artigos=0, erro="PubMed não devolveu artigos para o tema do dia")
         print("❌ Nenhum artigo encontrado — abortando.")
-        return
+        sys.exit(1)
 
     # ── 3. Triagem Gemini ─────────────────────────────────────────────────
     print(f"\n🤖 Triagem Gemini ({len(artigos)} artigos)…")
-    triagem = radar.analisar_triagem(artigos, cat_nome)
+    try:
+        triagem = radar.analisar_triagem(artigos, cat_nome)
+    except Exception as e:
+        # ═══ A CAUSA DE 09/Ago: CRÉDITO ACABADO ═══
+        # O Radar chegou até aqui todos os dias de 05 a 08/Ago. Em 09 o fornecedor recusou
+        # por quota, e sem waypoint o sintoma era "não chegou nada no WhatsApp" — uma
+        # investigação inteira para uma causa de uma linha.
+        VOO.marcar("E1_RADAR", ok=False, artigo=f"radar-{data_str}", tema=cat_nome,
+                   n_artigos=len(artigos), erro=f"triagem: {type(e).__name__}: {e}")
+        print(f"❌ TRIAGEM FALHOU: {type(e).__name__}: {str(e)[:200]}")
+        sys.exit(1)
     print(f"   Triagem concluída ({len(triagem)} chars)")
 
     # ── 4. Gerar script ───────────────────────────────────────────────────
     print(f"\n✍️  Gerando script de podcast…")
-    script = radar.gerar_script_pubmed(artigos, triagem, cat_nome, tema_nome=cat_nome)
+    try:
+        script = radar.gerar_script_pubmed(artigos, triagem, cat_nome, tema_nome=cat_nome)
+    except Exception as e:
+        VOO.marcar("E1_RADAR", ok=False, artigo=f"radar-{data_str}", tema=cat_nome,
+                   n_artigos=len(artigos), erro=f"script: {type(e).__name__}: {e}")
+        print(f"❌ SCRIPT FALHOU: {type(e).__name__}: {str(e)[:200]}")
+        sys.exit(1)
+    if len(script) < 800:
+        # roteiro curto demais é sintoma de resposta truncada — não vira podcast de 4 minutos
+        VOO.marcar("E1_RADAR", ok=False, artigo=f"radar-{data_str}", tema=cat_nome,
+                   n_artigos=len(artigos), chars=len(script),
+                   erro=f"script curto demais ({len(script)} chars) — resposta provavelmente truncada")
+        print(f"❌ SCRIPT CURTO DEMAIS: {len(script)} chars")
+        sys.exit(1)
+    VOO.marcar("E1_RADAR", artigo=f"radar-{data_str}", tema=cat_nome,
+               n_artigos=len(artigos), chars=len(script))
     print(f"   Script: {len(script)} chars")
 
     # ── 5. Salvar script local ────────────────────────────────────────────
@@ -248,13 +279,21 @@ def run(categoria: str | None = None, dry_run: bool = False):
     print(f"\n☁️  Upload para Supabase Storage (radar_podcasts)…")
     audio_url = _upload_radar_storage(mp3_path, mp3_filename)
     if not audio_url:
-        print("⚠️  Upload falhou — Supabase não receberá o registro.")
+        # ═══ 09/Ago — A MENSAGEM CONTRADIZIA O CÓDIGO ═══
+        # Dizia "Supabase não receberá o registro" e, três linhas abaixo, INSERIA assim mesmo
+        # com `caminho_podcast=""`. O assinante recebia o texto e um player vazio.
+        VOO.marcar("E2_AUDIO", ok=False, artigo=f"radar-{data_str}", tema=cat_nome,
+                   erro="upload do MP3 falhou — a linha vai para a tabela SEM o caminho do podcast")
+        print("⚠️  Upload falhou. A linha AINDA VAI para a tabela, mas sem o áudio —")
+        print("    quem receber vai ver o texto e um player vazio.")
         audio_url = ""
+    else:
+        VOO.marcar("E2_AUDIO", artigo=f"radar-{data_str}", tema=cat_nome, url=audio_url)
 
     # ── 8. Inserir na tabela 'radar' ──────────────────────────────────────
     print(f"\n🗄️  Registrando na tabela radar…")
     resumo_texto = _extrair_resumo_triagem(triagem)
-    _inserir_radar_supabase(
+    _ok_insert = _inserir_radar_supabase(
         tema=cat_key,
         tema_nome=cat_nome,
         data_varredura=data_str,
@@ -283,11 +322,25 @@ def run(categoria: str | None = None, dry_run: bool = False):
         except Exception as e:
             print(f"   ⚠️  Telegram script falhou: {e}")
 
+    # ═══ WAYPOINT E3 + O BANNER QUE MENTIA ═══
+    # O retorno do insert era IGNORADO e o banner imprimia "✅ Radar concluído!" sempre —
+    # inclusive quando o áudio não subiu e quando a linha não entrou. Um voo que caiu no mar
+    # com o rádio dizendo "pousei".
+    VOO.marcar("E3_REGISTRO", ok=bool(_ok_insert), artigo=f"radar-{data_str}", tema=cat_nome,
+               erro=None if _ok_insert else "o INSERT na tabela radar não confirmou")
+    _completo = bool(_ok_insert) and bool(audio_url)
     print(f"\n{'='*55}")
-    print(f"✅ Radar {cat_nome} concluído!")
+    if _completo:
+        print(f"✅ Radar {cat_nome} concluído!")
+    else:
+        print(f"⚠️  Radar {cat_nome} INCOMPLETO —" +
+              ("" if audio_url else " áudio NÃO subiu.") +
+              ("" if _ok_insert else " registro NÃO confirmado na tabela."))
     print(f"   MP3: {mp3_filename}")
-    print(f"   URL: {audio_url}")
+    print(f"   URL: {audio_url or '(nenhuma)'}")
     print(f"{'='*55}\n")
+    if not _completo:
+        sys.exit(1)
 
 
 def main():
