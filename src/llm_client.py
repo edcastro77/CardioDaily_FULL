@@ -58,13 +58,36 @@ def _registrar_uso(r, modelo):
                 try: stop = str(getattr(r.candidates[0], "finish_reason", None))  # Gemini
                 except Exception: stop = None
         d = getattr(u, "output_tokens_details", None)
+
+        # ═══ 09/Ago/2026 — O MEDIDOR ERA CEGO PARA A OPENAI ═══
+        # Medido no uso.jsonl (3.767 chamadas, 27/Jul→09/Ago):
+        #     gpt-5.6-terra  · 2.359 chamadas · 52.420.115 tokens de input · cache  0,0 %
+        #     claude-sonnet-5·   641 chamadas ·  7.929.899 tokens de input · cache 38,1 %
+        # O terra virou primário em 04/Ago e leva 82 % de TODO o input da casa. Ler "0,0 %" ali e
+        # concluir "o cache não funciona" seria diagnosticar o que não foi olhado (LEI 7) — porque
+        # o zero podia ser do INSTRUMENTO, não do mundo: os três nomes procurados acima são da
+        # Anthropic e do Google. A OpenAI reporta o cache em OUTRO lugar, e em DOIS formatos:
+        #     chat.completions → usage.prompt_tokens_details.cached_tokens
+        #     /v1/responses    → usage.input_tokens_details.cached_tokens   ← a rota da extração
+        # Nenhum dos dois estava na lista. Enquanto isso o `_openai` diz, em comentário desde
+        # sempre, "OpenAI cacheia prefixo automático" — e ninguém nunca conferiu se cacheava.
+        # Agora o número vai aparecer. Se der 0 %, aí sim é o mundo, e é ~US$ 40/mês.
+        def _cache_openai():
+            for nome in ("prompt_tokens_details", "input_tokens_details"):
+                det = getattr(u, nome, None) if u is not None else None
+                v = getattr(det, "cached_tokens", None) if det is not None else None
+                if v:
+                    return v
+            return 0
+
         linha = {
             "ts": datetime.datetime.now().isoformat(timespec="seconds"),
             "artigo": _USO_CTX.get("artigo"), "etapa": _USO_CTX.get("etapa"), "modelo": modelo,
             "input": g("input_tokens", "prompt_tokens", "prompt_token_count"),
             "output": g("output_tokens", "completion_tokens", "candidates_token_count"),
             "cache_write": g("cache_creation_input_tokens") or 0,
-            "cache_read": g("cache_read_input_tokens", "cached_content_token_count") or 0,
+            "cache_read": (g("cache_read_input_tokens", "cached_content_token_count")
+                           or _cache_openai() or 0),
             "thinking": getattr(d, "thinking_tokens", None) if d else None,
             "stop_reason": stop,                              # "max_tokens" (Anthropic) / "length" (OpenAI) = truncou
         }

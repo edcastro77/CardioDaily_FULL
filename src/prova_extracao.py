@@ -62,26 +62,18 @@ sys.path.insert(0, _HERE)
 
 MODELOS_PADRAO = ["gpt-5.6-terra", "claude-sonnet-5", "grok-4.5"]   # terra na frente desde 04/Ago
 
-# US$ por 1M de tokens (entrada, saída) — para a coluna de custo. Aproximado e declarado como tal.
-_PRECO = {
-    "claude-sonnet-5":        (3.00, 15.00),
-    "claude-opus-5":          (15.00, 75.00),
-    "claude-haiku-4-5-20251001": (1.00, 5.00),
-    "gpt-5.6-terra":          (1.25, 10.00),
-    "gpt-5.6-sol":            (1.25, 10.00),
-    "gpt-5.6-luna":           (0.20, 1.20),
-    "gemini-3.1-pro-preview": (1.25, 10.00),
-    "grok-4.5":               (3.00, 15.00),   # estimado — conferir na fatura da xAI
-}
+# 09/Ago/2026 — a tabela SAIU daqui (LEI 9). Ela estava escrita aqui E no `prova_classificador.py`,
+# com valores DIFERENTES para terra, sol e sonnet: a mesma pergunta tinha duas respostas, e a
+# diferença dava 22 % na conta do mês. Agora mora só em `precos.py`.
+import precos as _P
 
 TIPOS = ("original", "meta", "diretriz", "revisao_narrativa")
 
 
 def _custo(modelo, ent, sai):
-    p = _PRECO.get(modelo)
-    if not p or ent is None or sai is None:
+    if ent is None or sai is None or str(modelo) not in _P.PRECO:
         return None
-    return (ent * p[0] + sai * p[1]) / 1_000_000
+    return _P.custo(modelo, entrada=ent, saida=sai)
 
 
 def _achatar(d, prefixo=""):

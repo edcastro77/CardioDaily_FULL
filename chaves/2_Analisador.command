@@ -47,12 +47,28 @@ n_meta=$(ls "$CD_CLASSIFICADOS/META_ANALISES"/*.pdf     2>/dev/null|wc -l|tr -d 
 n_guia=$(ls "$CD_CLASSIFICADOS/GUIDELINES"/*.pdf        2>/dev/null|wc -l|tr -d ' ')
 n_revi=$(ls "$CD_CLASSIFICADOS/REVISOES"/*.pdf          2>/dev/null|wc -l|tr -d ' ')
 n_orig=$(ls "$CD_CLASSIFICADOS/ARTIGOS_ORIGINAIS"/*.pdf 2>/dev/null|wc -l|tr -d ' ')
+# ═══ O CUSTO POR ARTIGO SAI DO REGISTRO, NÃO DO MEU CHUTE (09/Ago/2026) ═══
+# Esta tela dizia US$ 0,30 por artigo desde que foi escrita — um número que eu inventei e
+# chumbei aqui. Em 09/Ago li o `outputs/uso.jsonl` pela primeira vez (3.767 chamadas gravadas
+# desde 27/Jul, nunca lidas) e o real, na configuração de hoje, é US$ 0,199. A tela mentia
+# 55 % PARA CIMA — e é com ela que o Dr. Eduardo decide se roda a fila ou se espera.
+# Agora o número vem de `custo.py --por-artigo`, que lê os últimos 7 dias medidos.
+# Se o registro estiver vazio ou o python falhar, cai nos 30 centavos antigos: uma tela que
+# não abre é pior que uma tela conservadora.
+CENT_ART=$(cd "$CD_FULL" && python3 src/custo.py --por-artigo 2>/dev/null \
+           | awk '{printf "%d", $1*100}')
+case "$CENT_ART" in ''|*[!0-9]*) CENT_ART=30; FONTE_CUSTO="estimado (registro vazio)";; \
+                    *) FONTE_CUSTO="MEDIDO nos últimos 7 dias";; esac
+[ "$CENT_ART" -lt 1 ] && { CENT_ART=30; FONTE_CUSTO="estimado (registro vazio)"; }
+
 echo "   ── A FILA · digite o número da linha ──"
-printf "     1) META_ANALISES     %4s   US\$ %d   motor da Escada\n"           "$n_meta" $((n_meta*30/100))
-printf "     2) GUIDELINES        %4s   US\$ %d   motor AGREE (sobe em qualquer nota)\n" "$n_guia" $((n_guia*30/100))
-printf "     3) REVISOES          %4s   US\$ %d   motor da revisão narrativa\n" "$n_revi" $((n_revi*30/100))
-printf "     4) ARTIGOS_ORIGINAIS %4s   US\$ %d   o mais caro\n"               "$n_orig" $((n_orig*30/100))
-printf "     5) TUDO              %4s   US\$ %d   nesta ordem\n"               "$N_TOT"  $((N_TOT*30/100))
+printf "     1) META_ANALISES     %4s   US\$ %d   motor da Escada\n"           "$n_meta" $((n_meta*CENT_ART/100))
+printf "     2) GUIDELINES        %4s   US\$ %d   motor AGREE (sobe em qualquer nota)\n" "$n_guia" $((n_guia*CENT_ART/100))
+printf "     3) REVISOES          %4s   US\$ %d   motor da revisão narrativa\n" "$n_revi" $((n_revi*CENT_ART/100))
+printf "     4) ARTIGOS_ORIGINAIS %4s   US\$ %d   o mais caro\n"               "$n_orig" $((n_orig*CENT_ART/100))
+printf "     5) TUDO              %4s   US\$ %d   nesta ordem\n"               "$N_TOT"  $((N_TOT*CENT_ART/100))
+echo
+printf "     (custo/artigo: US\$ 0,%02d — %s · Chave 19 mostra a conta)\n" "$CENT_ART" "$FONTE_CUSTO"
 echo
 printf "     (minirevisões: %s — condutas + fluxograma, NÃO sobem no Supabase)\n" "$N_MINI"
 echo
@@ -66,8 +82,9 @@ case "$ESCOLHA" in
   *) echo "   Opção inválida. Nada foi feito."; read -p "Enter. "; exit 1 ;;
 esac
 echo
-CENT=$((NP * 30))
-printf "   %s artigo(s) · custo aproximado US\$ %d.%02d\n" "$NP" $((CENT/100)) $((CENT%100))
+CENT=$((NP * CENT_ART))
+printf "   %s artigo(s) · custo aproximado US\$ %d.%02d   (%s)\n" \
+       "$NP" $((CENT/100)) $((CENT%100)) "$FONTE_CUSTO"
 echo "   RAMPA DE CONFIANÇA: começa em blocos de 10 · 3 blocos sem falha → 20 · mais 3 → 30"
 echo "   (qualquer falha volta para 10 e o contador zera · o bloco nunca atravessa a divisa entre pastas)"
 echo "   Diário desta rodada: ${DIARIO/#$HOME/~}"

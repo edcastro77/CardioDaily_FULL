@@ -64,10 +64,11 @@ PASTA_TIPO = {
 
 # Os 3 juízes. Preço/M tokens de entrada em 31/07/2026: Luna 0,20 · Haiku 1,00 · Sonnet 2,00.
 MODELOS_PADRAO = ["gpt-5.6-luna", "claude-haiku-4-5-20251001", "claude-sonnet-5"]
-PRECO_ENTRADA = {"gpt-5.6-luna": 0.20, "gpt-5.6-terra": 2.00, "gpt-5.6-sol": 5.00,
-                 "claude-haiku-4-5-20251001": 1.00, "claude-sonnet-5": 2.00, "claude-opus-5": 15.00}
-PRECO_SAIDA = {"gpt-5.6-luna": 1.20, "gpt-5.6-terra": 12.00, "gpt-5.6-sol": 25.00,
-               "claude-haiku-4-5-20251001": 5.00, "claude-sonnet-5": 10.00, "claude-opus-5": 75.00}
+
+# 09/Ago/2026 — a tabela SAIU daqui (LEI 9). As que estavam escritas aqui divergiam das do
+# `prova_extracao.py` em terra (2,00/12,00 vs 1,25/10,00), sol (5,00/25,00 vs 1,25/10,00) e
+# sonnet (2,00/10,00 vs 3,00/15,00). Fonte única agora: `precos.py`.
+import precos as _P
 
 # ─────────────────────────── O PROMPT ───────────────────────────
 # 02/Ago/2026: o texto SAIU daqui e foi para `classificador_prompt.py`, que a PRODUCAO tambem le.
@@ -266,10 +267,11 @@ def main():
                       + (f"  {linha['erro']}" if linha["erro"] else ""))
     fh.close()
 
-    print(f"\n{'─' * 70}\nCUSTO REAL desta rodada ({time.time() - t0:.0f}s):")
+    print(f"\n{'─' * 70}\nCUSTO desta rodada ({time.time() - t0:.0f}s):")
+    print(f"  {_P.aviso()}")
     tot = 0.0
     for mod, (ti, to) in sorted(_uso.items()):
-        c = ti / 1e6 * PRECO_ENTRADA.get(mod, 0) + to / 1e6 * PRECO_SAIDA.get(mod, 0)
+        c = _P.custo(mod, entrada=ti, saida=to)
         tot += c
         print(f"  {mod:28} entrada {ti:>9,} · saída {to:>7,} → US$ {c:.4f}")
     print(f"  {'TOTAL':28} {'':>30} → US$ {tot:.4f}")

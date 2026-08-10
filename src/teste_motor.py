@@ -1736,6 +1736,84 @@ def teste_acri_nao_diz_sim_nao_para_todo_mundo():
         checa(f"ACRI sabe o caso: {termo}", termo in txt, "o prompt não cobre este tipo")
 
 
+def teste_uma_tabela_de_precos():
+    """09/Ago — DUAS TABELAS DE PREÇO, E ELAS DISCORDAVAM (LEI 9).
+
+    ═══ O CASO REAL ═══
+    Ao responder "quanto custa rodar agosto", achei o preço escrito em DOIS arquivos:
+
+        modelo             prova_extracao.py      prova_classificador.py
+        gpt-5.6-terra        1,25 / 10,00            2,00 / 12,00
+        gpt-5.6-sol          1,25 / 10,00            5,00 / 25,00
+        claude-sonnet-5      3,00 / 15,00            2,00 / 10,00
+
+    A mesma pergunta tinha duas respostas, com 22 % de diferença na conta do mês — e é com essa
+    conta que o Dr. Eduardo decide se roda a fila ou se espera. É a LEI 9 inteira: uma regra que
+    mora em vários blocos, consertada num só, rodando errado em silêncio no outro.
+
+    ═══ O QUE ESTA TRAVA GUARDA ═══
+    1. A tabela vive em `precos.py` e em lugar NENHUM mais.
+    2. A conta desconta o cache antes de recobrar — somar input + cache é cobrar duas vezes.
+    3. Modelo fora da tabela devolve 0.0 e NÃO levanta exceção: isto roda dentro de log e de
+       relatório, e relatório que quebra é pior que relatório aproximado.
+    4. Enquanto `CONFERIDO_EM` for None, `aviso()` grita ESTIMATIVA. Um número de dinheiro sem
+       aviso vira fato na cabeça de quem lê — foi assim que o meu chute de US$ 0,30 virou a
+       base de duas decisões.
+    """
+    import os
+    import re
+    import precos as _P
+
+    # 1) a conta bate, e o cache desconta em vez de somar
+    cheio = _P.custo("gpt-5.6-terra", entrada=1_000_000, saida=0)
+    checa("1M de input no terra custa o preço de tabela", abs(cheio - 1.25) < 1e-9,
+          f"deu {cheio} — esperado 1,25")
+    meio = _P.custo("gpt-5.6-terra", entrada=1_000_000, saida=0, cache_leitura=1_000_000)
+    checa("input TODO vindo do cache custa 10%", abs(meio - 0.125) < 1e-9,
+          f"deu {meio} — se der 1,375 é porque somou input + cache, cobrando o token duas vezes")
+    checa("Batch corta pela metade",
+          abs(_P.custo("gpt-5.6-terra", entrada=1_000_000, saida=0, batch=True) - 0.625) < 1e-9,
+          "o desconto de lote não está sendo aplicado")
+
+    # 2) modelo desconhecido não pode derrubar relatório
+    # O try/except é a própria coisa testada: se `custo()` levantar, a exceção subiria daqui e
+    # MATARIA a bateria inteira — as outras 57 travas nem apareceriam na tela. Foi o que a
+    # sabotagem 3 de 09/Ago mostrou: "💥 CRASHOU (não é reprova!)". Crash é pior que reprova,
+    # porque reprova diz o que está errado e crash esconde tudo o que estava certo.
+    try:
+        _v = _P.custo("modelo-que-nao-existe", entrada=9999, saida=9999)
+        _erro = None
+    except Exception as e:
+        _v, _erro = None, f"{type(e).__name__}: {e}"
+    checa("modelo fora da tabela devolve 0.0 sem explodir", _v == 0.0,
+          f"levantou {_erro}" if _erro else f"devolveu {_v!r} — isto roda dentro de log e de relatório")
+
+    # 3) o aviso de estimativa existe enquanto ninguém conferiu a fatura
+    if _P.CONFERIDO_EM is None:
+        checa("sem fatura conferida, o aviso diz ESTIMATIVA", "ESTIMATIVA" in _P.aviso(),
+              "a tabela nunca foi conferida e o relatório não avisa — vira fato na cabeça de quem lê")
+
+    # 4) VARREDURA: ninguém pode ter escrito uma segunda tabela por fora
+    _src = os.path.dirname(os.path.abspath(__file__))
+    padrao = re.compile(r"\(\s*\d+\.\d+\s*,\s*\d+\.\d+\s*\)")   # o formato (entrada, saída)
+    reincidentes = []
+    for nome in sorted(os.listdir(_src)):
+        if not nome.endswith(".py") or nome in ("precos.py", "teste_motor.py"):
+            continue
+        try:
+            txt = open(os.path.join(_src, nome), encoding="utf-8", errors="ignore").read()
+        except Exception:
+            continue
+        for linha in txt.splitlines():
+            if linha.lstrip().startswith("#"):
+                continue
+            # uma tabela de preço = nome de modelo + par de floats na MESMA linha
+            if padrao.search(linha) and re.search(r"(claude-|gpt-5|gemini-|grok-)", linha):
+                reincidentes.append(f"{nome}: {linha.strip()[:70]}")
+    checa("a tabela de preços mora só em precos.py", not reincidentes,
+          "voltou a existir preço fora do precos.py — " + " | ".join(reincidentes[:3]))
+
+
 def teste_doi_sintetico_para_quem_nao_tem():
     """06/Ago — A COLUNA `doi` É NOT NULL, E O NICE NÃO TEM DOI.
 
