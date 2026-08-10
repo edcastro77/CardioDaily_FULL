@@ -1736,6 +1736,100 @@ def teste_acri_nao_diz_sim_nao_para_todo_mundo():
         checa(f"ACRI sabe o caso: {termo}", termo in txt, "o prompt não cobre este tipo")
 
 
+def teste_nenhum_modulo_usado_sem_import():
+    """10/Ago — `NameError: name '_VOO' is not defined`, DEZ ARTIGOS SEGUIDOS.
+
+    ═══ O CASO REAL ═══
+    Em 09/Ago instrumentei o `publicador.py` com o plano de voo: 8 chamadas a `_VOO.marcar(...)`.
+    Esqueci o `import voo as _VOO`. O `ficha_site.py` tinha, o `analisador.py` tinha, o
+    `rodar_em_blocos.py` tinha — o publicador não. Disse "testei aqui" e mandei rodar.
+
+    No dia seguinte o Dr. Eduardo clicou a Chave 2 e o primeiro bloco fechou assim:
+        ═══ BLOCO 1 fechado · publicados 0 · recusados 0 · falhas neste bloco 10 ═══
+    Dez artigos analisados e pagos, publicação recusada em todos.
+
+    ═══ POR QUE NADA PEGOU, E É O PONTO ═══
+    `NameError` NÃO existe em tempo de compilação. Tudo isto passa com um módulo assim:
+        · `python3 -c "import publicador"`   → passa (o nome só falta quando a LINHA roda)
+        · `ast.parse(...)`                    → passa (é sintaxe válida)
+        · `python3 -m py_compile`             → passa
+        · a bateria inteira                   → passa (ela não toca no publicador, que precisa
+                                                do Supabase, e eu não consigo chamar o Supabase)
+    Ou seja: TODAS as minhas verificações eram cegas para esta classe de defeito, e a palavra
+    "testei aqui" estava tecnicamente certa e praticamente inútil — o publicador não estava
+    dentro de "aqui" nenhum.
+
+    ═══ A IRONIA QUE NÃO PODE SE REPETIR ═══
+    O defeito estava DENTRO do sistema de vigilância, que existe justamente para achar defeitos.
+    A `voo.marcar()` foi escrita para nunca levantar exceção — e essa proteção não vale nada se
+    o próprio NOME do módulo não existe: o erro acontece ANTES de entrar na função protegida.
+    O instrumento derrubou o voo.
+
+    ═══ O QUE ESTA TRAVA FAZ ═══
+    Varre todo .py de `src/` e `scripts/` e procura o padrão exato do estrago: um nome usado
+    como `ALGUMACOISA.metodo(...)` que NUNCA é ligado no arquivo — nem import, nem atribuição,
+    nem argumento, nem `global`. É de propósito ESTREITO: só acusa acesso a atributo de nome nu,
+    que é a forma de "módulo esquecido". Não tenta ser um linter.
+    """
+    import os
+    import ast
+    import builtins
+
+    raizes = [os.path.dirname(os.path.abspath(__file__)),
+              os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")]
+    embutidos = set(dir(builtins)) | {"__file__", "__name__", "__doc__", "self", "cls"}
+    achados = []
+
+    for raiz in raizes:
+        if not os.path.isdir(raiz):
+            continue
+        for nome in sorted(os.listdir(raiz)):
+            if not nome.endswith(".py"):
+                continue
+            caminho = os.path.join(raiz, nome)
+            try:
+                arvore = ast.parse(open(caminho, encoding="utf-8", errors="ignore").read())
+            except Exception:
+                continue          # sintaxe quebrada é outro problema, e o compile já pega
+
+            ligados = set()
+            for no in ast.walk(arvore):
+                if isinstance(no, ast.Import):
+                    for a in no.names:
+                        ligados.add(a.asname or a.name.split(".")[0])
+                elif isinstance(no, ast.ImportFrom):
+                    for a in no.names:
+                        ligados.add(a.asname or a.name)
+                elif isinstance(no, ast.Name) and isinstance(no.ctx, (ast.Store, ast.Del)):
+                    ligados.add(no.id)
+                elif isinstance(no, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    ligados.add(no.name)
+                elif isinstance(no, ast.arg):
+                    ligados.add(no.arg)
+                elif isinstance(no, ast.Global):
+                    ligados.update(no.names)
+                elif isinstance(no, ast.ExceptHandler) and no.name:
+                    ligados.add(no.name)
+                elif isinstance(no, (ast.With, ast.AsyncWith)):
+                    for it in no.items:
+                        for alvo in ast.walk(it.optional_vars) if it.optional_vars else []:
+                            if isinstance(alvo, ast.Name):
+                                ligados.add(alvo.id)
+
+            # o padrão do estrago: NOME.atributo(...) com NOME nunca ligado
+            for no in ast.walk(arvore):
+                if (isinstance(no, ast.Attribute) and isinstance(no.value, ast.Name)
+                        and isinstance(no.value.ctx, ast.Load)):
+                    alvo = no.value.id
+                    if alvo not in ligados and alvo not in embutidos:
+                        achados.append(f"{nome}:{no.lineno} → {alvo}.{no.attr}")
+
+    unicos = sorted(set(achados))
+    checa("nenhum módulo é usado sem import", not unicos,
+          "NameError esperando a hora de acontecer (compila, importa, e quebra no artigo real): "
+          + " | ".join(unicos[:5]) + (f" … e mais {len(unicos) - 5}" if len(unicos) > 5 else ""))
+
+
 def teste_uma_tabela_de_precos():
     """09/Ago — DUAS TABELAS DE PREÇO, E ELAS DISCORDAVAM (LEI 9).
 

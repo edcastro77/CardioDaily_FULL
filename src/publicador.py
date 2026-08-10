@@ -18,6 +18,28 @@ sys.path.insert(0, _HERE)
 import contrato as C
 import ficha_site as F
 
+# ═══ 10/Ago/2026 — A LINHA QUE FALTAVA, E QUE CUSTOU 10 ARTIGOS ═══
+# Em 09/Ago instrumentei este arquivo com o plano de voo: 8 chamadas a `_VOO.marcar(...)`
+# em P2_CONTRATO, P3_MIDIA e P4_BANCO. E não escrevi o import. O `ficha_site.py` tinha,
+# o `analisador.py` tinha, o `rodar_em_blocos.py` tinha — este não.
+#
+# POR QUE NADA PEGOU: `NameError` não existe em tempo de compilação. `python3 -c "import
+# publicador"` passa, `ast.parse` passa, a bateria passa (ela não toca no publicador, que
+# precisa de Supabase). O nome só falta no instante em que a linha roda — e a linha só roda
+# quando um artigo REAL termina a análise e vai publicar. Eu escrevi "testei aqui" e a
+# palavra estava certa pela LEI 7; o que faltou foi dizer que o publicador não estava no
+# "aqui" de teste nenhum.
+#
+# O ESTRAGO: 10 artigos analisados e pagos, publicação recusada em todos, "fica na fila p/
+# refazer". O dinheiro da análise não se perdeu (o pacote fica no STAGING com _OK e é
+# reaproveitado), mas o Dr. Eduardo clicou uma chave que ia gastar US$ 30 e viu 10 falhas
+# seguidas logo no primeiro bloco.
+#
+# A IRONIA: o defeito estava DENTRO do sistema de vigilância que existe para achar defeitos.
+# O instrumento derrubou o voo. Por isso a `voo.marcar` foi escrita para NUNCA levantar
+# exceção — e essa proteção não vale nada se o próprio NOME do módulo não existe.
+import voo as _VOO
+
 
 def _carregar_env():
     from dotenv import load_dotenv
