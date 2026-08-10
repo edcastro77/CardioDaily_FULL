@@ -1803,18 +1803,39 @@ def teste_o_llm_le_todo_artigo():
           not C.titulo_diz_revisao_narrativa("Effects of X on Y: A Randomized Trial"),
           "a trava está pegando ensaio clínico")
 
-    # 3) VARREDURA: o rótulo impresso não pode voltar a decidir na cascata determinística
+    # 3) VARREDURA: só DUAS camadas podem decidir antes do LLM
+    #    Decisão do Dr. Eduardo, 10/Ago: mapa de revista (curadoria dele, 86 artigos e 100 % de
+    #    acerto medido) e LIXO (relato de caso: "= LIXO", não se paga leitura para jogar fora).
+    #    Tudo o mais é conferência. Esta varredura é a guarda da ordem — se alguém acrescentar um
+    #    `elif` decidindo antes do LLM, o juiz volta a ser calado e ninguém percebe.
     src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "classificador_ouro.py"), encoding="utf-8").read()
-    # a linha proibida é a que usava `rotulo_original` como um elif do encadeamento de cima
-    proibida = re.search(r"^\s*elif\s*\(?\s*rot_o\s*:=\s*rotulo_original", src, re.M)
-    checa("o rótulo impresso não decide mais na cascata determinística", not proibida,
-          "a camada 6 voltou: ela decidia 240 de 703 artigos e calava o LLM (99,1%)")
-    checa("a discordância rótulo × LLM vai para REVISAO_HUMANA",
-          "DISCORDÂNCIA: rótulo" in src,
-          "a conferência sumiu — voltamos a escolher no escuro quando as fontes divergem")
+    bloco = re.search(r"TRAVA: rede caiu.*?\n(\s+)else:\n", src, re.S)
+    checa("o bloco da cascata foi encontrado", bool(bloco), "a estrutura mudou — refazer a trava")
+    if bloco:
+        decisores = re.findall(r"^\s+elif (.+?):\s*$", bloco.group(0), re.M)
+        checa(f"só 2 camadas decidem antes do LLM (achei {len(decisores)})", len(decisores) == 2,
+              "camada nova decidindo antes do juiz: " + " | ".join(d[:40] for d in decisores))
+        checa("uma delas é o mapa de revista",
+              any("mapa_revista" in d for d in decisores), "o mapa do Dr. Eduardo saiu da cascata")
+        checa("a outra é o descarte de relato de caso",
+              any("eh_descartavel" in d for d in decisores), "o filtro de lixo saiu da cascata")
+        checa("o PubMed NÃO decide mais (60,0 % contra 99,1 % do LLM)",
+              not any("map_pubtype" in d for d in decisores),
+              "o PubMed voltou a decidir — ele erra 4 em 10 quando opina, medido no gabarito")
+        checa("o rótulo impresso NÃO decide mais",
+              not any("rotulo_original" in d or "rotulo_topo" in d for d in decisores),
+              "a camada que decidia 240 de 703 e produziu os erros de 10/Ago voltou")
+
+    # 4) NADA DE REVISÃO HUMANA POR DISCORDÂNCIA
+    # *"a llm tem que acertar - nada de revisão humana - só teremos que fazer revisão humana se
+    #  formos incompetentes em fazer os filtros corretos para a llm ler no início!"*
+    checa("discordância NÃO desvia o artigo para revisão humana",
+          "DISCORDÂNCIA: rótulo" not in src,
+          "voltou a mandar divergência para fila manual — isso transfere ao Dr. Eduardo o custo "
+          "de um filtro mal feito, em vez de consertar o filtro")
     checa("a conferência é registrada no diário", '"conferencia"' in src,
-          "sem a coluna, ninguém sabe QUANTOS artigos a revisão humana vai receber")
+          "sem a coluna, a divergência não vira conserto de filtro: some")
 
     # 4) A TRAVA `CAIXA ERRADA` DEPENDE DE UM CAMPO ATRAVESSAR TRÊS ARQUIVOS
     # Sabotagem de 10/Ago: bastou a ficha mandar `_desenho: ""` e a trava do contrato PAROU de

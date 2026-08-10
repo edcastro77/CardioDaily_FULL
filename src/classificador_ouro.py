@@ -343,54 +343,71 @@ def classificar(pasta, dry_run=True, max_n=0):
             pubtypes, meta, rotulado = [], {}, True   # sem pubtype, sem rename, sem dedup por DOI
 
         # ═══════════════════════════════════════════════════════════════════════════════════
-        # 10/Ago/2026 — O RÓTULO IMPRESSO DEIXA DE DECIDIR. VIRA CONFERÊNCIA.
+        # 10/Ago/2026 — DUAS CAMADAS DECIDEM. O LLM DECIDE O RESTO. NINGUÉM VAI PARA
+        # REVISÃO HUMANA POR DISCORDÂNCIA.
         # ═══════════════════════════════════════════════════════════════════════════════════
         #
-        # DECISÃO DO DR. EDUARDO, tomada depois de medir o preço da leitura:
-        #     US$ 0,001 por artigo · US$ 0,72 para ler os 740 do mês inteiro
-        # O histórico INTEIRO de classificação — 736 leituras — custou US$ 0,71.
+        # AS SEIS DECISÕES DO DR. EDUARDO, uma a uma, com as palavras dele:
         #
-        # O QUE ISSO REVELOU: a cascata existia para economizar uma chamada de LLM. A economia
-        # é de 56 centavos por mês. O preço dela foi um Nature Medicine com nota 3.
+        #  1. MAPA DE REVISTA GANHA — *"TODOS OS ARTIGOS DA CLINICS (CARDIOLOGY CLINICS, HEART
+        #     FAILURE CLINICS, INTERVENTIONAL CLINICS) SÃO REVISÕES. EHJ SUPPLEMENTS SÃO
+        #     MINIRREVISÕES."*  Medido no acervo: 86 artigos, 100 % na pasta certa. É a camada
+        #     mais confiável que existe porque não é heurística — é curadoria dele.
         #
-        # OS QUATRO CASOS DE 10/Ago, e o que os une: o LLM **nunca foi chamado** em nenhum
-        # deles (coluna `modelo` vazia no diário). Uma camada de cima respondeu antes, e a
-        # camada 6 — o rótulo impresso "ORIGINAL RESEARCH" — decidia 34 % dos artigos, 240 de
-        # 703. Revista carimba meta-análise como ORIGINAL RESEARCH o tempo todo: é o nome da
-        # SEÇÃO da revista, não o desenho do estudo.
+        #  2. O PUBMED NÃO GANHA MAIS — *"não sei como você está confiando assim no PubMed. Ele
+        #     não tem no escopo todos os nomes e sai colando o primeiro da reta... a impressão
+        #     que eu tenho é que o PubMed vai errar mais que a LLM."*
+        #     MEDIDO contra o gabarito de 111 artigos que ELE conferiu à mão:
+        #         PubMed  60,0 % de acerto (9 certos, 6 errados) · e só OPINA em 15 % dos artigos
+        #         LLM v3  99,1 %                                 · opina em 100 %
+        #     Os 6 erros são exatamente o que ele descreveu: 2 revisões narrativas carimbadas
+        #     `Systematic Review` (a revisão diz que fez busca) e 4 minirrevisões carimbadas
+        #     `Editorial` (o Eugene Braunwald da JACC). Um desses erros teria mandado uma
+        #     revisão narrativa para a Escada das meta-análises, a ser cobrada por Trim-and-Fill
+        #     e I² que ela nunca teve.
         #
-        # O DESENHO NOVO:
-        #   · o LLM lê TODO artigo (medido no gabarito do Dr. Eduardo: 110/111 = 99,1 %)
-        #   · mapa de revista e PubMed continuam GANHANDO — o primeiro é curadoria dele, o
-        #     segundo é catalogação humana da NLM (foi o PubMed que sabia do `Scoping Review`
-        #     que o meu mapa ignorava)
-        #   · o rótulo impresso vira CONFERÊNCIA: quando ele discorda do LLM, ninguém escolhe
-        #     no escuro — o artigo vai para REVISAO_HUMANA (LEI 8, ponto 4)
-        #   · DESCARTE segue determinístico: não se paga leitura para jogar fora
+        #  3. O RÓTULO IMPRESSO NÃO GANHA — vira conferência. É a camada que decidia 240 de 703
+        #     artigos e produziu os erros de 10/Ago: revista carimba meta-análise como
+        #     "ORIGINAL RESEARCH" porque é o nome da SEÇÃO, não o desenho do estudo.
+        #
+        #  4. NADA DE REVISÃO HUMANA POR DISCORDÂNCIA — *"a llm tem que acertar. Só teremos que
+        #     fazer revisão humana se formos incompetentes em fazer os filtros corretos para a
+        #     llm ler no início."*  Mandar a discordância para uma fila manual seria transferir
+        #     para ele o custo de um filtro mal feito. Quando as fontes divergem, vale o LLM —
+        #     e a divergência fica REGISTRADA na coluna `conferencia` do diário, para virar
+        #     conserto de filtro, não trabalho braçal.
+        #
+        #  5. RELATO DE CASO CONTINUA DETERMINÍSTICO — *"= LIXO"*. Não se paga leitura para
+        #     jogar fora.
+        #
+        # O QUE ISSO CUSTA: US$ 0,001 por artigo · US$ 0,72 para ler os 740 do mês. O histórico
+        # INTEIRO de classificação — 736 leituras — custou US$ 0,71. A cascata antiga existia
+        # para poupar essa chamada; a economia era de 56 centavos por mês e o preço dela foi um
+        # Nature Medicine com nota 3.
+        #
+        # ⚠️ DUAS CAMADAS QUE EU REBAIXEI SEM ELE MANDAR, e digo por quê (LEI 6 — se estiver
+        # errado, cada uma volta em uma linha):
+        #   · RÓTULO NEGATIVO (EDITORIAL/VIEWPOINT/LETTER): ela existia para proteger do DOI
+        #     emprestado — editorial rouba o DOI do artigo que comenta e o PubMed carimbava o
+        #     tipo do artigo COMENTADO. Com o PubMed rebaixado, o motivo dela evaporou. E o
+        #     gabarito mostra o custo de mantê-la: das 6 falhas do PubMed, 4 eram minirrevisões
+        #     carimbadas `Editorial`.
+        #   · TÍTULO DIZ META: nunca errou até hoje, mas é a mesma família — camada que cala o
+        #     juiz. A regra do Dr. Eduardo é "a LLM tem que acertar", e o título continua sendo
+        #     a prova mais forte que o próprio prompt v3 manda usar (REGRA 1).
+        # As duas continuam rodando como CONFERÊNCIA: opinam no diário, não mudam o destino.
         #
         # TRAVA: rede caiu → NÃO classifica, NÃO renomeia. Vai pro balde de retentar.
         conferencia = []                     # o que as camadas determinísticas ACHAM (não decidem)
         if falha_rede:
             destino, marca, via = "RETRY", "🌐", "falha de rede → retentar"
-        # CAMADA A — mapa de revista (curadoria do Dr. Eduardo: DECIDE)
+        # ── CAMADA QUE DECIDE 1/2 — MAPA DE REVISTA (curadoria do Dr. Eduardo) ──
         elif (destino := mapa_revista(doi)):
             marca, via = "🗺️", "mapa de revista"
             via_mapa += 1
-        # RÓTULO NEGATIVO do topo — editorial/comentário/carta (DECIDE: rouba o DOI do artigo
-        # que comenta, e o PubMed carimbaria o tipo do artigo COMENTADO)
-        elif rotulo_topo(texto)[0]:
-            destino, rot_l = rotulo_topo(texto)
-            marca, via, rotulado = "🏷️", f"rótulo do topo: {rot_l}", True
-        # CAMADA D — descarte determinístico (DECIDE: não se paga leitura para jogar fora)
+        # ── CAMADA QUE DECIDE 2/2 — LIXO (relato de caso/carta): não se paga leitura ──
         elif eh_descartavel(pubtypes, meta.get("title", ""), texto):
             destino, marca, via = "DESCARTE", "⛔", f"descarte: caso/carta {pubtypes or ''}"
-        # META pelo TÍTULO — a revista DECLARA "Systematic Review and Meta-Analysis" (DECIDE)
-        elif _META_TITULO.search((meta.get("title", "") or texto[:250])):
-            destino, marca, via = "revisao_sistematica_meta_analise", "🏷️", "título: meta-análise"
-        # PubMed AUTORITATIVO — catalogação humana da NLM (DECIDE)
-        elif pubtypes and map_pubtype(pubtypes):
-            destino, marca, via = map_pubtype(pubtypes), "✅", f"PubMed {pubtypes}"
-            via_pubmed += 1
         else:
             # CAMADA B/C — o JUIZ LLM lê as PÁGINAS 1 A 3 com o prompt v3 (medido: 110/111 = 99,1 %)
             tipo, conf, prova = classificar_llm(caminho)
@@ -438,19 +455,31 @@ def classificar(pasta, dry_run=True, max_n=0):
                 # com essa trava que o 99,1 % foi medido. Desconfiar aqui seria desperdiçar a trava.
                 destino, marca, via = tipo, "🤖", f"LLM v3 pág.1-3 ({conf}): {prova[:60]}"
 
-                # ═══ A CONFERÊNCIA (10/Ago) — o rótulo impresso não decide, mas FALA ═══
-                # Até hoje esta camada DECIDIA, e sozinha: 240 dos 703 artigos. Agora ela só
-                # opina. Quando ela e o LLM concordam, nada muda e ninguém é incomodado.
-                # Quando DISCORDAM, é proibido escolher no escuro — porque foi escolhendo no
-                # escuro que o "Incidence and Predictors of Extracranial Bleeding" (meta-análise
-                # carimbada ORIGINAL RESEARCH ARTICLE) foi para a trilha do artigo original.
-                # LEI 8, ponto 4: *"Na dúvida, REVISÃO HUMANA. Classificar errado custa mais
-                # caro que não classificar."*
-                rot_o = rotulo_original(texto)
-                if rot_o and tipo != "artigo_original":
-                    conferencia.append(f"rótulo impresso diz «{rot_o}», LLM diz {tipo}")
-                    destino, marca = "REVISAO", "🔴"
-                    via = f"DISCORDÂNCIA: rótulo «{rot_o}» × LLM {tipo} ({conf}) — {prova[:34]}"
+                # ═══ A CONFERÊNCIA — REGISTRA, NÃO DESVIA (10/Ago/2026) ═══
+                #
+                # Palavras do Dr. Eduardo: *"a llm tem que acertar - nada de revisão humana - só
+                # teremos que fazer revisão humana se formos incompetentes em fazer os filtros
+                # corretos para a llm ler no início!"*
+                #
+                # Eu tinha escrito a versão anterior mandando a discordância para REVISAO_HUMANA,
+                # e ele recusou — com razão. Mandar divergência para uma fila manual transfere a
+                # ele o custo de um filtro mal feito. A divergência é MATÉRIA-PRIMA DE CONSERTO:
+                # ela vai para a coluna `conferencia` do diário, e é lá que a gente descobre se o
+                # prompt precisa de uma regra nova. Fila manual não conserta nada — só acumula.
+                #
+                # As três fontes que opinam aqui, e por que NENHUMA ganha do LLM (medido contra o
+                # gabarito de 111 artigos conferido à mão pelo Dr. Eduardo):
+                #    LLM v3            99,1 % · opina em 100 %
+                #    PubMed            60,0 % · opina em 15 %   (9 certos, 6 errados)
+                #    rótulo impresso   decidia 240 de 703 e produziu os erros de 10/Ago
+                for quem, opiniao in (("PubMed", map_pubtype(pubtypes) if pubtypes else None),
+                                      ("rótulo impresso", "artigo_original" if rotulo_original(texto) else None),
+                                      ("título", ("revisao_sistematica_meta_analise"
+                                                  if _META_TITULO.search(meta.get("title", "") or texto[:250])
+                                                  else None)),
+                                      ("rótulo de seção", rotulo_topo(texto)[0] or None)):
+                    if opiniao and opiniao != tipo:
+                        conferencia.append(f"{quem} diz {opiniao}")
             else:
                 destino, marca, via = "REVISAO", "🔴", f"ambíguo (LLM={tipo or 'vazio'})"
 
@@ -557,7 +586,18 @@ def classificar(pasta, dry_run=True, max_n=0):
             break
 
     print("\nResumo:", ", ".join(f"{k}={v}" for k, v in sorted(cont.items())))
-    print(f"Resolvidos: MAPA {via_mapa} | PubMed autoritativo {via_pubmed} | LLM {via_sonnet}  (grátis: {via_mapa + via_pubmed})")
+    # 10/Ago — a linha dizia "PubMed autoritativo" e "grátis", que era o vocabulário da cascata
+    # velha. O PubMed não decide mais (60,0 % de acerto contra 99,1 % do LLM, medido no gabarito
+    # do Dr. Eduardo) e o "grátis" era o argumento que custou um Nature Medicine com nota 3:
+    # ler tudo custa US$ 0,001 por artigo.
+    _discord = sum(1 for x in _LOG if (x.get("conferencia") or "").strip())
+    print(f"Decidiram: MAPA DE REVISTA {via_mapa} | LIXO (relato/carta) {len(_LOG) - via_mapa - via_sonnet} "
+          f"| LLM {via_sonnet}")
+    if via_sonnet:
+        print(f"CONFERÊNCIA: {_discord} de {via_sonnet} artigos tiveram alguma fonte discordando do LLM "
+              f"({100 * _discord / via_sonnet:.0f} %) — coluna `conferencia` do diário.")
+        print("   Discordância NÃO manda ninguém para revisão humana (decisão do Dr. Eduardo,")
+        print("   10/Ago): ela é matéria-prima para consertar o filtro, não fila de trabalho manual.")
 
     # ─── O DIÁRIO DA RODADA (02/Ago/2026) ───
     # Sem isto, quando um lote sai errado ninguém sabe QUAL CAMADA decidiu nem QUAL MODELO respondeu —
