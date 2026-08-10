@@ -177,6 +177,13 @@ def indice_do_disco():
         # O `doc_id` é a chave que o portão usa e existe em toda linha; indexar pelos dois torna
         # a ponte imune a um dos lados faltar.
         try:
+            # 10/Ago — o administrador LÊ, não publica: `montar()` é código de produção e marca
+            # o waypoint P1_FICHA. Sem silenciar, cada abertura do painel escrevia uma marca de
+            # produção por pacote no plano de voo — e a Chave 18 passava a relatar artigos
+            # "parados no P1_FICHA" que na verdade tinham chegado ao fim horas antes.
+            # Mesmo motivo do `ensaio_seco.py`; achado na mesma varredura.
+            import voo as _VOO
+            _VOO.silenciar(True)
             import ficha_site as _F
             _d = (_F.montar(pasta) or {}).get("doc_id")
             if _d:

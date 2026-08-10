@@ -52,6 +52,20 @@ def ensaiar(pasta):
     import contrato as C
     import ficha_site as F
 
+    # ═══ 10/Ago — "NADA É ESCRITO" ERA MENTIRA, E SUJAVA A ÚNICA PROVA QUE TEMOS ═══
+    # `F.montar()` é código de PRODUÇÃO e marca o waypoint `P1_FICHA`. Este ensaio chama
+    # `montar()` uma vez por pacote — logo, cada vez que eu rodava o ensaio (de graça, para
+    # NÃO fazer o Dr. Eduardo gastar) o plano de voo ganhava 119 marcas de produção falsas.
+    #
+    # Medido na rodada de 10/Ago: P1_FICHA com 222 marcas para 119 artigos. Um artigo que
+    # tinha chegado ao P2_CONTRATO às 23:49 aparecia na Chave 18 como "parado no P1_FICHA",
+    # com zona de busca, porque a caixa-preta olha a ÚLTIMA marca — e as últimas eram minhas.
+    #
+    # O observador alterando o observado, na ferramenta feita justamente para observar sem
+    # alterar. A linha abaixo é o conserto inteiro.
+    import voo as _VOO
+    _VOO.silenciar(True)
+
     fj = glob.glob(os.path.join(pasta, "*_fatos.json"))
     if not fj:
         return None

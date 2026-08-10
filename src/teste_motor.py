@@ -1618,6 +1618,16 @@ def teste_ficha_sem_contradicao():
     """
     import os, sys, glob
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+    # ═══ 10/Ago — A PRÓPRIA BATERIA SUJAVA O PLANO DE VOO ═══
+    # `F.montar()` é código de produção e marca o waypoint P1_FICHA. Esta trava monta a ficha
+    # de TODOS os pacotes do STAGING — 119 na rodada de 10/Ago. Medido: cada execução da
+    # Chave 8 escrevia **30.881 bytes** de marcas de produção falsas no `outputs/voo.jsonl`.
+    # Terceiro poluidor encontrado no mesmo dia, depois do `ensaio_seco.py` e do
+    # `administrador.py` — e o mais irônico: a bateria que existe para provar que o sistema
+    # está certo estava adulterando a prova de onde os artigos param.
+    import voo as _V
+    _V.silenciar(True)
     import ficha_site as F
 
     raiz = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -1734,6 +1744,89 @@ def teste_acri_nao_diz_sim_nao_para_todo_mundo():
           "o prompt ainda manda imprimir SIM/NÃO em diretriz e revisão")
     for termo in ("RECOMENDADA COM RESSALVAS", "revisão narrativa"):
         checa(f"ACRI sabe o caso: {termo}", termo in txt, "o prompt não cobre este tipo")
+
+
+def teste_o_instrumento_nao_mente():
+    """10/Ago — A CHAVE 18 RELATOU 155 DESAPARECIDOS NUMA RODADA SEM UM ÚNICO DEFEITO.
+
+    ═══ O CASO REAL ═══
+    A primeira rodada grande com o plano de voo terminou limpa: 41 artigos recusados, TODOS
+    nota <6 (2 com nota 0, 3 com 3, 8 com 4, 28 com 5) — a LEI 10 exatamente como o Dr. Eduardo
+    a escreveu. A caixa-preta relatou:
+
+        ── 155 DE 281 NÃO CHEGARAM ──
+        ▸ silêncio entre P3_MIDIA e P4_BANCO   —   114 artigo(s)
+        ▸ falha reportada em P2_CONTRATO       —    35 artigo(s)   erro: bloco A do ACRI vazio
+        ▸ silêncio entre P1_FICHA e P2_CONTRATO —    6 artigo(s)
+
+    Nenhum dos três era verdade. TRÊS defeitos, todos do INSTRUMENTO:
+
+    1. IDENTIDADE (os 114) — o P3_MIDIA marcava `artigo=objeto`, e objeto é o nome do arquivo
+       no Storage (`10.1016/j.ahj.2026.107510.pdf`). Os outros marcam o nome do PACOTE. Medido:
+       P1↔P2 tinham 119 nomes em comum de 119; P3↔P4 tinham ZERO de 114. Toda mídia enviada com
+       SUCESSO virava um artigo desaparecido. É a LEI 9 dentro do próprio vigia.
+
+    2. CAUSA CORTADA (os 35) — a classificação "retido" procurava a frase "FICA retido" dentro
+       da mensagem, e a mensagem guardava só as 3 primeiras violações. A linha da nota era a
+       quarta. Ver `caixa_preta.e_retido`.
+
+    3. O OBSERVADOR (os 6) — o `ensaio_seco.py`, que promete "custo zero, não escreve nada",
+       chama `ficha_site.montar()`, que marca P1_FICHA. Cada ensaio meu injetava 119 marcas
+       falsas de produção. P1 ficou com 222 marcas para 119 artigos, e artigos que tinham
+       chegado ao P2 às 23:49 apareciam parados no P1 — porque a caixa-preta lê a ÚLTIMA marca,
+       e as últimas eram minhas.
+
+    ═══ POR QUE ISTO É PIOR QUE UM BUG COMUM ═══
+    O plano de voo existe para o Dr. Eduardo poder confiar no que o sistema relata. Um vigia
+    que grita "155 sumiram" quando nada sumiu não é inofensivo: gasta a noite dele procurando
+    defeito que não existe, e da próxima vez que gritar de verdade ele não vai acreditar.
+    """
+    import os
+    import caixa_preta as CP
+    import voo as V
+
+    # ── 1. RETIDO É DECIDIDO PELO NÚMERO ──
+    sintomas = ("contexto_tema: ausente: bloco A do ACRI vazio · impacto_conduta: ausente · "
+                "gancho_lista: sem gancho")          # a mensagem REAL, sem a linha da nota
+    checa("nota 4 sem a frase na mensagem ainda é RETIDO",
+          CP.e_retido({"wp": "P2_CONTRATO", "ok": False, "nota": 4, "erro": sintomas}),
+          "voltou a depender de achar texto — 35 reprovados viraram 'falha do ACRI' em 10/Ago")
+    checa("nota 7 recusado é FALHA, não retenção",
+          not CP.e_retido({"wp": "P2_CONTRATO", "ok": False, "nota": 7, "erro": "tema fora da lista"}),
+          "um artigo BOM que não subiu está sendo escondido na lista de 'retidos pela régua'")
+    checa("DIRETRIZ com nota 4 é FALHA (ela não tem porta — 05/Ago)",
+          not CP.e_retido({"wp": "P2_CONTRATO", "ok": False, "nota": 4,
+                           "tipo_documento": "diretriz", "erro": sintomas}),
+          "a exceção da diretriz vazou: diretriz retida ficaria escondida como 'é a régua'")
+    checa("marca de SUCESSO nunca é retenção",
+          not CP.e_retido({"wp": "P2_CONTRATO", "ok": True, "nota": 4}),
+          "artigo que PASSOU no contrato entrando na lista de retidos")
+
+    # ── 2. SIMULAÇÃO NÃO ESCREVE NO PLANO DE VOO ──
+    tam = (lambda: os.path.getsize(V.VOO) if os.path.exists(V.VOO) else 0)
+    antes_flag = V.silenciado()
+    V.silenciar(True)
+    a = tam()
+    for i in range(30):
+        V.marcar("P1_FICHA", artigo=f"__trava_{i}")
+    checa("com voo.silenciar(), 30 marcas não escrevem 1 byte", tam() == a,
+          "a simulação voltou a sujar o registro — foi assim que 6 artigos que chegaram ao fim "
+          "apareceram parados no P1_FICHA")
+    V.silenciar(antes_flag)
+
+    # ── 3. TODO WAYPOINT DE ARTIGO USA A IDENTIDADE DO PACOTE ──
+    _src = os.path.dirname(os.path.abspath(__file__))
+    txt = open(os.path.join(_src, "publicador.py"), encoding="utf-8").read()
+    ruins = [l.strip() for l in txt.splitlines()
+             if "_VOO.marcar" in l and ("artigo=objeto" in l or "artigo=os.path.basename(str(local_path" in l)]
+    checa("nenhum waypoint marca o artigo com o nome do arquivo do Storage", not ruins,
+          "voltou a identidade dupla: " + (ruins[0][:80] if ruins else ""))
+    checa("o ensaio_seco silencia o voo antes de simular",
+          "silenciar(True)" in open(os.path.join(_src, "ensaio_seco.py"), encoding="utf-8").read(),
+          "o ensaio voltou a injetar marcas de produção falsas")
+    checa("o administrador silencia o voo antes de ler a ficha",
+          "silenciar(True)" in open(os.path.join(_src, "administrador.py"), encoding="utf-8").read(),
+          "abrir o painel volta a escrever marcas de produção")
 
 
 def teste_nenhum_modulo_usado_sem_import():

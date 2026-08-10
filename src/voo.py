@@ -225,6 +225,39 @@ def _corrida():
     return c
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# MODO ENSAIO — SIMULAÇÃO NÃO ESCREVE NO PLANO DE VOO (10/Ago/2026)
+# ═══════════════════════════════════════════════════════════════════════════════════════
+#
+# O `ensaio_seco.py` existe para responder "o que aconteceria SE eu rodasse", de graça e sem
+# efeito nenhum. Para simular, ele chama `ficha_site.montar()` — que marca `P1_FICHA`.
+# Ou seja: toda vez que eu rodava o ensaio, o registro ganhava uma marca de PRODUÇÃO que
+# nunca aconteceu.
+#
+# Medido na rodada de 10/Ago: P1_FICHA com **222 marcas para 119 artigos**. Um artigo cuja
+# história real era `A1→A2→A3→A4→P1→P2 (recusado, nota 4)` aparecia na caixa-preta com onze
+# marcas de P1 DEPOIS do P2 — e, como ela olha a ÚLTIMA marca, era relatado como "parado no
+# P1_FICHA", com zona de busca e tudo. O artigo tinha chegado ao P2 às 23:49; as marcas
+# posteriores eram minhas, do ensaio.
+#
+# É a versão mais traiçoeira do problema: o OBSERVADOR alterando o observado. O ensaio é a
+# ferramenta que eu uso justamente para não fazer o Dr. Eduardo gastar — e ela estava
+# adulterando a única prova de onde os artigos param.
+#
+# Quem simula chama `voo.silenciar()` no começo. Nada mais muda: as mesmas funções, os mesmos
+# caminhos de código, só que a escrita vira no-op.
+_SILENCIO = [False]
+
+
+def silenciar(sim=True):
+    """Desliga a gravação. Para SIMULAÇÃO (ensaio_seco, testes) — nunca para produção."""
+    _SILENCIO[0] = bool(sim)
+
+
+def silenciado():
+    return _SILENCIO[0]
+
+
 def marcar(wp, ok=True, artigo=None, erro=None, **dados):
     """Marca posição. É a única função que os programas do CardioDaily chamam.
 
@@ -237,6 +270,8 @@ def marcar(wp, ok=True, artigo=None, erro=None, **dados):
     de 60 caracteres numa mensagem de erro que transformou um diagnóstico de dez segundos
     em 232 linhas idênticas na tela (07/Ago).
     """
+    if _SILENCIO[0]:
+        return                      # simulação: não sujar o registro de voo (ver acima)
     try:
         linha = {
             "t": datetime.datetime.now().isoformat(timespec="seconds"),

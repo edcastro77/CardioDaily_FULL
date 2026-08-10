@@ -186,9 +186,25 @@ def _preflight(payload):
     return probs
 
 
-def _upload_storage(bucket, local_path, objeto, content_type):
+def _upload_storage(bucket, local_path, objeto, content_type, artigo=""):
     """Sobe UM arquivo pro Storage (bucket público) com a service_role e devolve a URL pública.
-    x-upsert idempotente; cria o bucket se não existir. Devolve None se falhar (não derruba a linha)."""
+    x-upsert idempotente; cria o bucket se não existir. Devolve None se falhar (não derruba a linha).
+
+    ═══ 10/Ago/2026 — O `artigo=` NÃO É ENFEITE: SEM ELE O PLANO DE VOO MENTE ═══
+    Este waypoint marcava `artigo=objeto`, e `objeto` é o nome do arquivo no Storage
+    (`10.1016/j.ahj.2026.107510.pdf`). Os outros três waypoints do publicador marcam o nome do
+    PACOTE (`2026-06-American_heart_journal-Clinical_profiles…`). Medido no voo.jsonl da
+    rodada de 10/Ago: P1 e P2 tinham 119 nomes em comum de 119; P3 e P4 tinham **ZERO de 114**.
+
+    Consequência na tela da Chave 18, e ela é grave: a caixa-preta agrupa por artigo e procura
+    quem não chegou ao destino. Como o nome do P3 não existe em nenhum outro waypoint, TODA
+    mídia enviada com sucesso virava "um artigo que sumiu entre P3 e P4" — 114 falsos
+    desaparecidos, com zona de busca, numa rodada em que nada tinha dado errado.
+
+    É a LEI 9 dentro do próprio instrumento de vigilância: a mesma pergunta ("que artigo é
+    este?") respondida por duas fontes. O nome do arquivo continua registrado, no campo
+    `objeto` — onde ele é informação, e não identidade.
+    """
     import requests
     url = os.getenv("SUPABASE_URL", "").rstrip("/")
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
@@ -198,8 +214,7 @@ def _upload_storage(bucket, local_path, objeto, content_type):
         # e a linha sobe assim para o Supabase. O site renderiza um link para
         # `/Users/eduardocastro/...`, que não existe para ninguém no mundo.
         # As três causas são bem diferentes e agora aparecem separadas.
-        _VOO.marcar("P3_MIDIA", ok=False, artigo=os.path.basename(str(local_path or "")),
-                    bucket=bucket,
+        _VOO.marcar("P3_MIDIA", ok=False, artigo=artigo, objeto=objeto, bucket=bucket,
                     erro=("credencial do Supabase ausente" if not (url and key)
                           else f"arquivo local não existe: {local_path}"))
         print(f"  ⚠️  Storage {bucket}: NÃO subiu — " +
@@ -247,7 +262,7 @@ def _upload_storage(bucket, local_path, objeto, content_type):
 
     r = _post(f"{url}/storage/v1/object/{bucket}/{objeto}", headers=hdr, data=dados, timeout=120)
     if r.status_code in (200, 201):
-        _VOO.marcar("P3_MIDIA", artigo=objeto, bucket=bucket, kb=len(dados) // 1024)
+        _VOO.marcar("P3_MIDIA", artigo=artigo, objeto=objeto, bucket=bucket, kb=len(dados) // 1024)
         return url_publica
     if r.status_code in (400, 404):                      # bucket pode não existir → cria e re-tenta
         _post(f"{url}/storage/v1/bucket",
@@ -256,15 +271,19 @@ def _upload_storage(bucket, local_path, objeto, content_type):
         r = _post(f"{url}/storage/v1/object/{bucket}/{objeto}", headers=hdr, data=dados, timeout=120)
         if r.status_code in (200, 201):
             return url_publica
-    _VOO.marcar("P3_MIDIA", ok=False, artigo=objeto, bucket=bucket,
+    _VOO.marcar("P3_MIDIA", ok=False, artigo=artigo, objeto=objeto, bucket=bucket,
                 erro=f"HTTP {r.status_code}: {r.text[:200]}")
     print(f"  ⚠️  Storage {bucket}: {r.status_code} {r.text[:120]}")
     return None
 
 
-def _subir_midia(ficha):
+def _subir_midia(ficha, artigo=""):
     """Sobe PNG/áudio/PDF pro Storage e troca os caminho_* LOCAIS pelas URLs públicas (o que o site usa).
-    Sem arquivo local → deixa o campo como está. Buckets: visual_abstracts / podcasts / resumos_pdf."""
+    Sem arquivo local → deixa o campo como está. Buckets: visual_abstracts / podcasts / resumos_pdf.
+
+    O `artigo` vem de cima e é o nome do PACOTE — a mesma identidade de P1, P2 e P4. Ver o
+    comentário do `_upload_storage`: sem isto, o plano de voo inventa 114 desaparecidos.
+    """
     doc = ficha.get("doc_id") or "artigo"
     mapa = [("caminho_visual_abstract", "visual_abstracts", f"{doc}.png", "image/png"),
             ("caminho_audio",           "podcasts",         f"{doc}.mp3", "audio/mpeg"),
@@ -272,7 +291,7 @@ def _subir_midia(ficha):
     for campo, bucket, objeto, ctype in mapa:
         local = ficha.get(campo, "")
         if local and os.path.exists(local):
-            u = _upload_storage(bucket, local, objeto, ctype)
+            u = _upload_storage(bucket, local, objeto, ctype, artigo=artigo)
             if u:
                 ficha[campo] = u                          # caminho local → URL pública
     return ficha
@@ -298,11 +317,24 @@ def processar_pasta(pasta, publicar=False):
         # para que a pergunta "por que este artigo não subiu?" nunca mais dependa de eu ir
         # ler um arquivo de motivo de uma rodada de duas semanas atrás — que foi exatamente
         # o erro que cometi em 09/Ago, contando 90 artigos publicados como retidos.
+        # ═══ 10/Ago — A CAUSA VINHA EM QUARTO LUGAR E ERA CORTADA FORA ═══
+        # Gravava-se `violacoes[:3]`, e o contrato lista os SINTOMAS antes da CAUSA:
+        #     1. contexto_tema: ausente: bloco A do ACRI vazio
+        #     2. impacto_conduta: ausente: bloco I do ACRI vazio
+        #     3. gancho_lista: sem gancho no ACRI
+        #     4. nota 4 < 6: por regra o artigo FICA retido      ← a razão, cortada aqui
+        # Um artigo nota 4 não tem ACRI porque a régua não manda escrever ACRI para nota 4.
+        # Os três primeiros são consequência do quarto. Na tela da Chave 18 de 10/Ago isso
+        # virou "35 artigos com o ACRI vazio" — que soa como defeito do gerador de ACRI, e
+        # não era: eram 35 artigos reprovados, exatamente como a LEI 10 manda.
+        # Agora a linha da NOTA vai na frente, e o resto vai atrás dela.
+        _causa = [v for v in violacoes if "< 6" in v or "inválida" in v]
+        _resto = [v for v in violacoes if v not in _causa]
         _VOO.marcar("P2_CONTRATO", ok=False, artigo=base,
                     nota=ficha.get("nota_aplicabilidade"),
                     tipo_documento=ficha.get("tipo_documento"),
                     violacoes=len(violacoes),
-                    erro=" · ".join(violacoes[:3])[:380])
+                    erro=" · ".join(_causa + _resto)[:380])
         return ("RECUSADO", ficha.get("nota_aplicabilidade"), violacoes)
 
     _VOO.marcar("P2_CONTRATO", artigo=base, nota=ficha.get("nota_aplicabilidade"),
@@ -321,7 +353,7 @@ def processar_pasta(pasta, publicar=False):
                     erro="preflight de schema: " + " · ".join(prob[:3])[:340])
         return ("RECUSADO(schema)", ficha.get("nota_aplicabilidade"), prob)
     if publicar:
-        ficha = _subir_midia(ficha)              # payload validado → sobe PNG/áudio/PDF, troca por URLs
+        ficha = _subir_midia(ficha, artigo=base)  # payload validado → sobe PNG/áudio/PDF, troca por URLs
     open(os.path.join(pasta, "_SITE.json"), "w", encoding="utf-8").write(
         json.dumps(_payload_site(ficha), ensure_ascii=False, indent=2))
     if publicar:

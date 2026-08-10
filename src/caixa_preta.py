@@ -81,6 +81,41 @@ def _chegou(marcas):
     return False, ultimo_bloco
 
 
+def e_retido(marca):
+    """RETIDO PELA RÉGUA (não é falha) — decidido pelo NÚMERO, não por procurar texto.
+
+    Função pura e no nível do módulo de propósito: assim a bateria consegue provar as quatro
+    situações sem rodar nada. Estava aninhada dentro do `relatorio()` e, portanto, fora do
+    alcance de qualquer teste — que é como o defeito abaixo sobreviveu.
+
+    ═══ 10/Ago — O QUE ESTAVA ERRADO ═══
+    A regra era `"FICA retido" in erro`. O publicador gravava só as TRÊS primeiras violações, e
+    o contrato lista os SINTOMAS antes da CAUSA:
+        1. contexto_tema: ausente: bloco A do ACRI vazio
+        2. impacto_conduta: ausente: bloco I do ACRI vazio
+        3. gancho_lista: sem gancho no ACRI
+        4. nota 4 < 6: por regra o artigo FICA retido        ← cortada fora
+    Um artigo nota 4 não tem ACRI porque a régua não manda escrever ACRI para nota 4: os três
+    primeiros são consequência do quarto. Na Chave 18 isso virou "35 falhas com o ACRI vazio",
+    que soa como defeito do gerador de ACRI — e eram 35 artigos reprovados, a LEI 10 em ação.
+
+    Procurar palavra dentro de mensagem é frágil por natureza: basta reordenar, cortar ou
+    reescrever o texto e a classificação muda em silêncio. A NOTA já vinha gravada na marca,
+    como número. Número não muda de redação.
+
+    ⚠️ A DIRETRIZ É EXCEÇÃO (Dr. Eduardo, 05/Ago): ela sobe em QUALQUER nota. Diretriz retida
+    é falha de verdade, por mais baixa que seja a nota — nunca "a régua funcionando".
+    """
+    if marca.get("wp") != "P2_CONTRATO" or marca.get("ok"):
+        return False
+    if "diretriz" in str(marca.get("tipo_documento") or "").lower():
+        return False
+    n = marca.get("nota")
+    if isinstance(n, (int, float)) and not isinstance(n, bool) and n < 6:
+        return True
+    return "FICA retido" in str(marca.get("erro") or "")
+
+
 def relatorio(horas=24, filtro=""):
     linhas = VOO.ler(desde_horas=horas)
     if filtro:
@@ -135,8 +170,22 @@ def relatorio(horas=24, filtro=""):
     # mais — esta é a regra"*. Misturar os dois numa lista só é o mesmo erro de leitura que
     # em 09/Ago me fez contar 90 artigos publicados como retidos: números certos, conclusão
     # errada, porque as categorias estavam trocadas.
-    retidos = [(a, u, b) for a, u, b in parados
-               if u["wp"] == "P2_CONTRATO" and "FICA retido" in str(u.get("erro", ""))]
+    #
+    # ═══ 10/Ago — ESTA CLASSIFICAÇÃO ERA FEITA PROCURANDO TEXTO, E FALHOU ═══
+    # Era `"FICA retido" in erro`. O publicador gravava `violacoes[:3]`, e o contrato lista os
+    # SINTOMAS antes da CAUSA — os três primeiros eram "bloco A do ACRI vazio", "bloco I vazio",
+    # "sem gancho", e a linha "nota 4 < 6: por regra o artigo FICA retido" era a QUARTA, cortada
+    # fora. Resultado na tela: 35 artigos reprovados pela régua apareceram como "35 falhas com
+    # o ACRI vazio" — o que soa como defeito do gerador de ACRI e não era nada.
+    #
+    # Procurar palavra dentro de mensagem é frágil por natureza: basta alguém reescrever o texto,
+    # cortar, traduzir ou reordenar, e a classificação vira outra coisa em silêncio. A NOTA já
+    # vinha gravada no campo `nota` da própria marca — um número, que não muda de redação.
+    # Agora é ela que decide, e a busca por texto fica só como rede de segurança.
+    #
+    # A diretriz é a exceção do Dr. Eduardo (05/Ago): ela SOBE em qualquer nota. Se uma diretriz
+    # não chegou ao banco, isso é falha de verdade, por mais baixa que seja a nota.
+    retidos = [(a, u, b) for a, u, b in parados if e_retido(u)]
     falhas = [x for x in parados if x not in retidos]
 
     print()
