@@ -206,10 +206,18 @@ def montar(pasta):
     # indistinguíveis no banco — e são réguas completamente diferentes.
     fatos_f = glob.glob(os.path.join(pasta, "*_fatos.json"))
     fracao_ejecao, motor, tipo_documento, veredito_dominios = None, "ORIGINAL", "original", {}
+    desenho = ""
     if fatos_f:
         try:
             _f = json.load(open(fatos_f[0], encoding="utf-8"))
             fracao_ejecao = _f.get("fracao_ejecao")
+            # 10/Ago — o DESENHO viaja junto para o contrato poder comparar com a caixa.
+            # Sem esta linha a trava `CAIXA ERRADA` do contrato nunca dispararia: ela leria
+            # um campo que a ficha não carrega e devolveria "" para sempre. É o mesmo defeito
+            # de 06/Ago (motor certo + schema certo + PROMPT calado = campo null eternamente) e
+            # de 05/Ago (as palavras-chave da meta nasceram sem instrução). Trava que depende
+            # de campo ausente não é trava: é decoração que dá APROVADO por ausência.
+            desenho = str(_f.get("desenho") or "").strip()
             import notas_prototipo as _N
             _r = _N.score(_f)
             motor = _r.get("motor") or "ORIGINAL"
@@ -447,4 +455,5 @@ def montar(pasta):
         "publicar_no_site": False,              # sobe como rascunho; você libera no Administrador/site
         "created_at": datetime.date.today().isoformat(),
         "_fracao_ejecao": fracao_ejecao,        # METADADO (prefixo _ → NÃO sobe): trava de inversão FE no contrato
+        "_desenho": desenho,                    # METADADO: alimenta a trava CAIXA ERRADA do contrato (10/Ago)
     }

@@ -81,6 +81,21 @@ _PUBTYPE_PRIORITY = [
     ("guideline",                        {"Practice Guideline", "Guideline"}),
     # D-01 (Dr. Eduardo, 31/07): revisão sistemática = meta-análise, MESMA TRILHA.
     ("revisao_sistematica_meta_analise", {"Meta-Analysis", "Systematic Review"}),
+    # ⚠️ `Scoping Review` NÃO ENTRA AQUI — e a história de por que vale a pena escrever:
+    #
+    # Em 10/Ago o "Bradyarrhythmia … A Systematic Scoping Review" (JAHA) foi para artigo_original.
+    # O PubMed tinha catalogado `Journal Article | Scoping Review`; este mapa não conhecia a
+    # palavra, devolveu None, e a decisão caiu no rótulo impresso "ORIGINAL RESEARCH".
+    # Meu primeiro conserto foi acrescentar `("revisao_geral", {"Scoping Review"})` aqui.
+    #
+    # A BATERIA RECUSOU — `teste_mapa_pubmed`, escrita em 02/Ago, diz que NENHUM pubtype pode
+    # decidir `revisao_geral`: é o balde genérico, e quem decide é o LLM. Ela nasceu do erro
+    # idêntico ao de hoje, e a frase dela é *"O LLM não tinha culpa — ele NUNCA FOI CHAMADO."*
+    # A trava velha estava certa e eu estava repetindo o erro que ela guardava.
+    #
+    # E, com a cascata de 10/Ago, o conserto é desnecessário: o LLM passa a ler TODO artigo, e
+    # ele lê "A Systematic Scoping Review" no próprio título. O defeito se fecha pelo desenho,
+    # não por remendar o mapa com um caso particular.
     ("ponto_de_vista",                   {"Editorial", "Comment"}),  # "Letter" agora é descarte
     ("artigo_original",                  {"Randomized Controlled Trial", "Clinical Trial",
                                           "Controlled Clinical Trial", "Comparative Study",

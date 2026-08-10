@@ -1746,6 +1746,97 @@ def teste_acri_nao_diz_sim_nao_para_todo_mundo():
         checa(f"ACRI sabe o caso: {termo}", termo in txt, "o prompt não cobre este tipo")
 
 
+def teste_o_llm_le_todo_artigo():
+    """10/Ago — O RÓTULO IMPRESSO DECIDIA 34% DOS ARTIGOS E O LLM NUNCA ERA CHAMADO.
+
+    ═══ O QUE ACONTECEU ═══
+    Quatro artigos foram para a caixa errada na rodada de 10/Ago. Nos QUATRO, a coluna `modelo`
+    do diário estava VAZIA: o juiz que lê as páginas 1–3 — medido em 110/111 = 99,1 % no
+    gabarito conferido à mão pelo Dr. Eduardo — **nunca foi chamado**. Uma camada de cima
+    respondeu antes.
+
+    A camada era o RÓTULO IMPRESSO ("ORIGINAL RESEARCH"), que decidia 240 dos 703 artigos e
+    rodava DEPOIS do PubMed e ANTES do LLM. Revista carimba meta-análise como ORIGINAL RESEARCH
+    o tempo todo: é o nome da SEÇÃO, não o desenho do estudo.
+        · "Incidence and Predictors of Extracranial Bleeding"  → rótulo ORIGINAL RESEARCH ARTICLE
+        · "Bradyarrhythmia … A Systematic Scoping Review"      → rótulo ORIGINAL RESEARCH
+
+    ═══ POR QUE A CASCATA EXISTIA, E POR QUE O ARGUMENTO CAIU ═══
+    Ela existia para poupar chamadas de LLM. MEDIDO em 736 leituras reais: US$ 0,001 por artigo,
+    mediana de 4.482 tokens de entrada. Ler os 740 artigos de um mês inteiro custa **US$ 0,72**.
+    O histórico completo de classificação custou US$ 0,71.
+    A economia era de 56 centavos por mês. O preço dela foi um Nature Medicine com nota 3.
+
+    ═══ O DESENHO QUE O DR. EDUARDO ESCOLHEU ═══
+    O LLM lê TODO artigo. As camadas determinísticas que sobrevivem DECIDINDO são as que têm
+    autoridade humana atrás: o mapa de revista (curadoria dele), o rótulo NEGATIVO (editorial
+    rouba o DOI do artigo comentado), o descarte, o título que declara meta, e o PubMed
+    (catalogação da NLM — foi ele que sabia do `Scoping Review` que o meu mapa ignorava).
+    O rótulo IMPRESSO vira CONFERÊNCIA: se discordar do LLM, ninguém escolhe no escuro — vai
+    para REVISAO_HUMANA. LEI 8, ponto 4.
+    """
+    import os
+    import re
+    import classificador_ouro as C
+    import classificador_pubmed as P
+
+    # 1) o mapa do PubMed continua sem inventar decisão para o balde genérico
+    #    (`Scoping Review` NÃO entra: a `teste_mapa_pubmed` de 02/Ago proíbe pubtype decidindo
+    #     `revisao_geral`, e ela está certa — com o LLM lendo todos, quem resolve é ele)
+    checa("PubMed 'Scoping Review' NÃO decide sozinho (vai ao LLM)",
+          P.map_pubtype(["Journal Article", "Scoping Review"]) is None,
+          "voltou a remendar o mapa com caso particular em vez de deixar o juiz ler")
+    checa("PubMed 'Systematic Review' continua na trilha da meta (D-01)",
+          P.map_pubtype(["Systematic Review"]) == "revisao_sistematica_meta_analise",
+          "a D-01 do Dr. Eduardo (31/Jul) foi quebrada")
+    checa("PubMed 'Practice Guideline' continua diretriz",
+          P.map_pubtype(["Practice Guideline"]) == "guideline", "diretriz deixou de ser reconhecida")
+
+    # 2) ": A Review" é revisão narrativa; "Systematic Review and Meta-Analysis" NÃO é
+    checa("': A Review' é reconhecido como revisão narrativa",
+          C.titulo_diz_revisao_narrativa("Gastroparesis: A Review."),
+          "as revisões da JAMA voltam a cair na trilha da meta citando 'We conducted a PubMed search'")
+    checa("'Systematic Review and Meta-Analysis' NÃO é narrativa",
+          not C.titulo_diz_revisao_narrativa("Omega-3 and AF: A Systematic Review and Meta-Analysis"),
+          "a trava está roubando meta-análise de verdade para a trilha da revisão")
+    checa("'A Randomized Trial' não é revisão",
+          not C.titulo_diz_revisao_narrativa("Effects of X on Y: A Randomized Trial"),
+          "a trava está pegando ensaio clínico")
+
+    # 3) VARREDURA: o rótulo impresso não pode voltar a decidir na cascata determinística
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "classificador_ouro.py"), encoding="utf-8").read()
+    # a linha proibida é a que usava `rotulo_original` como um elif do encadeamento de cima
+    proibida = re.search(r"^\s*elif\s*\(?\s*rot_o\s*:=\s*rotulo_original", src, re.M)
+    checa("o rótulo impresso não decide mais na cascata determinística", not proibida,
+          "a camada 6 voltou: ela decidia 240 de 703 artigos e calava o LLM (99,1%)")
+    checa("a discordância rótulo × LLM vai para REVISAO_HUMANA",
+          "DISCORDÂNCIA: rótulo" in src,
+          "a conferência sumiu — voltamos a escolher no escuro quando as fontes divergem")
+    checa("a conferência é registrada no diário", '"conferencia"' in src,
+          "sem a coluna, ninguém sabe QUANTOS artigos a revisão humana vai receber")
+
+    # 4) A TRAVA `CAIXA ERRADA` DEPENDE DE UM CAMPO ATRAVESSAR TRÊS ARQUIVOS
+    # Sabotagem de 10/Ago: bastou a ficha mandar `_desenho: ""` e a trava do contrato PAROU de
+    # disparar — sem erro, sem aviso, dando aprovado. É o defeito de 06/Ago (motor certo +
+    # schema certo + prompt calado = campo null para sempre) e o de 05/Ago (palavras-chave da
+    # meta sem instrução). Trava que depende de campo ausente não é trava: é decoração que dá
+    # APROVADO POR AUSÊNCIA — o mesmo pecado do runner de lista fixa.
+    import contrato as CT
+    fake = {"tipo_documento": "original", "_desenho": "meta", "nota_aplicabilidade": 8}
+    achou = any("CAIXA ERRADA" in x for x in CT.validar(fake, checar_arquivos=False))
+    checa("contrato: desenho de meta na trilha de original é RETIDO", achou,
+          "a rede de segurança da LEI 8 sumiu — meta volta a ser julgada com a régua do original")
+    limpo = {"tipo_documento": "original", "_desenho": "coorte", "nota_aplicabilidade": 8}
+    checa("contrato: coorte na trilha de original passa (não pode acusar inocente)",
+          not any("CAIXA ERRADA" in x for x in CT.validar(limpo, checar_arquivos=False)),
+          "a trava está retendo artigo original legítimo")
+    fs = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ficha_site.py"),
+              encoding="utf-8").read()
+    checa("a ficha carrega o desenho até o contrato", '"_desenho": desenho' in fs,
+          "o campo parou de viajar: a trava acima vira decoração e aprova por ausência")
+
+
 def teste_o_instrumento_nao_mente():
     """10/Ago — A CHAVE 18 RELATOU 155 DESAPARECIDOS NUMA RODADA SEM UM ÚNICO DEFEITO.
 

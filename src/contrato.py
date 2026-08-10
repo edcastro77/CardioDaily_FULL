@@ -112,6 +112,38 @@ def validar(ficha, checar_arquivos=True):
         v.append(f"nota {n} < 6: por regra o artigo FICA retido (não publica). "
                  f"Bug real: um nota 5 foi parar no Supabase em 25/07.")
 
+    # 4b) ═══ O DESENHO CONTRADIZ A CAIXA — RETÉM (10/Ago/2026) ═══
+    #
+    # É a rede de segurança da LEI 8, ponto 4: *"na dúvida, REVISÃO HUMANA. Classificar errado
+    # custa mais caro que não classificar."* Todas as travas do classificador olham o artigo
+    # ANTES de ler; esta olha DEPOIS, quando o extrator já leu o texto inteiro e disse o que viu.
+    #
+    # O CASO REAL (rodada de 10/Ago, 4 artigos): o classificador pôs em ARTIGOS_ORIGINAIS e o
+    # extrator devolveu `desenho: meta`. Como o prompt e o motor obedecem à PASTA (LEI 8), os
+    # quatro foram julgados com a régua do artigo original — e um Nature Medicine levou nota 3.
+    # Ninguém a jusante percebeu, porque cada peça ficou internamente coerente e errada:
+    # exatamente o que a LEI 8 descreve.
+    #
+    # POR QUE AQUI, E NÃO NO CLASSIFICADOR: o classificador decide pela primeira página; o
+    # extrator lê o artigo todo. Quando os dois discordam, quem tem mais informação é o extrator
+    # — mas ele não pode CORRIGIR a caixa (isso reabriria a "duas fontes de verdade" que a LEI 8
+    # fechou). O que ele pode é DENUNCIAR, e a denúncia segura a publicação.
+    #
+    # NÃO é apagar nada: o pacote fica no STAGING com o `_REVISAR_publicacao.txt` dizendo a
+    # contradição, e o Dr. Eduardo decide reclassificar ou aceitar.
+    _DESENHO_DE_OUTRO_TIPO = {
+        "meta": "meta-análise", "meta_analise": "meta-análise",
+        "revisao_sistematica": "revisão sistemática", "revisao": "revisão",
+        "revisao_narrativa": "revisão narrativa", "diretriz": "diretriz", "guideline": "diretriz",
+    }
+    _td = str(ficha.get("tipo_documento") or "").strip().lower()
+    _de = str(ficha.get("_desenho") or ficha.get("desenho") or "").strip().lower()
+    if _td == "original" and _de in _DESENHO_DE_OUTRO_TIPO:
+        v.append(f"CAIXA ERRADA: está na trilha de artigo original, mas o extrator leu o texto "
+                 f"inteiro e diz que o desenho é {_DESENHO_DE_OUTRO_TIPO[_de]} "
+                 f"(desenho={_de!r}). Motor e prompt errados → nota errada (LEI 8). "
+                 f"Reclassifique antes de publicar.")
+
     # 5) keywords
     kw = ficha.get("keywords")
     if not isinstance(kw, list) or len([k for k in kw if _txt(k)]) < 3:

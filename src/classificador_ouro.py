@@ -98,6 +98,41 @@ def mapa_revista(doi):
 # D-01 (31/07): revisão sistemática = meta-análise, MESMA TRILHA. O regex agora diz isso.
 _META_TITULO = re.compile(r"meta[-\s]?analys|systematic\s+review|revis[ãa]o\s+sistem[áa]tica", re.I)
 
+# ═══ 10/Ago/2026 — ": A REVIEW" É REVISÃO NARRATIVA, E O LLM ESTAVA CHAMANDO DE META ═══
+#
+# CASOS REAIS, os dois da JAMA, os dois com o LLM em confiança ALTA:
+#     "Gastroparesis: A Review"                   → meta, citando "A PubMed search was conducted…"
+#     "Alcohol-Related Liver Disease: A Review"   → meta, citando "We conducted a PubMed search…"
+#
+# A trava do prompt v3 manda responder META só se o artigo DECLARAR busca/PRISMA/I²/pooled. Só que
+# TODA revisão narrativa da JAMA declara que fez busca no PubMed — é a frase de método padrão da
+# seção "Clinical Review & Education". A trava está pegando o vocabulário da revista, não o
+# desenho do estudo. Mesmo erro do 'technique for/with' que saiu em 03/Ago.
+#
+# O título é a prova mais forte e mais barata que existe: quando a revista escreve ": A Review" no
+# fim do título, ela está declarando o formato. Uma meta-análise de verdade escreve
+# ": A Systematic Review and Meta-Analysis" — e essa continua caindo no `_META_TITULO`, que roda
+# ANTES desta trava e não é afetado.
+#
+# Medido nos 703 artigos já classificados: 7 têm ": A Review" no título do PubMed — 3 foram para
+# revisao_geral (certo), 1 para ponto_de_vista, e 3 para meta-análise (errado; 2 artigos distintos,
+# um deles classificado duas vezes com respostas DIFERENTES na mesma cascata).
+_REVIEW_NARRATIVA_TITULO = re.compile(
+    r":\s*(a|an)\s+(narrative\s+|state[- ]of[- ]the[- ]art\s+|clinical\s+|contemporary\s+|"
+    r"critical\s+|practical\s+|concise\s+)?review\s*\.?\s*$", re.I)
+
+
+def titulo_diz_revisao_narrativa(titulo):
+    """True se o título TERMINA em ': A Review' (e variantes) — formato declarado pela revista.
+
+    Só vale se o `_META_TITULO` NÃO casar: ": A Systematic Review and Meta-Analysis" tem as duas
+    coisas, e nesse caso quem manda é a meta.
+    """
+    t = (titulo or "").strip()
+    if not t or _META_TITULO.search(t):
+        return False
+    return bool(_REVIEW_NARRATIVA_TITULO.search(t))
+
 
 # ============================ RÓTULO DO TOPO (manda antes do PubMed) ============================
 # Editorial/comentário/carta ROUBA o DOI do artigo que comenta → PubMed carimba errado e promove
@@ -307,30 +342,55 @@ def classificar(pasta, dry_run=True, max_n=0):
                   f" ({meta.get('journal') or '?'}), que não é este PDF — ignorando o PubMed")
             pubtypes, meta, rotulado = [], {}, True   # sem pubtype, sem rename, sem dedup por DOI
 
+        # ═══════════════════════════════════════════════════════════════════════════════════
+        # 10/Ago/2026 — O RÓTULO IMPRESSO DEIXA DE DECIDIR. VIRA CONFERÊNCIA.
+        # ═══════════════════════════════════════════════════════════════════════════════════
+        #
+        # DECISÃO DO DR. EDUARDO, tomada depois de medir o preço da leitura:
+        #     US$ 0,001 por artigo · US$ 0,72 para ler os 740 do mês inteiro
+        # O histórico INTEIRO de classificação — 736 leituras — custou US$ 0,71.
+        #
+        # O QUE ISSO REVELOU: a cascata existia para economizar uma chamada de LLM. A economia
+        # é de 56 centavos por mês. O preço dela foi um Nature Medicine com nota 3.
+        #
+        # OS QUATRO CASOS DE 10/Ago, e o que os une: o LLM **nunca foi chamado** em nenhum
+        # deles (coluna `modelo` vazia no diário). Uma camada de cima respondeu antes, e a
+        # camada 6 — o rótulo impresso "ORIGINAL RESEARCH" — decidia 34 % dos artigos, 240 de
+        # 703. Revista carimba meta-análise como ORIGINAL RESEARCH o tempo todo: é o nome da
+        # SEÇÃO da revista, não o desenho do estudo.
+        #
+        # O DESENHO NOVO:
+        #   · o LLM lê TODO artigo (medido no gabarito do Dr. Eduardo: 110/111 = 99,1 %)
+        #   · mapa de revista e PubMed continuam GANHANDO — o primeiro é curadoria dele, o
+        #     segundo é catalogação humana da NLM (foi o PubMed que sabia do `Scoping Review`
+        #     que o meu mapa ignorava)
+        #   · o rótulo impresso vira CONFERÊNCIA: quando ele discorda do LLM, ninguém escolhe
+        #     no escuro — o artigo vai para REVISAO_HUMANA (LEI 8, ponto 4)
+        #   · DESCARTE segue determinístico: não se paga leitura para jogar fora
+        #
         # TRAVA: rede caiu → NÃO classifica, NÃO renomeia. Vai pro balde de retentar.
+        conferencia = []                     # o que as camadas determinísticas ACHAM (não decidem)
         if falha_rede:
             destino, marca, via = "RETRY", "🌐", "falha de rede → retentar"
-        # CAMADA A — mapa de revista
+        # CAMADA A — mapa de revista (curadoria do Dr. Eduardo: DECIDE)
         elif (destino := mapa_revista(doi)):
             marca, via = "🗺️", "mapa de revista"
             via_mapa += 1
-        # RÓTULO DO TOPO manda antes do PubMed (editorial/comentário/carta não vira artigo original)
+        # RÓTULO NEGATIVO do topo — editorial/comentário/carta (DECIDE: rouba o DOI do artigo
+        # que comenta, e o PubMed carimbaria o tipo do artigo COMENTADO)
         elif rotulo_topo(texto)[0]:
             destino, rot_l = rotulo_topo(texto)
             marca, via, rotulado = "🏷️", f"rótulo do topo: {rot_l}", True
-        # CAMADA D — descarte determinístico
+        # CAMADA D — descarte determinístico (DECIDE: não se paga leitura para jogar fora)
         elif eh_descartavel(pubtypes, meta.get("title", ""), texto):
             destino, marca, via = "DESCARTE", "⛔", f"descarte: caso/carta {pubtypes or ''}"
-        # META pelo TÍTULO (convenção das revistas — determinístico, não depende do Sonnet)
+        # META pelo TÍTULO — a revista DECLARA "Systematic Review and Meta-Analysis" (DECIDE)
         elif _META_TITULO.search((meta.get("title", "") or texto[:250])):
             destino, marca, via = "revisao_sistematica_meta_analise", "🏷️", "título: meta-análise"
-        # PubMed AUTORITATIVO: se já tem tipo específico catalogado (RCT/Multicenter/Review/…), usa ele
+        # PubMed AUTORITATIVO — catalogação humana da NLM (DECIDE)
         elif pubtypes and map_pubtype(pubtypes):
             destino, marca, via = map_pubtype(pubtypes), "✅", f"PubMed {pubtypes}"
             via_pubmed += 1
-        # RÓTULO POSITIVO do topo (última trava determinística antes do Sonnet)
-        elif (rot_o := rotulo_original(texto)):
-            destino, marca, via = "artigo_original", "🏷️", f"rótulo do topo: {rot_o}"
         else:
             # CAMADA B/C — o JUIZ LLM lê as PÁGINAS 1 A 3 com o prompt v3 (medido: 110/111 = 99,1 %)
             tipo, conf, prova = classificar_llm(caminho)
@@ -360,11 +420,37 @@ def classificar(pasta, dry_run=True, max_n=0):
                 destino, marca, via = "REVISAO", "🔴", "o LLM não respondeu"
             elif sem_base:
                 destino, marca, via = "REVISAO", "🔴", f"LLM disse {tipo} mas SEM BASE (conf={conf or '—'})"
+            elif (tipo == "revisao_sistematica_meta_analise"
+                  and titulo_diz_revisao_narrativa(meta.get("title", ""))):
+                # ═══ 10/Ago — O TÍTULO DA REVISTA GANHA DO LLM AQUI, E SÓ AQUI ═══
+                # "Gastroparesis: A Review" e "Alcohol-Related Liver Disease: A Review" foram
+                # para a trilha da meta-análise com confiança ALTA, citando como prova a frase
+                # de método padrão da JAMA ("We conducted a PubMed search…"). Toda revisão
+                # narrativa da JAMA tem essa frase — a trava do prompt pega o vocabulário da
+                # revista, não o desenho. O título diz o formato, e uma meta de verdade se
+                # anuncia como "Systematic Review and Meta-Analysis" (que o `_META_TITULO` pega
+                # antes, e continua ganhando).
+                destino, marca = "revisao_geral", "🏷️"
+                via = f"título ': A Review' > LLM (que disse meta: {prova[:34]})"
             elif tipo in FOLDERS:
                 # META deixou de ir para revisão humana: o prompt v3 tem a TRAVA DA REVISÃO
                 # SISTEMÁTICA (só responde meta se o artigo DECLARAR busca/PRISMA/I²/pooled), e foi
                 # com essa trava que o 99,1 % foi medido. Desconfiar aqui seria desperdiçar a trava.
                 destino, marca, via = tipo, "🤖", f"LLM v3 pág.1-3 ({conf}): {prova[:60]}"
+
+                # ═══ A CONFERÊNCIA (10/Ago) — o rótulo impresso não decide, mas FALA ═══
+                # Até hoje esta camada DECIDIA, e sozinha: 240 dos 703 artigos. Agora ela só
+                # opina. Quando ela e o LLM concordam, nada muda e ninguém é incomodado.
+                # Quando DISCORDAM, é proibido escolher no escuro — porque foi escolhendo no
+                # escuro que o "Incidence and Predictors of Extracranial Bleeding" (meta-análise
+                # carimbada ORIGINAL RESEARCH ARTICLE) foi para a trilha do artigo original.
+                # LEI 8, ponto 4: *"Na dúvida, REVISÃO HUMANA. Classificar errado custa mais
+                # caro que não classificar."*
+                rot_o = rotulo_original(texto)
+                if rot_o and tipo != "artigo_original":
+                    conferencia.append(f"rótulo impresso diz «{rot_o}», LLM diz {tipo}")
+                    destino, marca = "REVISAO", "🔴"
+                    via = f"DISCORDÂNCIA: rótulo «{rot_o}» × LLM {tipo} ({conf}) — {prova[:34]}"
             else:
                 destino, marca, via = "REVISAO", "🔴", f"ambíguo (LLM={tipo or 'vazio'})"
 
@@ -383,6 +469,12 @@ def classificar(pasta, dry_run=True, max_n=0):
             "doi_emprestado": "SIM" if rotulado else "",
             "modelo": _MODELO_USADO or "", "confianca": conf or "",
             "prova": (prova or "")[:150],
+            # 10/Ago — a CONFERÊNCIA vai para o diário. Sem esta coluna, "o rótulo impresso
+            # discordou do LLM" seria uma decisão tomada e esquecida: o artigo iria para
+            # REVISAO_HUMANA e ninguém saberia POR QUÊ, nem com que frequência isso acontece.
+            # É esta coluna que vai dizer, na primeira rodada real, se a revisão humana vai
+            # receber 5 artigos por mês ou 200 — o único risco de verdade deste desenho.
+            "conferencia": " | ".join(conferencia)[:200],
         })
 
         # EXPERT OPINION / editorial → trilha MINIRREVISÃO (Dr. Eduardo 26/07): JACC/Circulation/NEJM
