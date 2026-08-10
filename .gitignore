@@ -10,7 +10,28 @@ downloads/
 logs/
 *.pyc
 .DS_Store
+
+# ═══ SEGREDOS — 10/Ago/2026 ═══
+# Aqui havia SÓ `.env`. Em 04/Ago um backup chamado `.env.backup-20260804-0315` foi criado ao
+# lado e o `.gitignore` não o cobriu: o nome tinha sufixo. Ele entrou no commit d1b6226 e ficou
+# 23 commits versionado, com ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, GEMINI_API_KEY,
+# SUPABASE_SERVICE_KEY (a que ignora as políticas e escreve em QUALQUER tabela), ELEVENLABS,
+# ZAPI_TOKEN, TELEGRAM_BOT_TOKEN, NCBI e o telefone do Dr. Eduardo.
+#
+# Só não virou incidente porque o repositório estava 25 commits atrás do GitHub e o push nunca
+# foi dado. Bots varrem o GitHub por chave em segundos, e commit apagado continua no histórico.
+# Achado ao conferir o que ia subir, ANTES de subir — a conferência é a regra, não a sorte.
+#
+# Agora o padrão é por PREFIXO, não por nome exato: qualquer `.env` com qualquer sufixo fica de
+# fora, e a exceção explícita libera só o `.env.example`, que é modelo sem valor nenhum dentro.
 .env
+.env.*
+!.env.example
+*.pem
+*.p12
+*_secrets.json
+service_account*.json
+
 inputs/
 .venv/
 chaves/config.sh
