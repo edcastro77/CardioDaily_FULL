@@ -290,6 +290,79 @@ def _extrair_dois_enviados(sb, doc_ids):
     }
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# A FILA DA CURADORIA — 10/Ago/2026 · O ELO QUE FALTAVA
+# ═══════════════════════════════════════════════════════════════════════════════════════
+#
+# Palavras do Dr. Eduardo, em 09/Ago, olhando o Administrador:
+#   *"esse administrador ficou muito bom, você tá de parabéns... mas eu, eu faço o que com
+#    isso? Como é que eu vou fazer que essa lista de envio gere automaticamente a lista que
+#    será enviada?"*
+#
+# A resposta, medida em 10/Ago: NÃO IA. A Chave 3 gravava `saidas/agenda_envio.csv` com
+# `data_envio, nome, revista, doc_id` — e uma varredura no projeto inteiro mostrou que
+# NENHUM programa lia esse arquivo. A curadoria dele morria num CSV, e este distribuidor
+# escolhia sozinho, do Supabase, por nota e recência.
+#
+# Duas peças que funcionavam, uma do lado da outra, sem se falar. É o mesmo formato do
+# defeito que a LEI 9 nomeia — só que aqui não eram duas verdades brigando: era uma verdade
+# (a decisão dele) sendo simplesmente ignorada.
+#
+# DECISÃO DELE (10/Ago), quando perguntei como o distribuidor deve escolher:
+#   "SÓ o que eu aprovei no Administrador."
+# Não é "prioriza a fila e cai no automático se estiver vazia". Se ele não aprovou nada, NÃO
+# SAI NADA — e o log diz isso com todas as letras. Um dia sem mensagem é um fato; uma mensagem
+# que ele não viu é um risco, e enquanto a perícia não tiver o conferidor de números
+# (S3·1, ainda aberto), a leitura dele é a única trava contra publicar dado errado.
+AGENDA_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saidas", "agenda_envio.csv")
+
+
+def fila_aprovada(data=None):
+    """Os doc_id que o Dr. Eduardo aprovou no Administrador para ESTA data.
+
+    Devolve [] se o arquivo não existir ou não houver nada marcado para hoje — e quem chama
+    trata isso como "não envie", nunca como "escolha você".
+    """
+    import csv as _csv
+    alvo = data or datetime.now(timezone(timedelta(hours=-3))).strftime("%Y-%m-%d")
+    if not os.path.exists(AGENDA_CSV):
+        log.warning(f"  [FILA] {AGENDA_CSV} não existe — o Administrador ainda não gravou nada.")
+        return []
+    try:
+        linhas = list(_csv.DictReader(open(AGENDA_CSV, encoding="utf-8")))
+    except Exception as e:
+        log.error(f"  [FILA] não consegui ler a agenda: {type(e).__name__}: {e}")
+        return []
+    hoje = [l for l in linhas if (l.get("data_envio") or "").strip()[:10] == alvo
+            and (l.get("doc_id") or "").strip()]
+    if not hoje:
+        datas = sorted({(l.get("data_envio") or "")[:10] for l in linhas if l.get("data_envio")})
+        log.warning(f"  [FILA] nada aprovado para {alvo}. Datas na agenda: {datas[-4:] or 'nenhuma'}")
+    return [l["doc_id"].strip() for l in hoje]
+
+
+def buscar_aprovados(sb, doc_ids):
+    """Puxa do Supabase exatamente os artigos que ele aprovou, na ORDEM em que ele marcou.
+
+    ⚠️ Sem filtro de nota, de tema ou de data: ele já decidiu. Filtrar de novo aqui seria
+    a máquina revisando o dono — e foi para não fazer isso que a fila existe.
+    """
+    if not doc_ids:
+        return []
+    r = sb.table("artigos").select(
+        "doc_id, doi, titulo, revista, doenca_principal, tipo_estudo, "
+        "nota_aplicabilidade, gancho_abertura, caminho_visual_abstract, caminho_audio, caminho_pdf"
+    ).in_("doc_id", doc_ids).execute()
+    achados = {a["doc_id"]: a for a in (r.data or [])}
+    faltando = [d for d in doc_ids if d not in achados]
+    if faltando:
+        # não é detalhe: o artigo foi aprovado e NÃO está no banco. Silenciar isso faria a
+        # fila encolher sozinha e ninguém saberia por quê.
+        log.error(f"  [FILA] {len(faltando)} aprovado(s) NÃO encontrado(s) no Supabase: "
+                  f"{faltando[:3]}{'…' if len(faltando) > 3 else ''}")
+    return [achados[d] for d in doc_ids if d in achados]
+
+
 def buscar_candidatos_por_tema(sb, temas, ja_enviados):
     """
     Para cada tema subscrito busca os melhores artigos com fallback:
@@ -651,18 +724,27 @@ def distribuir_artigos():
         log.info(f"\n{'─' * 40}")
         log.info(f"Assinante: {nome} ({phone}) | temas: {temas}")
 
-        por_tema = buscar_candidatos_por_tema(sb, temas, ja_enviados)
-        temas_com_artigos = list(por_tema.keys())
-        total_candidatos = sum(len(v) for v in por_tema.values())
-        log.info(f"  Temas com artigos novos: {temas_com_artigos}")
-        log.info(f"  Total candidatos: {total_candidatos}")
-
-        if not por_tema:
-            log.warning("  Sem artigos novos nos últimos 15 dias.")
+        # ═══ A CURADORIA MANDA (10/Ago) ═══
+        # Decisão do Dr. Eduardo: "SÓ o que eu aprovei no Administrador". A busca por tema
+        # continua no arquivo — mas como REDE, não como escolha: se ele não aprovou nada, o
+        # dia passa sem mensagem e o log diz por quê. Antes disto, a Chave 3 gravava a fila e
+        # este programa escolhia sozinho: a decisão dele morria no CSV.
+        aprovados = fila_aprovada()
+        if aprovados:
+            selecionados = buscar_aprovados(sb, aprovados)
+            for s in selecionados:
+                s["_tema"] = "curadoria"
+            log.info(f"  ✅ FILA DA CURADORIA: {len(selecionados)} artigo(s) aprovado(s) por você")
+            for s in selecionados:
+                log.info(f"      [{s.get('nota_aplicabilidade')}] {(s.get('titulo') or '')[:58]}")
+            if not selecionados:
+                log.error("  A fila tinha doc_id, mas NENHUM foi encontrado no banco. Nada será enviado.")
+                continue
+        else:
+            log.warning("  ⏸️  NADA APROVADO PARA HOJE no Administrador (Chave 3) — não vou enviar.")
+            log.warning("      Isto NÃO é falha: é a regra que você definiu em 10/Ago — só sai o que")
+            log.warning("      você aprovou. Abra a Chave 3, marque os artigos e a data, e rode de novo.")
             continue
-
-        selecionados = selecionar_artigos_por_tema(por_tema)
-        log.info(f"  Selecionados: {len(selecionados)}")
 
         doc_ids = []
         for artigo in selecionados:
