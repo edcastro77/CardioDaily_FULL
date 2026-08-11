@@ -25,6 +25,11 @@ echo "════════════════════════�
 echo
 python3 src/prova_v4_v5.py --dry-run
 echo
+echo "   ── OU só RECALCULAR o placar, de graça ──"
+echo "   As 420 respostas do modelo já estão gravadas. Quando você julga um artigo de novo"
+echo "   (planilha GABARITO_16_para_julgar), o placar se refaz contra a régua NOVA sem"
+echo "   chamar modelo nenhum. Custo zero."
+echo
 echo "   O que vai ser medido:"
 echo "     · ACURÁCIA de cada versão contra o gabarito"
 echo "     · REPETIBILIDADE — a mesma pergunta 2×  (em 10/Ago o MESMO artigo saiu"
@@ -32,10 +37,16 @@ echo "       revisao_geral numa rodada e meta-análise na outra, as duas com con
 echo "     · ERROS GRAVES — os que trocam o MOTOR e portanto a NOTA (LEI 8)"
 echo "     · POR SINAL (só v5) — quando erra, QUAL sinal falhou"
 echo
-read -r -p "   Começar? [s/N]: " OK
-case "$OK" in s|S|sim|SIM) ;; *) echo "   Cancelado. Nada foi gasto."; read -p "Enter. "; exit 0 ;; esac
+echo "   1) só RECALCULAR o placar com o gabarito atual   (US$ 0,00)"
+echo "   2) RODAR a prova de novo                          (gasta o valor acima)"
 echo
-python3 src/prova_v4_v5.py
+read -r -p "   Escolha [1-2, Enter = 1]: " E
+echo
+if [ "$E" = "2" ]; then
+  python3 src/prova_v4_v5.py
+else
+  python3 src/prova_v4_v5.py --placar
+fi
 echo
 echo "   Retoma de onde parou se a rede cair — é só clicar de novo."
 echo "   Só o placar, sem gastar:  python3 src/prova_v4_v5.py --placar"

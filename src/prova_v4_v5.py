@@ -56,7 +56,21 @@ import classificador_prompt_v5 as V5
 from prova_classificador import chamar          # mesma chamada da prova antiga: sem fallback
 
 _ROOT = os.path.dirname(_HERE)
-GABARITO = os.path.join(_ROOT, "outputs", "PROVA", "gabarito.csv")
+
+# ═══ 10/Ago — O GABARITO v2: 16 ARTIGOS JULGADOS DE NOVO PELO DR. EDUARDO ═══
+# A primeira rodada da prova acusou 16 artigos em que o classificador e o gabarito de 31/Jul
+# discordavam. Eu supus que o gabarito estivesse velho — depois dele vieram BRIEF REPORT =
+# minirevisão, a D-01 e Scientific Statement = guideline. Ele julgou os 16 à mão, com o motivo
+# escrito, e o resultado desmontou a minha suposição:
+#     5 vezes o MODELO estava certo
+#     5 vezes o GABARITO estava certo
+#     6 não eram nem um nem outro — os tributos póstumos ao Braunwald, que ele mandou DESCARTAR
+# Ou seja: o gabarito não estava simplesmente desatualizado. Estava certo em metade dos casos.
+#
+# A coluna `VEREDITO_10AGO` vence a `CORRECAO` de 31/Jul onde existir. A `MOTIVO_10AGO` guarda
+# a razão que ele escreveu — é ela que vai virar regra de prompt, não a minha leitura dela.
+_G_V2 = os.path.join(_ROOT, "outputs", "PROVA", "gabarito_v2.csv")
+GABARITO = _G_V2 if os.path.exists(_G_V2) else os.path.join(_ROOT, "outputs", "PROVA", "gabarito.csv")
 SAIDA = os.path.join(_ROOT, "outputs", "PROVA", "prova_v4_v5.csv")
 
 MODELO = os.getenv("CD_M_CLASSIF", "gpt-5.6-luna")   # o medido em 99,1 % — não mudar sem refazer tudo
@@ -77,7 +91,10 @@ def _acha_pdfs():
     linhas, sem_pdf = [], []
     for g in csv.DictReader(open(GABARITO, encoding="utf-8-sig")):
         n = g["arquivo"]
-        certo = (g.get("CORRECAO") or "").strip() or (g.get("classificador_disse") or "").strip()
+        # o veredito de 10/Ago (julgado à mão, com motivo) vence tudo
+        certo = ((g.get("VEREDITO_10AGO") or "").strip()
+                 or (g.get("CORRECAO") or "").strip()
+                 or (g.get("classificador_disse") or "").strip())
         cam = todos.get(n)
         if not cam:
             cand = [v for k, v in todos.items()
@@ -168,10 +185,37 @@ def placar():
         print("Nada rodado ainda.")
         return 1
     R = [x for x in csv.DictReader(open(SAIDA, encoding="utf-8")) if not x["erro"]]
+
+    # ═══ 10/Ago — RECORRIGIR COM O GABARITO ATUAL, SEM GASTAR UM CENTAVO ═══
+    # A coluna `certo` foi gravada NO MOMENTO da chamada, com o gabarito daquele dia. Quando o
+    # Dr. Eduardo julga um artigo de novo, essa coluna vira uma resposta velha congelada no
+    # arquivo — e o placar continuaria dando o número antigo para sempre, com cara de verdade.
+    # É a mesma família do erro dos _RECUSADOS (09/Ago): ler uma versão e supor que é a atual.
+    # Agora o gabarito é reaberto A CADA placar. As 420 RESPOSTAS DO MODELO não mudam (foram
+    # medidas e estão gravadas); o que muda é a régua — e recorrigir custa zero.
+    atual = {}
+    for g in csv.DictReader(open(GABARITO, encoding="utf-8-sig")):
+        certo = ((g.get("VEREDITO_10AGO") or "").strip()
+                 or (g.get("CORRECAO") or "").strip()
+                 or (g.get("classificador_disse") or "").strip())
+        if certo:
+            atual[g["arquivo"]] = certo
+    mudou = 0
+    for x in R:
+        novo = atual.get(x["arquivo"]) or next(
+            (v for k, v in atual.items() if k.startswith(x["arquivo"][:42])), None)
+        if novo and novo != x["certo"]:
+            x["certo"] = novo
+            mudou += 1
+
     print()
     print("═" * 88)
     print(" PLACAR")
     print("═" * 88)
+    print(f" gabarito: {os.path.basename(GABARITO)}")
+    if mudou:
+        print(f" ⚠️  {mudou} resposta(s) recorrigida(s) contra o veredito novo do Dr. Eduardo —")
+        print(f"     as respostas do modelo são as MESMAS; o que mudou foi a régua.")
 
     # ── 1. ACURÁCIA ──
     print(f"\n   {'versão':8s} {'acertos':>10s} {'de':>5s} {'acurácia':>10s} {'erros GRAVES':>14s}")
