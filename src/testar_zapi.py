@@ -102,9 +102,31 @@ def main():
             pass
     if tem_token:
         try:
-            tk = partes[partes.index("token") + 1]
+            i = partes.index("token")
+            tk = partes[i + 1]
             print(f"   TOKEN na URL      : {tk[:18]}…{tk[-4:]}  ({len(tk)} caracteres)")
             print("      → compare com a coluna TOKEN em Instâncias Web (NÃO é o Client-Token)")
+
+            # ═══ 11/Ago — O QUE VEM DEPOIS DO TOKEN, QUE EU NÃO MOSTRAVA ═══
+            # O CardioDaily monta cada chamada como `{ZAPI_BASE}/status`, `{ZAPI_BASE}/send-text`.
+            # Se o ZAPI_BASE já terminar num endpoint, TUDO vira endereço inexistente — e a
+            # Z-API responde HTTP 200 com:
+            #     {"error":"NOT_FOUND","message":"Unable to find matching target resource method"}
+            # que é erro de ROTA, não de instância. Foi o que aconteceu: as CINCO rotas de
+            # leitura deram a mesma resposta, o que só faz sentido se o problema estiver no
+            # começo da URL, não no fim.
+            # Eu mostrava o ID e o token mascarados e escondia justamente o que sobra.
+            sobra = partes[i + 2:]
+            if sobra:
+                print()
+                print(f"   🔴 O ZAPI_BASE NÃO TERMINA NO TOKEN. Depois dele ainda tem: /{'/'.join(sobra)}")
+                print("      O CardioDaily acrescenta o endpoint no fim (ex.: {base}/send-text).")
+                print(f"      Com essa sobra, a chamada vira …/token/<TOKEN>/{'/'.join(sobra)}/send-text")
+                print("      — endereço que não existe. É por isso que TODA rota dá NOT_FOUND.")
+                print()
+                print("      CONSERTO: Chave 13 → apague o que vem depois do token na linha")
+                print("      ZAPI_BASE. Ela tem de terminar exatamente no token, sem barra no fim:")
+                print("      ZAPI_BASE=https://api.z-api.io/instances/<ID>/token/<TOKEN>")
         except Exception:
             pass
     print(f"   Client-Token      : {token[:6]}…  (tela Segurança → Token de segurança da conta)")
