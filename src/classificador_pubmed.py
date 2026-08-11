@@ -140,6 +140,41 @@ def rotulo_protege(texto, linhas_do_topo=15):
         if _ROT_NAO_DESCARTA.match(l):
             return l
     return None
+
+
+# ═══ TRIBUTO — 10/Ago/2026 · A REGRA "A" DO DR. EDUARDO ═══
+#
+# CASO REAL: a JACC de julho/2026 publicou seis homenagens ao Eugene Braunwald. Elas entraram
+# na fila, foram classificadas como `ponto_de_vista` e viraram SEIS dos ONZE erros do
+# classificador — mais da metade. Palavras dele:
+#   *"todos estes papers são um tributo pós-morte dos maiores nomes da cardiologia na atualidade
+#    dos EUA, prestando homenagem ao homem que transformou a cardiologia no século 20... eu tenho
+#    o Braunwald desde a 5ª edição, estamos na 13ª."*  → DESCARTAR.
+#
+# É a categoria mais barata de resolver do sistema inteiro: a revista IMPRIME o rótulo
+# ("TRIBUTE", "EDITOR'S PAGE", "An Appreciation"), o texto tem 2 a 3 páginas, e nenhum LLM
+# precisa ser chamado. Determinístico, custo zero.
+#
+# ⚠️ ESTA REGRA VIVE EM DOIS BLOCOS (LEI 9) — aqui, no descarte determinístico, e no
+# `classificador_prompt.py` (regra R5 + o tipo `tributo`). As duas foram mexidas juntas: se
+# alguma escapar do determinístico, o LLM ainda a reconhece.
+#
+# CUIDADO QUE CUSTOU PENSAR: "EDITOR'S PAGE" e "TRIBUTE" precisam ser testados ANTES do
+# `rotulo_protege`, senão uma homenagem que cite "review" no subtítulo seria protegida do
+# descarte. E o teste é no TOPO — "in memoriam" no meio de um agradecimento não descarta nada.
+_TRIBUTO_RE = re.compile(
+    r"^\s*(tribute|in\s+memoriam|obituary|memorial|editor.?s\s+page"
+    r"|an\s+appreciation|remembering\b)", re.I)
+
+
+def eh_tributo(texto, linhas_do_topo=15):
+    """Homenagem/obituário declarado no TOPO do PDF. Devolve o rótulo achado, ou None."""
+    linhas = [l.strip() for l in (texto or "")[:2000].splitlines()]
+    linhas = [l for l in linhas if l and not re.fullmatch(r"[.\s·•]+", l)]
+    for l in linhas[:linhas_do_topo]:
+        if _TRIBUTO_RE.match(l):
+            return l[:60]
+    return None
 # cabeçalho de research letter (formato carta breve) → descarte (decisão do Dr. Eduardo)
 _LETTER_RE = re.compile(r"\bresearch letter\b|^\s*letters?\b", re.I)
 _NAO_DESCARTAR = {"Meta-Analysis", "Systematic Review", "Practice Guideline", "Guideline",
@@ -333,6 +368,10 @@ def eh_descartavel(pubtypes, titulo, texto):
 
     ORDEM (03/Ago/2026): o RÓTULO IMPRESSO no PDF vem PRIMEIRO e vence tudo — inclusive o pubtype
     do PubMed. O documento dizendo o que é vale mais que o catálogo dizendo o que ele acha que é."""
+    # TRIBUTO vem ANTES do rótulo que protege: uma homenagem que mencione "review" no subtítulo
+    # seria protegida do descarte e voltaria a entrar na fila (10/Ago — os 6 do Braunwald).
+    if eh_tributo(texto):
+        return True
     prot = rotulo_protege(texto)
     if prot:
         return False                      # o PDF declarou: REVIEW / ORIGINAL RESEARCH / GUIDELINE…

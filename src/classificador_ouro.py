@@ -223,7 +223,11 @@ def classificar_llm(caminho):
         return None, "", ""
     try:
         import llm_client, modelos as M
-        out = llm_client.gerar(M.CLASSIFICACAO, CP.montar(texto3), max_tokens=700, temperatura=0)
+        # 10/Ago — o TOTAL de páginas vai junto (regra R4 do v6): é o que separa revisão de
+        # ponto de vista, e o modelo não tem como contar páginas lendo texto extraído.
+        out = llm_client.gerar(M.CLASSIFICACAO,
+                               CP.montar(texto3, paginas=CP.total_paginas(caminho)),
+                               max_tokens=700, temperatura=0)
         tipo, conf, prova = CP.ler_resposta(out)
         # QUEM RESPONDEU DE VERDADE (02/Ago). `llm_client.gerar` troca de modelo EM SILÊNCIO quando
         # o primário falha (429/timeout). Numa rodada de 383 artigos isso é provável — e o Luna
@@ -431,7 +435,10 @@ def classificar(pasta, dry_run=True, max_n=0):
             # fáceis de decidir em revisão humana".
             # Um rótulo de seção é uma palavra. Medir prova por tamanho é medir a coisa errada.
             sem_base = (conf == "baixa") or not (prova or "").strip()
-            if tipo in ("relato_de_caso", "carta_de_pesquisa"):
+            # `tributo` entrou em 10/Ago (regra R5 do prompt v6). O descarte determinístico
+            # (`eh_descartavel` → `eh_tributo`) já pega a maioria antes de chegar aqui; esta é
+            # a segunda rede, para a homenagem cujo rótulo não está nas 15 primeiras linhas.
+            if tipo in ("relato_de_caso", "carta_de_pesquisa", "tributo"):
                 destino, marca, via = "DESCARTE", "⛔", f"LLM: {tipo} ({conf})"
             elif tipo is None:
                 destino, marca, via = "REVISAO", "🔴", "o LLM não respondeu"

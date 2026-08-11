@@ -114,19 +114,25 @@ def _feitos():
 def rodar(dry=False):
     linhas, sem_pdf = _acha_pdfs()
     feitos, _ = _feitos()
+    # ═══ 10/Ago — SÓ O v6 É COBRADO ═══
+    # As respostas do v4 e do v5 já estão gravadas e pagas. Regastar com elas seria pagar duas
+    # vezes pela mesma medição — e pior, o `classificador_prompt.py` AGORA É o v6: uma rodada
+    # "v4" hoje devolveria o texto novo com o rótulo velho, e a comparação viraria mentira.
+    # O v4 permanece como LINHA DE BASE histórica, congelada no CSV.
+    VERSOES_A_RODAR = ("v6",)
     falta = [(n, c, p, v, r) for (n, c, p) in linhas
-             for v in ("v4", "v5") for r in range(1, RODADAS + 1)
+             for v in VERSOES_A_RODAR for r in range(1, RODADAS + 1)
              if (n, v, str(r)) not in feitos]
 
     print("═" * 88)
-    print(" PROVA v4 × v5 — os dois prompts, o mesmo texto, o mesmo modelo")
+    print(" PROVA · v6 (novo) contra v4 (linha de base já paga)")
     print("═" * 88)
     print(f"   gabarito conferido à mão pelo Dr. Eduardo : {len(linhas) + len(sem_pdf)} artigos")
     print(f"   PDF encontrado no acervo                  : {len(linhas)}")
     if sem_pdf:
         print(f"   sem PDF (arquivado/removido)              : {len(sem_pdf)} — ficam de fora")
     print(f"   modelo    : {MODELO}   ·   rodadas por versão: {RODADAS} (mede repetibilidade)")
-    print(f"   chamadas  : {len(falta)} restantes de {len(linhas) * 2 * RODADAS}")
+    print(f"   a rodar   : v6, {len(falta)} chamadas   (o v4 já está no CSV, não regasta)")
     # custo pelo MEDIDO, não pelo chute: mediana real das 736 leituras já feitas (uso.jsonl)
     unit = P.custo(MODELO, entrada=4482, saida=260)
     print(f"   custo     : ~US$ {len(falta) * unit:.2f}   ({P.aviso()[:52]}…)")
@@ -153,11 +159,16 @@ def rodar(dry=False):
             if pdf not in cache_txt:                       # o MESMO texto para as duas versões
                 cache_txt[pdf] = V4.paginas_1a3(pdf)
             txt = cache_txt[pdf]
-            mod = V4 if versao == "v4" else V5
-            saida, _, _ = chamar(MODELO, mod.montar(txt))
-            if versao == "v4":
+            if versao == "v5":
+                saida, _, _ = chamar(MODELO, V5.montar(txt))
+            else:
+                # v4 (histórico) e v6 usam o mesmo módulo — que HOJE contém o v6.
+                # O total de páginas entra aqui: é a regra R4 (separa revisão de ponto de vista).
+                saida, _, _ = chamar(MODELO, V4.montar(txt, paginas=V4.total_paginas(pdf)))
+            if versao != "v5":
                 tipo, conf, prova = V4.ler_resposta(saida)
-                linha = dict(tipo=tipo, confianca=conf, porque="(v4 decide sozinho)", prova=prova)
+                linha = dict(tipo=tipo, confianca=conf,
+                             porque=f"({versao} decide sozinho · {V4.PROMPT_VERSAO})", prova=prova)
             else:
                 tipo, conf, prova, porque, s = V5.classificar(saida)
                 linha = dict(tipo=tipo, confianca=conf, porque=porque, prova=prova,
@@ -219,7 +230,7 @@ def placar():
 
     # ── 1. ACURÁCIA ──
     print(f"\n   {'versão':8s} {'acertos':>10s} {'de':>5s} {'acurácia':>10s} {'erros GRAVES':>14s}")
-    for v in ("v4", "v5"):
+    for v in ("v4", "v5", "v6"):
         d = [x for x in R if x["versao"] == v]
         if not d:
             continue
@@ -231,7 +242,7 @@ def placar():
 
     # ── 2. REPETIBILIDADE ──
     print(f"\n   ── REPETIBILIDADE (a mesma pergunta, {RODADAS} vezes) ──")
-    for v in ("v4", "v5"):
+    for v in ("v4", "v5", "v6"):
         por = {}
         for x in R:
             if x["versao"] == v:
@@ -245,7 +256,7 @@ def placar():
                 print(f"        ⚠️ instável: {k[:52]} → {sorted(por[k])}")
 
     # ── 3. ONDE CADA UM ERRA ──
-    for v in ("v4", "v5"):
+    for v in ("v4", "v6"):
         errs = [x for x in R if x["versao"] == v and x["tipo"] != x["certo"]]
         if not errs:
             print(f"\n   ── {v}: NENHUM ERRO ──")
@@ -267,14 +278,14 @@ def placar():
 
     # ── 4. QUEM SALVOU QUEM ──
     v4 = {x["arquivo"]: x for x in R if x["versao"] == "v4" and x["rodada"] == "1"}
-    v5 = {x["arquivo"]: x for x in R if x["versao"] == "v5" and x["rodada"] == "1"}
+    v5 = {x["arquivo"]: x for x in R if x["versao"] == "v6" and x["rodada"] == "1"}
     ganhou = [a for a in v5 if a in v4 and v5[a]["tipo"] == v5[a]["certo"] != v4[a]["tipo"]]
     perdeu = [a for a in v5 if a in v4 and v4[a]["tipo"] == v4[a]["certo"] != v5[a]["tipo"]]
     print(f"\n   ── O QUE MUDOU ──")
-    print(f"   o v5 ACERTA e o v4 errava : {len(ganhou)}")
+    print(f"   o v6 ACERTA e o v4 errava : {len(ganhou)}")
     for a in ganhou[:8]:
         print(f"        {a[:50]}  ({v4[a]['tipo']} → {v5[a]['tipo']})")
-    print(f"   o v5 ERRA e o v4 acertava : {len(perdeu)}   ← se >0, é regressão")
+    print(f"   o v6 ERRA e o v4 acertava : {len(perdeu)}   ← se >0, é REGRESSÃO")
     for a in perdeu[:8]:
         print(f"        ⚠️ {a[:48]}  ({v4[a]['tipo']} → {v5[a]['tipo']})  porque: {v5[a]['porque'][:44]}")
 

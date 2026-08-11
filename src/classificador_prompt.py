@@ -31,7 +31,75 @@ import fitz
 
 # VERSÃO DO PROMPT — entra na chave de retomada da prova. Sem isto, mudar o prompt e rodar de novo
 # NÃO refaz nada (o CSV acha que já foi feito) e a comparação entre versões fica impossível.
-PROMPT_VERSAO = "v4"
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# v6 — 10/Ago/2026 · SEIS REGRAS, TODAS DITADAS PELO DR. EDUARDO SOBRE ERRO MEDIDO
+# ═══════════════════════════════════════════════════════════════════════════════════════
+#
+# ⚠️ O NÚMERO 5 FOI PULADO DE PROPÓSITO. O `classificador_prompt_v5.py` é OUTRA arquitetura
+# (o LLM relata sinais, o código decide) que foi construída, medida e REPROVADA em 10/Ago:
+# 61,9 % contra 90,5 % do v4, com 29 regressões. Ele fica no disco como registro do que não
+# funcionou — reusar o número criaria duas coisas chamadas v5.
+#
+# O v6 NÃO é redesenho. É o v4 com seis regras trocadas, cada uma nascida de um artigo que
+# ele abriu e julgou à mão, com o motivo escrito na planilha `GABARITO_16_para_julgar.xlsx`.
+# Medição de partida (105 artigos, gabarito v2): v4 = 90,5 %, 11 erros, 4 deles GRAVES.
+#
+#  A · TRIBUTO NÃO É ARTIGO — 6 dos 11 erros
+#      Os tributos póstumos ao Braunwald (JACC, julho/2026) vinham como `ponto_de_vista`.
+#      Ele: *"são um tributo pós-morte... prestando homenagem ao homem que transformou a
+#      cardiologia no século 20"* → DESCARTAR. Categoria que não existia no prompt.
+#      ⚠️ Esta regra vive TAMBÉM no `classificador_ouro.eh_descartavel` — lá ela é
+#      determinística e nem chama o modelo. LEI 9: as duas foram mexidas juntas.
+#
+#  B · GUIDELINE É GRADUAÇÃO, NÃO É NOME — 2 erros GRAVES, em sentidos opostos
+#      KDIGO (dizia revisão): *"se ler as primeiras páginas fica fácil entender que isso aqui
+#      tem recomendações graduadas — logo é um guideline"*
+#      ACC Expert Consensus (dizia guideline): *"você não vê ele determinar a graduação de
+#      recomendações"*
+#      Mesmo teste nas duas direções. E o motivo de fundo é o MOTOR, não a taxonomia:
+#      *"nosso prompt vai tentar explorar qual percentual de recomendações se baseiam em
+#      padrão de evidência A, B ou C"* — documento sem graduação quebra o motor AGREE.
+#
+#  C · BUSCA SOZINHA VALE ZERO — 1 erro GRAVE
+#      Galen Medical Journal, "Intravascular Imaging-Guided PCI". Única evidência no texto:
+#      "A structured literature search was conducted using PubMed, Embase, and Cochrane".
+#      Conferido nas 3 páginas: SEM "systematic review", SEM PRISMA, SEM PROSPERO, SEM
+#      critérios de elegibilidade, SEM I²/pooled. E ainda MENCIONA meta-análises (como as
+#      fontes que revisou) — a regra "CITAR não é SER" sendo violada pelo próprio prompt.
+#      Ele: *"se ele leu o resumo e não tem métodos com 'A systematic review was conducted
+#      according to PRISMA'... então não pode ser meta-análise!"*
+#      Comparação que fixa a regra — os dois que ELE classificou como meta têm o oposto:
+#        Arquivos Bras.: "A Systematic Review" no título · PRISMA · PROSPERO CRD420251044229
+#        J Clin Med   : "systematic review conducted according to PRISMA" · random-effects
+#
+#  D · BRIEF REPORT DE ENSAIO CONTINUA SENDO ORIGINAL — 1 erro
+#      Corrige a regra dele de 31/Jul ("BRIEF REPORT é minirevisão"). O caso: JAMA Cardiology
+#      Brief Report que é *"A Randomized Clinical Trial"*. Ele: *"no resumo ele segue a
+#      cartilha IMRD — define o problema, testa uma hipótese (OBJECTIVE To test the
+#      hypothesis...), estabelece os métodos (DESIGN, SETTING, AND PARTICIPANTS...), diz qual
+#      intervenção será testada (INTERVENTION...)"*. O formato breve sozinho não basta.
+#
+#  E · PÁGINA SEPARA REVISÃO DE PONTO DE VISTA — 1 erro
+#      Ele: *"em praticamente todos os pontos de vista que vi tem menos de 3 páginas — se tem
+#      mais de 5 páginas, fica como revisão"*, e depois: *"estou diferenciando apenas revisão
+#      de ponto de vista — isto não se aplica a artigo original, que no caso seria obrigatório
+#      o IMRD."*
+#      MEDIDO no gabarito de 105: ponto de vista = 2 páginas · tributos = 2,2,2,3,3,3 ·
+#      minirevisão mediana 6 · revisão narrativa MÍNIMO 8 · original mínimo 5.
+#      Abaixo de 3 páginas não existe original, revisão, meta nem minirrevisão. Corte limpo.
+#      O caso: "Cardiovascular Health Across the Life Course" tem VIEWPOINT impresso e ele
+#      classificou revisão — *"delimitou um tema e diz que seu objetivo é revisar como as
+#      terapias modernas podem impactar"*. Contra "The Next Phase of Cardio-Oncology", que É
+#      ponto de vista — *"não tem IMRD, não tem recomendação formal, não avança sobre uma
+#      doença específica"*.
+#
+#  F · ARTIGO ORIGINAL É IMRD, E O IMRD SELECIONA PACIENTES
+#      Ele: *"ARTIGO ORIGINAL SEMPRE USA IMRD — onde, ao invés de pesquisar por artigos na
+#      internet, em MÉTODOS ele explica como fez a seleção de PACIENTES (não de artigos)...
+#      As revisões eu nunca vi usar IMRD."*
+#      É a única regra que sobreviveu inteira da arquitetura reprovada do v5 — lá ela era o
+#      campo `METODOS_SELECIONA`, e nos 13 papers que ele abriu acertou 11 de 11.
+PROMPT_VERSAO = "v6"
 
 # DECISÃO D-01 do Dr. Eduardo (31/07): revisão sistemática = meta-análise, mesma trilha.
 PROMPT = """Você classifica o TIPO de um artigo científico de cardiologia. Abaixo estão as
@@ -60,12 +128,73 @@ LISTA DE TIPOS:
 - relato_de_caso — relato de UM caso publicado como "Case Report" da revista, com o objetivo de
   descrever o caso em si (achado raro, complicação inédita, técnica nova em um paciente).
 - carta_de_pesquisa — research letter / carta ao editor (formato breve).
+- tributo — homenagem, obituário, memorial ou perfil biográfico de um médico ou pesquisador.
+  Rótulos: TRIBUTE · IN MEMORIAM · OBITUARY · EDITOR'S PAGE quando o texto é homenagem ·
+  "An Appreciation" · "My Relationship With…". Não ensina conduta, não tem tema clínico
+  delimitado: fala de uma PESSOA.
 - incerto — se o texto abaixo NÃO permitir decidir com segurança.
 
-REGRAS QUE VALEM MAIS QUE A SUA IMPRESSÃO:
-1. O RÓTULO DE SEÇÃO IMPRESSO PELA REVISTA MANDA, e manda acima de tudo. Se ele aparecer no texto,
-   ele DECIDE — mesmo que o artigo "pareça" outra coisa, mesmo que seja curto, opinativo ou
-   assinado por poucos autores. Correspondência obrigatória:
+═══ AS SEIS REGRAS QUE DECIDEM · leia todas ANTES de responder ═══
+
+R1 · ARTIGO ORIGINAL É IMRD, E O IMRD SELECIONA PACIENTES.
+   Um artigo original tem Introdução → Métodos → Resultados → Discussão, e na seção de MÉTODOS
+   ele explica como escolheu PACIENTES — não como escolheu artigos.
+     seleciona PACIENTES  → artigo_original   ("we enrolled", "consecutive patients",
+        "inclusion criteria: age ≥18", "we retrospectively reviewed the records of", NCT,
+        aprovação de comitê de ética, consentimento informado, DESIGN/SETTING/PARTICIPANTS)
+     seleciona ESTUDOS    → revisao_sistematica_meta_analise (ver R2)
+     não seleciona nada   → revisão, diretriz, minirevisão ou ponto de vista
+   Revisão narrativa NÃO usa IMRD: as seções dela são ASSUNTOS (Epidemiologia, Fisiopatologia,
+   Diagnóstico, Tratamento), não etapas.
+
+R2 · BUSCA SOZINHA NÃO FAZ META-ANÁLISE. Frases como "a structured literature search was
+   conducted using PubMed, Embase and Cochrane" ou "a busca foi realizada nas bases…" aparecem
+   em QUASE TODA revisão narrativa séria — procurar não é sintetizar.
+   Para responder revisao_sistematica_meta_analise o artigo tem de trazer PELO MENOS UM destes:
+     · "systematic review" / "revisão sistemática" DECLARADO (no título, no tipo do artigo, ou
+       em "a systematic review was conducted according to PRISMA")
+     · PRISMA · PROSPERO / número CRD
+     · critérios de elegibilidade (inclusão E exclusão) declarados
+     · número de estudos incluídos a partir de uma triagem
+     · estimativa agrupada: pooled, random-effects, I², forest plot, meta-regressão
+   Se o artigo SÓ diz que buscou, é revisao_geral.
+   ⚠️ E ATENÇÃO À R6: um artigo que CITA meta-análises entre as fontes que revisou não é uma.
+
+R3 · GUIDELINE É GRADUAÇÃO DE RECOMENDAÇÃO, NÃO É O NOME NO TÍTULO.
+   Responda guideline quando o documento GRADUA o que recomenda — Classe I / IIa / IIb / III,
+   Nível de Evidência A / B / C, GRADE forte/fraco, tabelas de recomendação, writing committee.
+     · "Consensus Document", "Expert Consensus Decision Pathway", "Position Paper" SEM
+       graduação → é revisao_geral. O nome não basta.
+     · Documento COM graduação → é guideline mesmo que a palavra "guideline" não apareça
+       (ex.: um documento do KDIGO com recomendações graduadas).
+   POR QUÊ ISTO IMPORTA: a análise da diretriz mede o percentual de recomendações apoiadas em
+   evidência A, B ou C. Um documento sem graduação não tem o que medir.
+
+R4 · PÁGINAS SEPARAM REVISÃO DE PONTO DE VISTA — e só isso.
+   O número de páginas do PDF está declarado logo abaixo. Use-o SOMENTE para escolher entre
+   revisao_geral e ponto_de_vista (e para reconhecer tributo). NUNCA para artigo_original,
+   meta-análise ou diretriz — nesses o que manda é a R1, a R2 e a R3.
+     menos de 3 páginas → ponto_de_vista ou tributo. Não existe revisão, original nem meta
+        com menos de 3 páginas.
+     mais de 5 páginas  → se o texto estiver entre revisão e ponto de vista, é revisao_geral,
+        AINDA QUE a revista tenha impresso VIEWPOINT no topo.
+   O teste que confirma: um ponto de vista opina sobre o CAMPO e não delimita tema
+   ("não avança sobre uma doença específica"); uma revisão DELIMITA um tema e se propõe a
+   revisá-lo, mesmo trazendo o olhar próprio do autor.
+
+R5 · TRIBUTO É TRIBUTO. Homenagem, obituário ou perfil de uma pessoa → tributo. Rótulos:
+   TRIBUTE, IN MEMORIAM, OBITUARY, "An Appreciation", EDITOR'S PAGE quando o conteúdo é
+   homenagem. Não force para ponto_de_vista: um tributo não opina sobre um tema clínico,
+   ele fala de alguém.
+
+R6 · CITAR NÃO É SER. Um artigo que MENCIONA "meta-analysis", "guideline" ou "PRISMA" no texto
+   ou nas referências não vira meta-análise nem diretriz. Só conta o que o PRÓPRIO artigo FAZ.
+
+═══ O RÓTULO IMPRESSO — FORTE, MAS PERDE PARA AS SEIS REGRAS ACIMA ═══
+7. O rótulo de seção impresso pela revista é a pista mais rápida, e na maioria das vezes está
+   certo. Use-o quando as regras R1–R6 não decidirem. MAS ele é o nome da SEÇÃO da revista, não
+   o desenho do estudo — revista carimba meta-análise como "ORIGINAL RESEARCH" e revisão como
+   "VIEWPOINT" o tempo todo. Correspondência:
      ORIGINAL RESEARCH ARTICLE · ORIGINAL ARTICLE · ORIGINAL INVESTIGATION · CLINICAL RESEARCH
         → artigo_original
      STATE-OF-THE-ART REVIEW · REVIEW ARTICLE · JACC REVIEW TOPIC OF THE WEEK · IN DEPTH · FRONTIERS
@@ -75,22 +204,21 @@ REGRAS QUE VALEM MAIS QUE A SUA IMPRESSÃO:
      DOCUMENT · POSITION PAPER  → guideline
      THE HEART OF THE MATTER · BRIEF REPORT · BRIEF COMMUNICATION · SHORT REPORT
      RESEARCH BRIEF · SHORT COMMUNICATION  → minirevisao
-        (decisão do Dr. Eduardo: BRIEF REPORT é minirevisão, NÃO artigo original — mesmo quando
-         traz dado primário. O formato breve não sustenta a perícia de um original.)
+        ⚠️ EXCEÇÃO (10/Ago): BRIEF REPORT que traz ENSAIO ou desenho declarado é
+        artigo_original. Se o resumo segue a cartilha IMRD — testa uma hipótese (OBJECTIVE To
+        test the hypothesis…), declara o desenho (DESIGN, SETTING, AND PARTICIPANTS / "A
+        Randomized Clinical Trial"), nomeia a intervenção (INTERVENTION…) — então o formato
+        breve é só o tamanho do texto, e vale a R1.
+     TRIBUTE · IN MEMORIAM · OBITUARY · AN APPRECIATION  → tributo
      EDITORIAL · EDITORIAL COMMENT · VIEWPOINT  → ponto_de_vista
-   Só use o julgamento dos itens 2 a 5 quando NÃO houver rótulo impresso.
-2. Se não houver rótulo, o juiz é o METHODS: quem COLETA dado de paciente é artigo_original;
-   quem BUSCA estudos em base é revisao_sistematica_meta_analise; quem não faz nem um nem outro
-   é revisao_geral ou guideline.
-3. CITAR não é SER. Um artigo que MENCIONA "meta-analysis" ou "guideline" no texto não vira
-   meta-análise nem diretriz. Só o que o artigo É conta.
-4. TRAVA DA REVISÃO SISTEMÁTICA — só responda revisao_sistematica_meta_analise se o artigo
-   DECLARAR pelo menos um destes: busca nomeando bases (PubMed, Embase, Cochrane, Web of Science);
-   critérios de elegibilidade/inclusão e exclusão; número de estudos incluídos; fluxograma PRISMA;
-   estimativa agrupada (pooled) ou I². **Se nada disso aparecer, é revisao_geral** — por mais
-   completa, longa ou "abrangente" que a revisão pareça. Revisão narrativa boa continua narrativa.
-5. Se o texto abaixo for só capa (título, autores, "Downloaded from…") sem abstract nem methods,
+        ⚠️ mas confira a R4 antes: VIEWPOINT com mais de 5 páginas que delimita um tema é
+        revisao_geral.
+
+8. Se o texto abaixo for só capa (título, autores, "Downloaded from…") sem resumo nem seções,
    responda incerto — NÃO adivinhe.
+
+═══ O DOCUMENTO ═══
+Total de páginas do PDF: {paginas}     (use SOMENTE como manda a R4)
 
 TEXTO (páginas 1 a 3):
 {texto}
@@ -102,9 +230,30 @@ _RE_PROVA = re.compile(r"PROVA:\s*(.+)", re.I | re.S)
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 TIPOS = {"artigo_original", "revisao_sistematica_meta_analise", "revisao_geral", "guideline",
-         "ponto_de_vista", "minirevisao", "relato_de_caso", "carta_de_pesquisa", "incerto"}
+         "ponto_de_vista", "minirevisao", "relato_de_caso", "carta_de_pesquisa",
+         "tributo", "incerto"}
 
 TETO_CHARS = 20_000     # o que a prova mediu; mudar isto invalida o 99,1 %
+
+# ═══ 10/Ago — O NÚMERO DE PÁGINAS PASSA A ENTRAR NO PROMPT (regra R4) ═══
+# Ele não estava lá, e o modelo não tem como contar páginas lendo texto extraído.
+# MEDIDO no gabarito de 105 artigos julgados por ele:
+#     ponto de vista .... 2 páginas          tributos ......... 2,2,2,3,3,3
+#     minirevisão ....... mediana 6          revisão narrativa  MÍNIMO 8
+#     artigo original ... mínimo 5           meta ............. mínimo 7
+# Abaixo de 3 páginas não existe original, revisão, meta nem minirrevisão.
+_PAGINAS_CACHE = {}
+
+
+def total_paginas(caminho):
+    """Quantas páginas o PDF tem. Best-effort: se não abrir, devolve 0 e a R4 fica muda —
+    melhor um sinal ausente que um número inventado."""
+    try:
+        if caminho not in _PAGINAS_CACHE:
+            _PAGINAS_CACHE[caminho] = len(fitz.open(caminho))
+        return _PAGINAS_CACHE[caminho]
+    except Exception:
+        return 0
 
 
 def paginas_1a3(caminho):
@@ -112,11 +261,15 @@ def paginas_1a3(caminho):
     impresso da seção ('ORIGINAL INVESTIGATION', 'STATE-OF-THE-ART REVIEW'), que é a REGRA 1 deste
     prompt, muitas vezes está na página 2 ou 3. Foi o que levou o acerto de 54 % para 87 %."""
     doc = fitz.open(caminho)
+    _PAGINAS_CACHE[caminho] = len(doc)          # aproveita a abertura: a R4 precisa do total
     return _CTRL.sub("", "".join(doc[i].get_text() for i in range(min(3, len(doc)))))
 
 
-def montar(texto):
-    return PROMPT.format(texto=(texto or "")[:TETO_CHARS])
+def montar(texto, paginas=0):
+    """`paginas` = total de páginas do PDF (regra R4). Zero significa 'não sei' — e o prompt
+    diz isso ao modelo em vez de mentir um número."""
+    return PROMPT.format(texto=(texto or "")[:TETO_CHARS],
+                         paginas=(paginas if paginas else "não informado"))
 
 
 def ler_resposta(saida):
