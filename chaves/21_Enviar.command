@@ -63,17 +63,25 @@ echo
 # ── ENSAIO PRIMEIRO: mostra a mensagem sem mandar ──
 echo "   1) ENSAIO   — monta a mensagem e mostra na tela, SEM enviar"
 echo "   2) ENVIAR   — manda de verdade no WhatsApp"
+echo "   3) ENVIAR sem verificar a Z-API"
+echo "      (use se a verificação der timeout mas você SABE que está conectado —"
+echo "       por exemplo, o Radar chegou hoje. Em 11/Ago um timeout de 10s abortou"
+echo "       um envio com a instância perfeitamente conectada.)"
 echo
-read -r -p "   Escolha [1-2, Enter = 1]: " E
+read -r -p "   Escolha [1-3, Enter = 1]: " E
 echo
-if [ "$E" = "2" ]; then
+if [ "$E" = "2" ] || [ "$E" = "3" ]; then
   echo "   ⚠️  Vai enviar de verdade. Confirma? [s/N]"
   read -r -p "   > " OK
   case "$OK" in s|S|sim|SIM) ;; *) echo "   Cancelado. Nada foi enviado."; read -p "Enter. "; exit 0 ;; esac
   echo
-  python3 distribuidor.py artigos
+  if [ "$E" = "3" ]; then
+    CD_PULAR_CHECK_ZAPI=1 python3 distribuidor.py artigos
+  else
+    python3 distribuidor.py artigos
+  fi
 else
-  python3 distribuidor.py artigos --dry-run 2>/dev/null || python3 distribuidor.py teste
+  python3 distribuidor.py artigos --dry-run
 fi
 
 echo

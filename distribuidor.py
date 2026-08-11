@@ -512,10 +512,50 @@ def zapi_check_connected() -> bool:
     Verifica se a instância Z-API está conectada ao WhatsApp.
     Retorna True se conectada, False caso contrário.
     Em caso de desconexão, envia alerta imediato via Telegram para Dr. Eduardo.
+
+    ═══ 11/Ago/2026 — UM TIMEOUT DE 10s MATOU O PRIMEIRO ENVIO DE VERDADE ═══
+    Ele aprovou 2 artigos na Chave 3, clicou ENVIAR, confirmou, e recebeu:
+        [ERROR] Erro ao verificar status Z-API: The read operation timed out
+        [ERROR] ❌ Z-API desconectada — distribuição abortada.
+    A Z-API NÃO estava desconectada: o Radar tinha saído por ela às 07:30 do mesmo dia.
+    Foi uma resposta lenta numa chamada com 10 segundos de teto e ZERO retentativa.
+
+    DOIS DEFEITOS, e o segundo é pior:
+      1. sem retry — o mesmo problema que o upload de mídia teve em 06/Ago, quando 11 artigos
+         caíram por soluço de rede e a solução foi 3 tentativas com espera crescente. A lição
+         não tinha sido aplicada aqui.
+      2. A MENSAGEM MENTE. O `except` engolia QUALQUER erro — timeout, DNS, SSL — e devolvia
+         False, e quem chama imprime "Z-API desconectada". Ele leria isso e iria ao painel da
+         Z-API reconectar uma instância que estava perfeita. Diagnóstico errado com cara de
+         certeza é pior que erro nenhum: manda o dono resolver o problema errado.
+
+    Agora: 3 tentativas (2s · 6s), teto de 20s, e "não consegui verificar" é uma resposta
+    DIFERENTE de "está desconectada".
     """
+    ultimo_erro = None
+    for tentativa in (1, 2, 3):
+        try:
+            resp = httpx.get(f"{ZAPI_BASE}/status", headers=ZAPI_HEADERS, timeout=20)
+            data = resp.json()
+            break
+        except Exception as e:
+            ultimo_erro = e
+            if tentativa < 3:
+                espera = 2 * (3 ** (tentativa - 1))
+                log.warning(f"  ↻ Z-API não respondeu em 20s ({type(e).__name__}) — "
+                            f"tentativa {tentativa + 1}/3 em {espera}s")
+                import time as _t
+                _t.sleep(espera)
+    else:
+        # 3 tentativas e nenhuma resposta. Isto NÃO é "desconectada": é "não consegui perguntar".
+        log.error(f"  ⚠️  NÃO CONSEGUI VERIFICAR o status da Z-API em 3 tentativas: "
+                  f"{type(ultimo_erro).__name__}: {ultimo_erro}")
+        log.error("      Isto é DIFERENTE de 'desconectada'. Pode ser a sua internet, o DNS,")
+        log.error("      ou a Z-API lenta. Se o Radar saiu hoje, a instância está conectada.")
+        log.error("      Para mandar assim mesmo, sem verificar:  CD_PULAR_CHECK_ZAPI=1")
+        return False
+
     try:
-        resp = httpx.get(f"{ZAPI_BASE}/status", headers=ZAPI_HEADERS, timeout=10)
-        data = resp.json()
         connected = data.get("connected", False)
         if not connected:
             motivo = data.get("error", "Sem detalhes")
@@ -543,7 +583,10 @@ def zapi_check_connected() -> bool:
                     log.error(f"  Falha ao enviar alerta Telegram: {te}")
         return connected
     except Exception as e:
-        log.error(f"  Erro ao verificar status Z-API: {e}")
+        # a resposta veio, mas não deu para ler (JSON quebrado, campo faltando).
+        # Continua sendo DIFERENTE de "desconectada" — e agora a mensagem diz isso.
+        log.error(f"  ⚠️  A Z-API respondeu, mas não entendi a resposta: {type(e).__name__}: {e}")
+        log.error("      Isto NÃO quer dizer que o WhatsApp está desconectado.")
         return False
 
 
@@ -706,9 +749,20 @@ def distribuir_artigos(dry_run: bool = False):
     # ele falhar porque o WhatsApp caiu — a conferência do texto não depende da rede.
     if dry_run:
         log.info("🧪 ENSAIO: não checo a Z-API e não envio nada.")
+    elif os.getenv("CD_PULAR_CHECK_ZAPI") == "1":
+        # 11/Ago — saída de emergência. O verificador é uma CONVENIÊNCIA (avisa antes de gastar
+        # 2 minutos mandando para o nada); não pode virar o dono do envio. Quando ele falha por
+        # timeout e o Dr. Eduardo SABE que a instância está de pé — porque o Radar saiu hoje —
+        # exigir que ele conserte a Z-API para poder mandar é o programa mandando nele.
+        log.warning("⚠️  CD_PULAR_CHECK_ZAPI=1 — mandando SEM verificar o status da Z-API.")
+        log.warning("    Se a instância estiver mesmo fora, as mensagens somem sem aviso.")
     else:
         if not zapi_check_connected():
-            log.error("❌ Z-API desconectada — distribuição abortada. Reconecte e dispare manualmente.")
+            log.error("❌ Não vou enviar: a verificação da Z-API não passou (veja o motivo acima).")
+            log.error("   Se você tem certeza de que o WhatsApp está conectado — por exemplo,")
+            log.error("   o Radar saiu hoje — rode assim para pular a verificação:")
+            log.error("       CD_PULAR_CHECK_ZAPI=1 python3 distribuidor.py artigos")
+            log.error("   Ou clique a Chave 21 e escolha a opção 3.")
             sys.exit(1)
         log.info("✅ Z-API conectada")
 
