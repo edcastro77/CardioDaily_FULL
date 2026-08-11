@@ -24,9 +24,19 @@ if [ "$N" -eq 0 ]; then
 fi
 
 echo "   $N PDF na fila  ·  vão ser LIDOS, RENOMEADOS e MOVIDOS para CLASSIFICADOS/<tipo>/"
-CENT=$((N * 2))                      # sem awk — ver o comentário na Chave 11 (travou o Terminal em 04/Ago)
-printf "   Custo aproximado: US\$ %d.%02d\n" $((CENT/100)) $((CENT%100))
-echo "   (o modelo só é chamado quando as camadas determinísticas não decidem sozinhas)"
+# ═══ 10/Ago — A TELA MENTIA EM DOIS PONTOS ═══
+# Dizia "(o modelo só é chamado quando as camadas determinísticas não decidem sozinhas)" —
+# verdade até ontem, quando 6 camadas decidiam antes dele e só 22 % chegavam ao juiz.
+# Hoje é o CONTRÁRIO: decidem antes só o mapa de revista e o filtro de lixo; o LLM lê e decide
+# todo o resto. Foi a decisão do Dr. Eduardo depois de medir o preço da leitura.
+# E o custo estava em 2 centavos por artigo — 20× acima do medido (736 leituras reais no
+# uso.jsonl: mediana de 4.482 tokens de entrada, US$ 0,001 por artigo).
+# Mesmo defeito dos US$ 0,30 da Chave 2: número chumbado que o dono lê como se fosse medida.
+CENT_MIL=$((N * 1))                  # 0,1 centavo por artigo — MEDIDO, não chutado
+printf "   Custo aproximado: US\$ %d.%02d   (medido: ~US\$ 0,001 por artigo)\n" \
+       $((CENT_MIL/1000)) $(((CENT_MIL%1000)/10))
+echo "   O LLM lê as páginas 1-3 de PRATICAMENTE TODO artigo e decide o tipo."
+echo "   Só o mapa de revista (Clinics, EHJ Supplements) e o filtro de lixo decidem antes dele."
 echo
 read -r -p "   Começar? [s/N]: " OK
 case "$OK" in s|S|sim|SIM) ;; *) echo "   Cancelado. Nada foi gasto e nada foi movido."; read -p "Enter. "; exit 0 ;; esac

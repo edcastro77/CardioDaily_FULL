@@ -3,13 +3,30 @@ classificador_ouro.py — CLASSIFICADOR OURO (09/Jul/2026, branch lab/religar-pr
 Arquitetura desenhada com o Dr. Eduardo. Ver MEMORIA_CLASSIFICADOR_OURO.md e
 MAPA_REVISTAS_classificador.md.
 
-CAMADAS:
-  A) MAPA DE REVISTA (pelo DOI) — determinístico, grátis, instantâneo. Resolve ~90%:
-       Clinics (ccl/hfc/ccep/iccl) = revisão; JACC Case Reports = descarte; AHA CIR.0 = guideline.
-  D) DESCARTE determinístico — relato de caso / research letter (pubtype / título / cabeçalho).
-  B/C) CLAUDE SONNET lê a PRIMEIRA PÁGINA (título+rótulo+IMRD+Methods) e decide o tipo.
-       Sem espera de indexação, sem rate-limit. O CONTEÚDO do Methods é o juiz.
-  Ambíguo até pro Sonnet → REVISAO_HUMANA (poucos).
+CAMADAS (reescritas em 10/Ago/2026 — este bloco descrevia um sistema que não existe mais):
+
+  1) MAPA DE REVISTA (pelo DOI) — determinístico, grátis. DECIDE.
+       Clinics (ccl/hfc/ccep/iccl) = revisão · EHJ Supplements = minirevisão ·
+       JACC Case Reports = descarte. Medido no acervo: 86 artigos, 100 % na pasta certa.
+       É curadoria do Dr. Eduardo, não heurística — por isso ganha de tudo.
+  2) LIXO — relato de caso, research letter, TRIBUTO/IN MEMORIAM. DECIDE, e de graça:
+       não se paga leitura para jogar fora.
+  3) O LLM lê as PÁGINAS 1 A 3 e DECIDE TODO O RESTO.
+       Modelo: a cadeia `modelos.CLASSIFICACAO` — hoje **gpt-5.6-luna** (não Sonnet: o Sonnet
+       é o 3º degrau e, medido nas últimas rodadas, respondeu 0 de 229 chamadas).
+       Prompt v6, seis regras ditadas pelo Dr. Eduardo sobre erro medido.
+       Medido nos 105 artigos do gabarito dele: 100,0 % e repetibilidade 100 %.
+  4) CONFERÊNCIA — PubMed, rótulo impresso e título OPINAM e não decidem. Quando discordam
+       do LLM, a divergência vai para a coluna `conferencia` do diário.
+
+⚠️ NÃO EXISTE MAIS revisão humana por discordância. Palavras dele, 10/Ago: *"a llm tem que
+acertar — nada de revisão humana; só teremos que fazer revisão humana se formos incompetentes
+em fazer os filtros corretos para a llm ler no início."* Divergência vira conserto de filtro,
+não fila na mesa dele.
+
+⚠️ E O PUBMED NÃO MANDA MAIS. Medido contra o gabarito de 111: PubMed 60,0 % de acerto e só
+opina em 15 % dos artigos; o LLM, 99,1 % e opina em 100 %. Intuição dele: *"ele não tem no
+escopo todos os nomes e sai colando o primeiro da reta"*. O número deu razão a ele.
 
 TÍTULO limpo (nunca "nome troncho"): PubMed/EPMC via DOI dá título+revista+data pro rename;
 se não houver, mantém o nome original. (Extração de título da 1ª página = melhoria futura.)
@@ -134,10 +151,14 @@ def titulo_diz_revisao_narrativa(titulo):
     return bool(_REVIEW_NARRATIVA_TITULO.search(t))
 
 
-# ============================ RÓTULO DO TOPO (manda antes do PubMed) ============================
-# Editorial/comentário/carta ROUBA o DOI do artigo que comenta → PubMed carimba errado e promove
-# a artigo_original. Trava do Dr. Eduardo: o rótulo do TOPO da 1ª página decide o tipo ANTES do DOI,
-# e nesses casos o DOI é suspeito (emprestado) → não renomeia pelo PubMed (título verídico > bonito).
+# ==================== RÓTULO DO TOPO — hoje só CONFERE (10/Ago/2026) ====================
+# ⚠️ ESTE CABEÇALHO DIZIA 'manda antes do PubMed' e que 'o rótulo do TOPO decide o tipo'.
+# Não decide mais nada. Foi rebaixado a conferência em 10/Ago: ele carimbava meta-análise como
+# ORIGINAL RESEARCH e revisão como VIEWPOINT, e decidia 240 dos 703 artigos do acervo — era a
+# camada que calava o juiz. As funções abaixo continuam sendo usadas para OPINAR (a coluna
+# `conferencia` do diário) e para o descarte de lixo, que segue determinístico.
+# O que continua verdadeiro: editorial/carta ROUBA o DOI do artigo que comenta, então quando um
+# desses rótulos aparece o DOI vira suspeito (emprestado) e o PubMed não renomeia o arquivo.
 _ROT_PV = re.compile(r"^(editorial(\s+comment)?|editorials|viewpoint|perspective|commentary|point of view)$", re.I)
 _ROT_DESC = re.compile(r"^(research letter|letters?|letter to the editor|correspondence|reply|reply to.*)$", re.I)
 # BRIEF REPORT → MINIRREVISÃO. Decisão do Dr. Eduardo (F-02 do docs/FALHAS_AUDITORIA.md, 31/Jul,
@@ -181,8 +202,14 @@ def rotulo_original(texto):
     return None
 
 
-# ============================ CAMADA B/C — SONNET lê a 1ª página ============================
-# Nota: META já foi decidida pelo título ANTES do Sonnet. Aqui o Sonnet NÃO tem a opção meta.
+# ================== O JUIZ — o LLM lê as PÁGINAS 1 A 3 e DECIDE (10/Ago/2026) ==================
+# ⚠️ ESTE CABEÇALHO DIZIA 'SONNET lê a 1ª página' e 'META já foi decidida pelo título ANTES do
+# Sonnet; aqui o Sonnet NÃO tem a opção meta'. As três coisas mudaram:
+#   · o modelo é a cadeia `modelos.CLASSIFICACAO` — hoje gpt-5.6-luna. O Sonnet é o 3º degrau
+#     e respondeu 0 de 229 nas últimas rodadas.
+#   · a leitura é das PÁGINAS 1 A 3 desde 03/Ago (o rótulo de seção mora na 2 ou na 3 com
+#     frequência; foi o que levou o acerto de 54 % para 87 %).
+#   · o LLM TEM a opção meta, e é ele quem decide: o título deixou de ganhar dele em 10/Ago.
 
 _llm_erro_mostrado = False
 _MODELO_USADO = None      # quem de fato respondeu na última chamada (pode não ser o primário)
@@ -269,7 +296,20 @@ def classificar(pasta, dry_run=True, max_n=0):
 
     _LOG.clear()                          # cada rodada tem o seu diário
     print(f"\n{'DRY-RUN (nada é movido)' if dry_run else 'EXECUTANDO (move arquivos)'} — {len(pdfs)} PDF(s)")
-    print("cascata: mapa de revista → descarte → Sonnet(1ª página) → revisão humana\n")
+    # ═══ 10/Ago — ESTA LINHA MENTIA EM TRÊS PONTOS ═══
+    # Dizia "mapa de revista → descarte → Sonnet(1ª página) → revisão humana". Nenhuma das
+    # três estava certa: o modelo é o gpt-5.6-luna (o Sonnet é o 3º fallback e, medido nas
+    # últimas rodadas, respondeu 0 de 229); a leitura é das páginas 1 a 3 desde 03/Ago; e a
+    # revisão humana por discordância acabou hoje, por decisão do Dr. Eduardo — *"a llm tem
+    # que acertar"*.
+    # É o mesmo defeito dos US$ 0,30 chumbados na Chave 2: uma linha escrita uma vez, nunca
+    # atualizada, que o dono lê e toma como o estado do sistema. Agora ela se monta do que
+    # está de fato configurado — se a cadeia ou o prompt mudarem, a tela muda junto.
+    import modelos as _M
+    print(f"cascata: mapa de revista → lixo (relato/carta) → LLM {_M.CLASSIFICACAO[0]} "
+          f"lê as páginas 1-3 (prompt {CP.PROMPT_VERSAO}) e DECIDE o resto")
+    print(f"         PubMed · rótulo impresso · título → CONFEREM (coluna `conferencia` do diário)")
+    print(f"         fallback, se o primário cair: {' → '.join(_M.CLASSIFICACAO[1:])}\n")
     cont = {}
     via_mapa = via_sonnet = via_pubmed = 0
     vistos_doi = {}    # DOI confiável → nome do 1º arquivo (dedup por identidade)
@@ -638,7 +678,7 @@ def classificar(pasta, dry_run=True, max_n=0):
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="Classificador OURO (mapa de revista → descarte → Sonnet)")
+    ap = argparse.ArgumentParser(description="Classificador OURO — mapa de revista → lixo → o LLM (páginas 1-3) decide o resto")
     ap.add_argument("pasta", help="Pasta com os PDFs")
     ap.add_argument("--dry-run", action="store_true", help="Só mostra o que faria (não move)")
     ap.add_argument("--max", type=int, default=0, help="Processar no máximo N PDFs")

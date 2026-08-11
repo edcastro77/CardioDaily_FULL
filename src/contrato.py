@@ -124,7 +124,7 @@ def validar(ficha, checar_arquivos=True):
     # Ninguém a jusante percebeu, porque cada peça ficou internamente coerente e errada:
     # exatamente o que a LEI 8 descreve.
     #
-    # POR QUE AQUI, E NÃO NO CLASSIFICADOR: o classificador decide pela primeira página; o
+    # POR QUE AQUI, E NÃO NO CLASSIFICADOR: o classificador decide pelas páginas 1 a 3; o
     # extrator lê o artigo todo. Quando os dois discordam, quem tem mais informação é o extrator
     # — mas ele não pode CORRIGIR a caixa (isso reabriria a "duas fontes de verdade" que a LEI 8
     # fechou). O que ele pode é DENUNCIAR, e a denúncia segura a publicação.
