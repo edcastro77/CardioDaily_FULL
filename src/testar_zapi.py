@@ -128,7 +128,34 @@ def main():
                 print("      Se a mensagem não chegou mesmo assim, o problema é no ENVIO —")
                 print("      rode a Chave 21 e me mande as linhas que começam com 'Erro WhatsApp'.")
                 return 0
-            print(f"   🔴 A instância NÃO está pareada. Motivo: {d.get('error') or d}")
+            motivo = str(d.get("error") or d)
+
+            # ═══ 11/Ago — NOT_FOUND NÃO É "DESCONECTADA" ═══
+            # Esta mensagem dizia "a instância NÃO está pareada — escaneie o QR code", e para
+            # NOT_FOUND isso está errado: o Dr. Eduardo iria ao painel escanear um QR code de
+            # uma instância que EXISTE e está boa, enquanto o problema é o ID no .env.
+            # É o terceiro diagnóstico errado do mesmo dia (o "Z-API desconectada" que era
+            # timeout, o "CONCLUÍDO" que não enviou, e este). Mandar o dono resolver o problema
+            # errado é pior que não dizer nada.
+            if "NOT_FOUND" in motivo.upper() or "NOT FOUND" in motivo.upper():
+                print(f"   🔴 O SERVIDOR NÃO CONHECE ESTA INSTÂNCIA. Resposta: {motivo}")
+                print()
+                print("   ISTO NÃO É DESCONEXÃO — não adianta escanear QR code. O ID que está")
+                print("   no seu .env não existe na Z-API. Ou ele foi digitado errado, ou a")
+                print("   instância foi recriada e o .env ficou com o número velho.")
+                print()
+                print("   O CASO REAL DE 11/Ago: o .env tinha 3F0C22[04]… e o ID certo era")
+                print("   3F0C22[84]… — UM dígito. O Radar chegava porque sai do GitHub Actions,")
+                print("   que usa o secret ZAPI_BASE (correto); o envio da máquina usava o .env.")
+                print()
+                print("   O QUE FAZER:")
+                print("     1. app.z-api.io → copie o ID da instância e o token")
+                print("     2. Chave 13 (Abrir o .env) → corrija a linha ZAPI_BASE")
+                print("     3. rode este diagnóstico de novo")
+                print("     4. confira também o secret do GitHub, se quiser os dois iguais")
+                return 1
+
+            print(f"   🔴 A instância existe, mas NÃO está pareada. Motivo: {motivo}")
             print("      Vá em app.z-api.io → sua instância → Conectar → escaneie o QR code.")
             return 1
         except Exception as e:
