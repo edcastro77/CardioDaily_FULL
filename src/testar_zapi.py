@@ -80,14 +80,37 @@ def main():
     print(f"   {'✅' if base.startswith('http')  else '🔴'} começa com http")
     print(f"   {'✅' if tem_instancia else '🔴'} tem /instances/ no caminho")
     print(f"   {'✅' if tem_token     else '🔴'} tem /token/ no caminho")
+    # ═══ 11/Ago — SÃO DOIS TOKENS DIFERENTES, E EU SÓ MOSTRAVA UM ═══
+    # O Dr. Eduardo abriu o painel e conferiu: o ID da instância do .env está CERTO
+    # (3F0C2204…, igual ao painel — quem estava errado era o CLAUDE.md, documentação velha),
+    # e o ZAPI_CLIENT_TOKEN também (Fef…, igual à tela de Segurança).
+    # Mesmo assim: NOT_FOUND. Porque existe um TERCEIRO segredo que eu não estava imprimindo:
+    #
+    #     https://api.z-api.io/instances/<ID>/token/<TOKEN_DA_INSTANCIA>
+    #                                             └── este, da coluna TOKEN do painel
+    #     header Client-Token: <TOKEN_DA_CONTA>   └── este, da tela Segurança
+    #
+    # A Z-API devolve NOT_FOUND quando o PAR instância+token da URL não bate — não só quando o
+    # ID não existe. Um diagnóstico que mostra o ID e esconde o token da URL manda o dono
+    # conferir metade do problema. Agora mostra os dois, sempre mascarados.
     if tem_instancia:
         try:
             inst = partes[partes.index("instances") + 1]
-            print(f"   instância: {inst[:8]}…{inst[-4:]}  ({len(inst)} caracteres)")
-            print("   ⚠️  CONFIRA ESTE ID contra o painel em app.z-api.io — o CLAUDE.md e o")
-            print("       alerta do distribuidor citam IDs que DIFEREM num dígito (…2284… × …2204…).")
+            print(f"   ID da instância   : {inst[:16]}…{inst[-4:]}  ({len(inst)} caracteres)")
+            print("      → compare com a coluna ID em Instâncias Web")
         except Exception:
             pass
+    if tem_token:
+        try:
+            tk = partes[partes.index("token") + 1]
+            print(f"   TOKEN na URL      : {tk[:18]}…{tk[-4:]}  ({len(tk)} caracteres)")
+            print("      → compare com a coluna TOKEN em Instâncias Web (NÃO é o Client-Token)")
+        except Exception:
+            pass
+    print(f"   Client-Token      : {token[:6]}…  (tela Segurança → Token de segurança da conta)")
+    print()
+    print("   ⚠️  SÃO TRÊS SEGREDOS DIFERENTES. O NOT_FOUND aparece se o ID OU o TOKEN DA URL")
+    print("       estiverem errados — o Client-Token só é testado depois que esses dois passam.")
 
     # ── 3. a máquina alcança o servidor? ──
     print("\n   ── 3. A SUA MÁQUINA ALCANÇA A Z-API? ──")

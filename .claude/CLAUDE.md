@@ -7,7 +7,7 @@
 
 ## Infraestrutura
 - Telegram Bot ID: 8349019693 | Canal: @CardioDailyBot | Chat ID: 237863636
-- Z-API Instance: 3F0C22840662826CFF327E97F8598275
+- Z-API Instance: 3F0C22040662826CFF327E97F8598275
 - Buckets: visual_abstracts, podcasts, resumos_pdf, radar
 
 ## Pipeline editorial
