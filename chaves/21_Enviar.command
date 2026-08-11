@@ -67,8 +67,9 @@ echo "   3) ENVIAR sem verificar a Z-API"
 echo "      (use se a verificação der timeout mas você SABE que está conectado —"
 echo "       por exemplo, o Radar chegou hoje. Em 11/Ago um timeout de 10s abortou"
 echo "       um envio com a instância perfeitamente conectada.)"
+echo "   4) DIAGNOSTICAR — por que a mensagem não chegou (não envia nada)"
 echo
-read -r -p "   Escolha [1-3, Enter = 1]: " E
+read -r -p "   Escolha [1-4, Enter = 1]: " E
 echo
 if [ "$E" = "2" ] || [ "$E" = "3" ]; then
   echo "   ⚠️  Vai enviar de verdade. Confirma? [s/N]"
@@ -80,6 +81,8 @@ if [ "$E" = "2" ] || [ "$E" = "3" ]; then
   else
     python3 distribuidor.py artigos
   fi
+elif [ "$E" = "4" ]; then
+  python3 src/testar_zapi.py
 else
   python3 distribuidor.py artigos --dry-run
 fi

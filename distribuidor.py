@@ -700,37 +700,56 @@ def enviar_artigo(phone, artigo):
       3. Visual abstract (imagem)  — anzol visual
       4. Link PDF + crédito        — destino final para quem quer a prova
     """
+    # ═══ 11/Ago/2026 — ESTA FUNÇÃO IGNORAVA O RESULTADO DE TODOS OS ENVIOS ═══
+    # `zapi_send_text` devolve True/False. As quatro chamadas aqui jogavam a resposta fora.
+    # Quando o envio falhava, o `zapi_send_text` escrevia "Erro WhatsApp texto: …" no log — e
+    # o contador de cima somava +1 assim mesmo. No fim saía "CONCLUÍDO — 2 artigos enviados".
+    # O Dr. Eduardo leu isso, fechou a janela, e descobriu pela AUSÊNCIA no celular.
+    #
+    # Dizer "enviei" sem ter enviado é o pior estado que este sistema pode alcançar: ele para
+    # de poder confiar no que a tela diz, e aí nada mais do que a gente construiu vale.
+    # Agora a função devolve (enviou_alguma_coisa, o_que_falhou).
     titulo = artigo.get("titulo", "Sem título")
     revista = artigo.get("revista", "")
     nac = artigo.get("nota_aplicabilidade", "?")
     log.info(f"  Enviando: {titulo[:60]}...")
+    falhas = []
 
-    # 1. Gancho socrático
+    # 1. Gancho socrático — a peça OBRIGATÓRIA. Se ela não vai, o artigo não foi.
     gancho = artigo.get("gancho_abertura") or ""
     if gancho:
         msg_gancho = f"{gancho}\n\n📖 {revista} · NAC {nac}/10"
     else:
         # Fallback: título + revista
         msg_gancho = f"📚 {titulo}\n\n📖 {revista} · NAC {nac}/10"
-    zapi_send_text(phone, msg_gancho)
+    ok_texto = zapi_send_text(phone, msg_gancho)
+    if not ok_texto:
+        falhas.append("gancho (texto)")
     tg_send_text(msg_gancho.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
     # 2. Áudio
     if artigo.get("caminho_audio"):
-        zapi_send_audio(phone, artigo["caminho_audio"])
+        if not zapi_send_audio(phone, artigo["caminho_audio"]):
+            falhas.append("áudio")
         tg_send_audio(artigo["caminho_audio"], f"CardioDaily — {titulo[:50]}")
 
     # 3. Visual abstract
     if artigo.get("caminho_visual_abstract"):
         caption = f"🔬 {titulo[:80]}"
-        zapi_send_image(phone, artigo["caminho_visual_abstract"], caption)
+        if not zapi_send_image(phone, artigo["caminho_visual_abstract"], caption):
+            falhas.append("visual abstract")
         tg_send_image(artigo["caminho_visual_abstract"], caption)
 
     # 4. Link PDF
     if artigo.get("caminho_pdf"):
         msg_pdf = f"📄 Análise completa (PDF):\n{artigo['caminho_pdf']}\n\n_CardioDaily — dados e fatos, sem firulas._"
-        zapi_send_text(phone, msg_pdf)
+        if not zapi_send_text(phone, msg_pdf):
+            falhas.append("link do PDF")
         tg_send_text(msg_pdf.replace("_", "").replace("&", "&amp;"))
+
+    if falhas:
+        log.error(f"  ❌ NÃO ENTREGUE por completo — falhou: {', '.join(falhas)}")
+    return ok_texto, falhas
 
 
 # =============================================================================
@@ -769,6 +788,7 @@ def distribuir_artigos(dry_run: bool = False):
     sb = conectar_supabase()
     assinantes = buscar_assinantes_ativos(sb)
     total = 0
+    nao_entregues = []          # 11/Ago: o que FALHOU, para o resumo não mentir
 
     for assinante in assinantes:
         nome = assinante.get("nome", "?")
@@ -833,9 +853,14 @@ def distribuir_artigos(dry_run: bool = False):
                     artigo["caminho_pdf"] = url
                 else:
                     log.warning(f"  ⚠️  PDF indisponível para {artigo['doc_id']} — envio sem link PDF")
-            enviar_artigo(phone, artigo)
-            doc_ids.append(artigo["doc_id"])
-            total += 1
+            entregou, falhas = enviar_artigo(phone, artigo)
+            if entregou:
+                # só marca como enviado o que SAIU. Um artigo marcado nunca mais é mandado —
+                # marcar um que falhou seria perdê-lo para sempre, em silêncio.
+                doc_ids.append(artigo["doc_id"])
+                total += 1
+            else:
+                nao_entregues.append((artigo.get("titulo", "")[:52], falhas))
 
         if doc_ids and not dry_run:
             registrar_envio(sb, assinante["id"], doc_ids, ja_enviados)
@@ -843,8 +868,16 @@ def distribuir_artigos(dry_run: bool = False):
     log.info(f"\n{'=' * 60}")
     if dry_run:
         log.info(f"ENSAIO — {total} artigo(s) SERIAM enviados. Nada saiu, nada foi marcado.")
+    elif nao_entregues:
+        # ═══ 11/Ago — O "CONCLUÍDO" NÃO PODE MAIS MENTIR ═══
+        log.error(f"⚠️  {total} ENTREGUE(S) · {len(nao_entregues)} NÃO ENTREGUE(S)")
+        for t, f in nao_entregues:
+            log.error(f"     ❌ {t} — falhou: {', '.join(f) or 'envio recusado'}")
+        log.error("   Os NÃO entregues NÃO foram marcados como enviados: continuam na fila")
+        log.error("   e saem na próxima tentativa. Rode `python3 src/testar_zapi.py` para")
+        log.error("   saber ONDE a corrente arrebentou (não envia nada, custo zero).")
     else:
-        log.info(f"CONCLUÍDO — {total} artigos enviados")
+        log.info(f"CONCLUÍDO — {total} artigo(s) entregue(s), nenhuma falha")
     log.info("=" * 60)
 
 
