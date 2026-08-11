@@ -128,6 +128,50 @@ def main():
         print("       e este envio não. São caminhos de rede diferentes.")
         return 1
 
+    # ══════════════════════════════════════════════════════════════════════════════════
+    # 3b. QUAL ROTA ESTA INSTÂNCIA RESPONDE — 11/Ago/2026
+    # ══════════════════════════════════════════════════════════════════════════════════
+    # O Dr. Eduardo conferiu as QUATRO credenciais contra o painel e todas batem:
+    #     ID 3F0C2204… · TOKEN da URL 11EF94E831F98B00… · Client-Token Fef43e54f8… ·
+    #     e a instância aparece como CONECTADA, paga até 27/08/2026.
+    # Mesmo assim o /status devolvia HTTP 200 com "NOT_FOUND" no corpo.
+    #
+    # HTTP 200 + NOT_FOUND no CORPO tem duas leituras, e eu tinha assumido só uma:
+    #     (a) a instância não existe          ← foi o que eu disse, e estava errado
+    #     (b) a ROTA não existe para esta instância
+    # Eu escolhi `/status` sem nunca ter testado. Duas hipóteses minhas já caíram hoje
+    # (o "digito trocado" e o "não está pareada"); não vou arriscar uma terceira.
+    #
+    # Este bloco PERGUNTA em vez de supor: bate em rotas de LEITURA conhecidas da Z-API e
+    # mostra o que cada uma responde. A que responder direito é a que o distribuidor deve usar.
+    #
+    # ⚠️ SÓ ROTAS DE LEITURA. `/restart` e `/disconnect` existem e DERRUBARIAM o WhatsApp dele
+    # — um diagnóstico que quebra o que está diagnosticando é pior que nenhum.
+    print("\n   ── 3b. QUAL ROTA ESTA INSTÂNCIA RESPONDE? ──")
+    print("   (só leitura — nada que reinicie ou desconecte)")
+    hdr = {"Client-Token": token} if token else {}
+    rotas = ["/status", "/device", "/me", "/instance-info", "/phone-code"]
+    achou_alguma = False
+    for rota in rotas:
+        try:
+            rr = httpx.get(f"{base}{rota}", headers=hdr, timeout=15)
+            corpo = (rr.text or "")[:90].replace("\n", " ")
+            marca = "✅" if (rr.status_code == 200 and "NOT_FOUND" not in corpo.upper()) else "  "
+            if marca == "✅":
+                achou_alguma = True
+            print(f"   {marca} {rota:16s} HTTP {rr.status_code}  {corpo}")
+        except Exception as e:
+            print(f"      {rota:16s} 🔴 {type(e).__name__}")
+    if achou_alguma:
+        print()
+        print("   ⚠️  ALGUMA ROTA RESPONDEU. Então as credenciais estão CERTAS e a instância")
+        print("       está viva — o problema é que o CardioDaily está batendo no endereço")
+        print("       errado. Me mande estas linhas que eu troco a rota no distribuidor.")
+    else:
+        print()
+        print("   Nenhuma rota de leitura respondeu. Aí sim o problema é a credencial ou a")
+        print("   instância — confira o TOKEN DA URL (não o Client-Token) no painel.")
+
     # ── 4 e 5. o endpoint e o pareamento ──
     print("\n   ── 4. O ENDPOINT /status ──")
     for tent in (1, 2, 3):
