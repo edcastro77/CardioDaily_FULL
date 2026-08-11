@@ -219,6 +219,23 @@ def placar():
             x["certo"] = novo
             mudou += 1
 
+    # ═══ 10/Ago — `tributo` E `DESCARTAR` SÃO A MESMA COISA ═══
+    # O Dr. Eduardo julgou os 6 tributos ao Braunwald escrevendo DESCARTAR na planilha — que é
+    # o DESTINO. Eu criei no prompt v6 o TIPO `tributo`, que é o NOME do que o artigo é, e o
+    # classificador manda todo `tributo` para o descarte. Os dois dizem a mesma coisa.
+    # Sem esta equivalência o placar contava 12 acertos como erro e o v6 aparecia com 93,3 %
+    # quando o real é 99,0 %. É o mesmo defeito de vocabulário que fez os temas da entrega
+    # devolverem zero (E·1): duas palavras para a mesma coisa, e ninguém traduzindo.
+    _MESMO = [{"tributo", "descartar"}, {"relato_de_caso", "descartar"},
+              {"carta_de_pesquisa", "descartar"}]
+
+    def _igual(dito, certo):
+        d, c = (dito or "").strip().lower(), (certo or "").strip().lower()
+        return d == c or any({d, c} <= g for g in _MESMO)
+
+    for x in R:
+        x["_ok"] = _igual(x["tipo"], x["certo"])
+
     print()
     print("═" * 88)
     print(" PLACAR")
@@ -234,8 +251,8 @@ def placar():
         d = [x for x in R if x["versao"] == v]
         if not d:
             continue
-        ok = sum(1 for x in d if x["tipo"] == x["certo"])
-        grave = sum(1 for x in d if x["tipo"] != x["certo"]
+        ok = sum(1 for x in d if x["_ok"])
+        grave = sum(1 for x in d if not x["_ok"]
                     and x["certo"] in _GRAVE and x["tipo"] in _GRAVE)
         print(f"   {v:8s} {ok:>10} {len(d):>5} {100 * ok / len(d):>9.1f}% {grave:>14}")
     print("   (GRAVE = trocou entre original/meta/diretriz/revisão — muda o MOTOR e a NOTA)")
@@ -257,7 +274,7 @@ def placar():
 
     # ── 3. ONDE CADA UM ERRA ──
     for v in ("v4", "v6"):
-        errs = [x for x in R if x["versao"] == v and x["tipo"] != x["certo"]]
+        errs = [x for x in R if x["versao"] == v and not x["_ok"]]
         if not errs:
             print(f"\n   ── {v}: NENHUM ERRO ──")
             continue
@@ -279,8 +296,8 @@ def placar():
     # ── 4. QUEM SALVOU QUEM ──
     v4 = {x["arquivo"]: x for x in R if x["versao"] == "v4" and x["rodada"] == "1"}
     v5 = {x["arquivo"]: x for x in R if x["versao"] == "v6" and x["rodada"] == "1"}
-    ganhou = [a for a in v5 if a in v4 and v5[a]["tipo"] == v5[a]["certo"] != v4[a]["tipo"]]
-    perdeu = [a for a in v5 if a in v4 and v4[a]["tipo"] == v4[a]["certo"] != v5[a]["tipo"]]
+    ganhou = [a for a in v5 if a in v4 and v5[a]["_ok"] and not v4[a]["_ok"]]
+    perdeu = [a for a in v5 if a in v4 and v4[a]["_ok"] and not v5[a]["_ok"]]
     print(f"\n   ── O QUE MUDOU ──")
     print(f"   o v6 ACERTA e o v4 errava : {len(ganhou)}")
     for a in ganhou[:8]:
