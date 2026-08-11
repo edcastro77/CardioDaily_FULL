@@ -9,13 +9,56 @@ MODELO (nas palavras do Dr. Eduardo):
 Ou seja: o sistema NÃO envia nada sozinho (só o Radar). Aqui o Dr. Eduardo REVISA e AGENDA/ENVIA pro
 grupo de WhatsApp. "Não publicado" = ainda não foi pro grupo.
 
-Rodar:  streamlit run src/painel_curadoria.py   (ou a Chave 5)
+═══════════════════════════════════════════════════════════════════════════════════════
+⛔ APOSENTADO EM 10/Ago/2026 — DUAS AGENDAS PARA A MESMA DECISÃO
+═══════════════════════════════════════════════════════════════════════════════════════
+
+Existiam DOIS painéis de curadoria, cada um gravando a aprovação num arquivo DIFERENTE:
+
+    administrador.py  (Chave 3)  →  saidas/agenda_envio.csv
+    painel_curadoria.py (Chave 5) →  outputs/agenda_curadoria.json     ← este
+
+Em 10/Ago o `distribuidor.py` passou a ler a fila da curadoria antes de enviar — e ele lê a
+do ADMINISTRADOR. A partir daí, aprovar aqui virou uma decisão que nunca chega ao WhatsApp:
+o painel diz "agendado", o Dr. Eduardo confia, e nada sai. Silêncio perfeito.
+
+Perguntado qual usava de verdade, ele respondeu: **o Administrador (Chave 3)**. É o que ele
+elogiou em 09/Ago e onde o ACRI em texto foi posto no mesmo dia.
+
+É a LEI 9 na forma mais perigosa: não são duas verdades brigando (isso a gente percebe), é
+uma verdade sendo escrita num arquivo que ninguém lê. O mesmo formato do `agenda_envio.csv`
+que ficou 5 dias sem leitor.
+
+Não apaguei o arquivo — a tela dele tem coisa boa (filtro por nota, os 7 dias à frente) que
+pode voltar para o Administrador um dia. O que morre é a capacidade de AGENDAR por aqui.
 """
 from __future__ import annotations
-import os, json, datetime, re
+import os, json, datetime, re, sys
 import requests
 import streamlit as st
 from dotenv import load_dotenv
+
+# ═══ GUARDA — recusa no próprio arquivo, como os outros portões aposentados da casa ═══
+if os.getenv("CD_PAINEL_CURADORIA_LEGADO") != "1":
+    st.set_page_config(page_title="Painel de Curadoria — APOSENTADO", page_icon="⛔")
+    st.error("### ⛔ Este painel foi aposentado em 10/Ago/2026")
+    st.markdown("""
+**Use a Chave 3 · Administrador.**
+
+Existiam dois painéis de curadoria gravando em arquivos diferentes:
+
+| painel | grava em | quem lê |
+|---|---|---|
+| **Administrador (Chave 3)** | `saidas/agenda_envio.csv` | ✅ o `distribuidor.py` |
+| Painel de Curadoria (este) | `outputs/agenda_curadoria.json` | ❌ ninguém |
+
+Desde que o distribuidor passou a obedecer a curadoria, aprovar **aqui** seria uma decisão
+que nunca chega ao WhatsApp — o painel diria "agendado" e nada sairia.
+
+*(Se precisar abrir só para consultar o histórico:* `CD_PAINEL_CURADORIA_LEGADO=1` *antes
+de rodar. Mas o que for agendado aqui continua não sendo enviado.)*
+    """)
+    st.stop()
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_HERE, "..", ".env"))

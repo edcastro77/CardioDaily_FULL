@@ -694,18 +694,23 @@ def enviar_artigo(phone, artigo):
 # DISTRIBUIÇÃO DE ARTIGOS (07:00)
 # =============================================================================
 
-def distribuir_artigos():
+def distribuir_artigos(dry_run: bool = False):
     log.info("=" * 60)
-    log.info("DISTRIBUIÇÃO DIÁRIA — 07:00")
+    log.info("ENSAIO — NADA SERÁ ENVIADO" if dry_run else "DISTRIBUIÇÃO DE ARTIGOS")
     log.info(f"Data: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    log.info(f"Janela: data_publicacao >= {_data_publicacao_inicio(JANELAS_FALLBACK[0])} ({JANELAS_FALLBACK[0]}d), piso {DATA_PUBLICACAO_PISO}")
+    log.info("Fonte: FILA DA CURADORIA (Chave 3) — só o que o Dr. Eduardo aprovou")
     log.info("=" * 60)
 
-    # Verificar conexão Z-API antes de qualquer envio
-    if not zapi_check_connected():
-        log.error("❌ Z-API desconectada — distribuição abortada. Reconecte e dispare manualmente.")
-        sys.exit(1)
-    log.info("✅ Z-API conectada")
+    # Verificar conexão Z-API antes de qualquer envio.
+    # No ENSAIO isso é pulado: o ensaio existe para conferir a MENSAGEM, e não faz sentido
+    # ele falhar porque o WhatsApp caiu — a conferência do texto não depende da rede.
+    if dry_run:
+        log.info("🧪 ENSAIO: não checo a Z-API e não envio nada.")
+    else:
+        if not zapi_check_connected():
+            log.error("❌ Z-API desconectada — distribuição abortada. Reconecte e dispare manualmente.")
+            sys.exit(1)
+        log.info("✅ Z-API conectada")
 
     sb = conectar_supabase()
     assinantes = buscar_assinantes_ativos(sb)
@@ -750,6 +755,23 @@ def distribuir_artigos():
         for artigo in selecionados:
             tema_tag = artigo.pop("_tema", "")
             log.info(f"  → [{tema_tag}] {artigo.get('titulo','')[:55]}...")
+
+            if dry_run:
+                # ENSAIO: mostra o que SERIA enviado e as peças que existem. Não sobe PDF,
+                # não chama a Z-API, não marca o artigo como enviado no Supabase.
+                # ⚠️ O `registrar_envio` é o ponto perigoso: se rodasse no ensaio, o artigo
+                # entraria em `artigos_enviados` e NUNCA MAIS seria mandado — o ensaio teria
+                # queimado o artigo em silêncio. É por isso que o corte é aqui, e não só na
+                # chamada da Z-API.
+                va = "✅" if artigo.get("caminho_visual_abstract") else "❌"
+                au = "✅" if artigo.get("caminho_audio") else "❌"
+                pdf = "✅" if str(artigo.get("caminho_pdf") or "").startswith("http") else "❌"
+                log.info(f"       nota {artigo.get('nota_aplicabilidade')}/10 · {artigo.get('revista','')}")
+                log.info(f"       visual {va}  áudio {au}  PDF {pdf}")
+                log.info(f"       gancho: {(artigo.get('gancho_abertura') or '(sem gancho)')[:88]}")
+                total += 1
+                continue
+
             # Garantia: se caminho_pdf sumiu do Supabase, gera on-the-fly
             if not artigo.get("caminho_pdf"):
                 url = _gerar_e_subir_pdf(artigo["doc_id"])
@@ -761,11 +783,14 @@ def distribuir_artigos():
             doc_ids.append(artigo["doc_id"])
             total += 1
 
-        if doc_ids:
+        if doc_ids and not dry_run:
             registrar_envio(sb, assinante["id"], doc_ids, ja_enviados)
 
     log.info(f"\n{'=' * 60}")
-    log.info(f"CONCLUÍDO — {total} artigos enviados")
+    if dry_run:
+        log.info(f"ENSAIO — {total} artigo(s) SERIAM enviados. Nada saiu, nada foi marcado.")
+    else:
+        log.info(f"CONCLUÍDO — {total} artigos enviados")
     log.info("=" * 60)
 
 
@@ -1242,7 +1267,12 @@ if __name__ == "__main__":
     elif modo == "lista_semanal":
         distribuir_lista_semanal(dry_run=dry)
     elif modo == "artigos":
-        distribuir_artigos()
+        # 10/Ago — `artigos` era o ÚNICO modo sem --dry-run. `semana` e `lista_diaria` tinham;
+        # justo o que manda o artigo do dia, não. Escrevi a Chave 21 chamando `--dry-run` aqui
+        # e ela teria caído na primeira execução, no ensaio, que é exatamente onde o Dr. Eduardo
+        # confia que nada acontece. Ensaio antes de enviar é regra da casa — não pode faltar
+        # justamente no caminho que fala com o WhatsApp dele.
+        distribuir_artigos(dry_run=dry)
     elif modo == "radar":
         distribuir_radar()
     elif modo == "semana":
