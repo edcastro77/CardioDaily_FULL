@@ -170,15 +170,17 @@ R3 · GUIDELINE É GRADUAÇÃO DE RECOMENDAÇÃO, NÃO É O NOME NO TÍTULO.
    POR QUÊ ISTO IMPORTA: a análise da diretriz mede o percentual de recomendações apoiadas em
    evidência A, B ou C. Um documento sem graduação não tem o que medir.
 
-R4 · PÁGINAS SEPARAM REVISÃO DE PONTO DE VISTA — e só isso.
-   O número de páginas do PDF está declarado logo abaixo. Use-o SOMENTE para escolher entre
-   revisao_geral e ponto_de_vista (e para reconhecer tributo). NUNCA para artigo_original,
-   meta-análise ou diretriz — nesses o que manda é a R1, a R2 e a R3.
-     menos de 3 páginas → ponto_de_vista ou tributo. Não existe revisão, original nem meta
-        com menos de 3 páginas.
-     mais de 5 páginas  → se o texto estiver entre revisão e ponto de vista, é revisao_geral,
-        AINDA QUE a revista tenha impresso VIEWPOINT no topo.
-   O teste que confirma: um ponto de vista opina sobre o CAMPO e não delimita tema
+R4 · PÁGINAS SEPARAM REVISÃO DE PONTO DE VISTA — E NADA MAIS.
+   O total de páginas do PDF está declarado logo abaixo. Ele serve para UMA decisão, e só uma:
+   quando você já concluiu que o texto é revisao_geral OU ponto_de_vista e está em dúvida entre
+   os dois.
+     menos de 3 páginas → ponto_de_vista
+     mais de 5 páginas  → revisao_geral, AINDA QUE a revista tenha impresso VIEWPOINT no topo
+   ⛔ NÃO use o número de páginas para NENHUMA outra decisão. Não para separar artigo original,
+   meta-análise, diretriz, minirrevisão, tributo ou relato de caso — nesses, quem manda é a R1
+   (IMRD/pacientes), a R2 (síntese) e a R3 (graduação). Um artigo original de 4 páginas continua
+   sendo artigo original; uma diretriz de 2 páginas continua sendo diretriz.
+   O teste que confirma a escolha: um ponto de vista opina sobre o CAMPO e não delimita tema
    ("não avança sobre uma doença específica"); uma revisão DELIMITA um tema e se propõe a
    revisá-lo, mesmo trazendo o olhar próprio do autor.
 

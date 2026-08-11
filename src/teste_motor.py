@@ -1746,6 +1746,59 @@ def teste_acri_nao_diz_sim_nao_para_todo_mundo():
         checa(f"ACRI sabe o caso: {termo}", termo in txt, "o prompt não cobre este tipo")
 
 
+def teste_pagina_so_separa_revisao_de_ponto_de_vista():
+    """10/Ago — O DR. EDUARDO TEVE DE REPETIR A REGRA PORQUE EU A ESTIQUEI.
+
+    Ele deu o critério: *"em praticamente todos os pontos de vista que vi tem menos de 3 páginas
+    — se tem mais de 5 páginas, independente do que for, fica como revisão"*. Ao ver o risco,
+    ele mesmo delimitou: *"estou diferenciando apenas revisão de ponto de vista — isto não se
+    aplica a artigo original, que no caso seria obrigatório o IMRD."*
+
+    Eu escrevi a R4 e mesmo assim estiquei em dois lugares: pus "(e para reconhecer tributo)" e
+    a frase "não existe revisão, original nem meta com menos de 3 páginas". Ele voltou: *"o
+    número de páginas só é útil para avaliar se estamos diante de uma revisão ou ponto de vista.
+    Não deve ser usado para nenhuma outra ocasião."*
+
+    POR QUE A REGRA APERTADA IMPORTA — medido no gabarito de 105 antes de eu codar:
+        artigo_original                  28 de 29 têm >5 páginas
+        revisao_sistematica_meta_analise  8 de  8
+        guideline                         6 de  7
+        minirevisao                      28 de 46
+    Uma régua de página solta no prompt viraria 70 dos 105 em revisão. O tributo se reconhece
+    pelo RÓTULO IMPRESSO (TRIBUTE, IN MEMORIAM), não pelo tamanho — e é assim que ele está
+    implementado, no `classificador_pubmed.eh_tributo`.
+    """
+    import os
+    import re
+    import classificador_prompt as CP
+
+    p = CP.PROMPT
+    checa("a R4 existe no prompt", "R4 ·" in p, "a regra da página sumiu")
+    checa("a R4 tem a PROIBIÇÃO explícita de usar página noutra decisão",
+          "NENHUMA outra decisão" in p,
+          "a trava textual sumiu — a régua de página volta a poder decidir qualquer coisa")
+
+    # o bloco da R4, isolado: nele NÃO pode aparecer nenhum outro tipo como consequência
+    m = re.search(r"R4 ·.*?(?=\nR5 ·)", p, re.S)
+    checa("o bloco da R4 foi encontrado", bool(m), "a numeração das regras mudou — refazer a trava")
+    if m:
+        bloco = m.group(0)
+        # as únicas duas saídas permitidas da régua de página
+        saidas = set(re.findall(r"→\s*([a-z_]+)", bloco))
+        checa(f"a R4 só decide revisao_geral e ponto_de_vista (achei {sorted(saidas)})",
+              saidas <= {"revisao_geral", "ponto_de_vista"},
+              "a régua de página voltou a decidir outro tipo — foi assim que eu estiquei a regra "
+              "dele em 10/Ago, e ela transformaria 70 dos 105 artigos do gabarito em revisão")
+
+    # e o campo tem de continuar chegando ao modelo (senão a R4 é decoração — o defeito de 06/Ago)
+    montado = CP.montar("texto qualquer", paginas=7)
+    checa("o total de páginas chega ao prompt", "Total de páginas do PDF: 7" in montado,
+          "o campo parou de viajar: a R4 vira letra morta e ninguém percebe")
+    checa("sem o número, o prompt diz 'não informado' em vez de mentir 0",
+          "não informado" in CP.montar("texto", paginas=0),
+          "um PDF que não abriu passaria como se tivesse 0 páginas → viraria ponto de vista")
+
+
 def teste_o_llm_le_todo_artigo():
     """10/Ago — O RÓTULO IMPRESSO DECIDIA 34% DOS ARTIGOS E O LLM NUNCA ERA CHAMADO.
 
