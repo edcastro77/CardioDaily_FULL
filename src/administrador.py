@@ -12,7 +12,28 @@ import streamlit as st
 
 AZUL = "#0B3D91"
 _HERE = os.path.dirname(os.path.abspath(__file__))
-AGENDA = os.path.abspath(os.path.join(_HERE, "..", "..", "saidas", "agenda_envio.csv"))
+
+# ═══ 11/Ago/2026 — UM `..` A MAIS, E A APROVAÇÃO CAÍA FORA DO PROJETO ═══
+#
+# Era `os.path.join(_HERE, "..", "..", "saidas", ...)`. Este arquivo mora em
+# `CardioDaily_FULL/src/`, então DOIS `..` sobem para `CardioDaily_FULL` e depois para
+# `~/projetos` — e a agenda era gravada FORA do projeto:
+#     gravava em : ~/projetos/saidas/agenda_envio.csv
+#     lida em    : ~/projetos/CardioDaily_FULL/saidas/agenda_envio.csv
+#
+# Enquanto ninguém lia o arquivo (até 10/Ago), o erro era invisível: o painel dizia
+# "Agendado para <data>", a fila aparecia na tela — porque `ler_agenda` lia do mesmo lugar
+# errado — e tudo parecia funcionar. O defeito só apareceu quando a Chave 21 passou a
+# procurar a agenda no lugar CERTO e não achou.
+#
+# É o formato mais perigoso de erro deste projeto, e o terceiro do mesmo tipo em dois dias:
+# gravar e ler no mesmo lugar errado é internamente coerente. Nada quebra, ninguém percebe,
+# e a confiança do Dr. Eduardo é gasta num "aprovei e não chegou".
+#
+# Um `..` só. E confirmado por cálculo, não por leitura — a linha abaixo tem de bater com o
+# que a Chave 21 procura: `$CD_FULL/saidas/agenda_envio.csv`.
+_RAIZ = os.path.dirname(_HERE)                       # .../CardioDaily_FULL
+AGENDA = os.path.join(_RAIZ, "saidas", "agenda_envio.csv")
 
 
 def _carregar_env():

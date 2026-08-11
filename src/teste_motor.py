@@ -1746,6 +1746,67 @@ def teste_acri_nao_diz_sim_nao_para_todo_mundo():
         checa(f"ACRI sabe o caso: {termo}", termo in txt, "o prompt não cobre este tipo")
 
 
+def teste_quem_grava_e_quem_le_apontam_para_o_mesmo_arquivo():
+    """11/Ago — UM `..` A MAIS, E A APROVAÇÃO DELE CAÍA FORA DO PROJETO.
+
+    ═══ O CASO ═══
+    O `administrador.py` mora em `CardioDaily_FULL/src/` e montava a agenda com DOIS `..`:
+        gravava em : ~/projetos/saidas/agenda_envio.csv          ← fora do projeto
+        lida em    : ~/projetos/CardioDaily_FULL/saidas/…        ← dentro
+    Enquanto ninguém lia o arquivo, o erro era INVISÍVEL: o painel dizia "Agendado para
+    <data>", a fila aparecia na tela — porque `ler_agenda` lia do mesmo lugar errado — e tudo
+    parecia funcionar. Só apareceu quando a Chave 21 passou a procurar no lugar certo.
+
+    ═══ POR QUE ISTO MERECE UMA TRAVA ═══
+    É o TERCEIRO erro do mesmo formato em dois dias, e o formato é sempre este: duas pontas
+    concordando sobre uma coisa errada, ou discordando sobre uma coisa certa, sem nada
+    quebrando no meio.
+        09/Ago  o `agenda_envio.csv` era gravado e ninguém lia
+        10/Ago  `tributo` (o tipo) e `DESCARTAR` (o destino) eram a mesma coisa com dois nomes
+        11/Ago  gravar e ler o MESMO nome, em pastas diferentes
+    Nada disso levanta exceção. É sempre internamente coerente e sempre gasta a confiança do
+    Dr. Eduardo num "eu aprovei e não chegou".
+
+    Esta trava confere, por CÁLCULO e não por leitura, que quem grava e quem lê a agenda
+    apontam para o mesmo arquivo — e que ele fica DENTRO do projeto.
+    """
+    import os
+    import re
+
+    src = os.path.dirname(os.path.abspath(__file__))
+    raiz = os.path.dirname(src)
+
+    # 1) o que o administrador usa de verdade (importado, não lido)
+    import administrador as AD
+    esperado = os.path.join(raiz, "saidas", "agenda_envio.csv")
+    checa("o Administrador grava a agenda DENTRO do projeto",
+          os.path.abspath(AD.AGENDA) == os.path.abspath(esperado),
+          f"grava em {AD.AGENDA} · esperado {esperado}")
+
+    # 2) o que o distribuidor procura
+    dist = os.path.join(raiz, "distribuidor.py")
+    if os.path.exists(dist):
+        t = open(dist, encoding="utf-8").read()
+        m = re.search(r"AGENDA_CSV\s*=\s*(.+)", t)
+        checa("o distribuidor tem um AGENDA_CSV", bool(m), "sumiu — o envio não sabe onde olhar")
+        if m:
+            ns = {"os": os, "__file__": dist}
+            try:
+                exec(f"AGENDA_CSV = {m.group(1)}", ns)
+                checa("quem GRAVA e quem LÊ a agenda apontam para o MESMO arquivo",
+                      os.path.abspath(ns["AGENDA_CSV"]) == os.path.abspath(AD.AGENDA),
+                      f"administrador={AD.AGENDA}  ·  distribuidor={ns['AGENDA_CSV']}")
+            except Exception as e:
+                checa("o AGENDA_CSV do distribuidor é calculável", False, f"{type(e).__name__}: {e}")
+
+    # 3) a Chave 21 procura no mesmo lugar
+    ch = os.path.join(raiz, "chaves", "21_Enviar.command")
+    if os.path.exists(ch):
+        checa("a Chave 21 usa $CD_FULL/saidas/agenda_envio.csv",
+              'AGENDA="$CD_FULL/saidas/agenda_envio.csv"' in open(ch, encoding="utf-8").read(),
+              "a chave aponta para outro lugar — ela diria 'a agenda não existe' para sempre")
+
+
 def teste_pagina_so_separa_revisao_de_ponto_de_vista():
     """10/Ago — O DR. EDUARDO TEVE DE REPETIR A REGRA PORQUE EU A ESTIQUEI.
 
