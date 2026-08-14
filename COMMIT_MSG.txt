@@ -1,177 +1,63 @@
-A VARREDURA DOS 4 SCHEMAS — 05/Ago/2026
+A ENTREGA CHEGOU AO WHATSAPP · O ACRI VOLTOU · O PROTOCOLO NAO PONTUA (11/Ago/2026)
 
-O Dr. Eduardo mandou parar de consertar peça por peça e revisar os quatro schemas coluna por
-coluna: *"com certeza sua memória ou estrutura o impedem de pesar no objetivo final — você só se
-concentra em atividades de curto prazo"*.
+Um dia inteiro contra a MESMA familia de defeito: duas pontas de acordo sobre uma coisa errada,
+ou em desacordo sobre uma coisa certa, e NADA quebrando no meio. Nenhum destes levanta excecao.
 
-Ele estava certo. Nenhum dos achados abaixo aparece olhando uma peça de cada vez; todos aparecem
-olhando a LINHA INTEIRA. Este commit é o resultado.
+═══ A CORRENTE DE ENTREGA — 6 defeitos empilhados ═══
+O Dr. Eduardo aprovou 2 artigos as 09h25 e passou o dia sem receber.
 
-═══════════════════════════════════════════════════════════════════════════════
-1 · O QUE A VARREDURA ACHOU EM CADA SCHEMA
-═══════════════════════════════════════════════════════════════════════════════
+ 1. administrador.py gravava a agenda FORA do projeto (dois `..`); quem lia, lia do mesmo
+    lugar errado — por isso ninguem via.
+ 2. .env · ZAPI_BASE tinha "/send-text" grudado no fim: 104 caracteres onde cabiam 94.
+    {base}/status virava endereco inexistente. Achado por aritmetica, nao por tentativa.
+ 3. buscar_assinantes_ativos so caia no plano B se a consulta levantasse EXCECAO — e ela
+    voltava com lista VAZIA, que e sucesso. "0 entregue, nenhuma falha".
+ 4. zero entregue era relatado como dia tranquilo. Agora e bloco de ERRO.
+ 5. DOIS telefones do dono, diferentes. A trava do beta — que existe para NAO mandar a
+    estranho — pularia o proprio dono. Normalizado na entrada (so_digitos).
+ 6. O PIOR: HTTP 200 e nada chegou. O EDUARDO_PHONE era o numero da PROPRIA INSTANCIA Z-API.
+    O sistema mandou a mensagem para ele mesmo. Sucesso perfeito, entrega zero.
+    ERRO DE LEITURA MEU: li /device (quem MANDA) como se fosse o destinatario, e troquei o
+    numero chumbado — que estava CERTO — pelo do remetente.
+    Trava nova: destinatario nunca pode ser igual ao remetente. Isso e eco, nao envio.
 
-DIRETRIZ — três contradições na mesma linha do banco:
-  · `tipo_documento: diretriz` E `tipo_estudo: artigo_original`, 18 de 18. O `tipo_estudo` vinha
-    do CANÔNICO, que grava "artigo_original" mesmo numa diretriz. Duas colunas respondendo a
-    mesma pergunta — o padrão do `muda_conduta` (3 caminhos, 04/Ago) e do `desfecho_duro`.
-    Agora `tipo_estudo` é DERIVADO de `tipo_documento`, que vem da pasta (LEI 8).
-  · `data_publicacao` sempre AAAA-01-01, 29 de 29 linhas. O focused update do ESC é de NOVEMBRO
-    e estava gravado como janeiro — erro de até 11 meses, que quebra ordenação e agenda de envio.
-    O mês existia no NOME do arquivo (posto pelo classificador, com metadado do PubMed).
-  · `gancho_lista` IDÊNTICO a `contexto_tema` em 9 de 18. Buraco editorial: o leitor lê a mesma
-    frase duas vezes e o gancho perde a função.
+═══ O ACRI SUMIA A MEDIDA QUE O SISTEMA ERA USADO ═══
+O painel indexava so outputs/STAGING (196 pacotes). A Chave 4 move o concluido para
+outputs/ARQUIVO/AAAA-MM (864 pacotes). Dos 37 artigos nota 9 listados, 26 nao achavam pacote.
+Varrendo as duas arvores: 37/37, todos com ACRI. Defeito que PIORA COM O USO.
 
-ARTIGO ORIGINAL — 11 campos órfãos, extraídos e jogados fora:
-  · `financiamento_papel` — a marca registrada do CardioDaily ("ceticismo metodológico,
-    especialmente estudos patrocinados pela indústria" — CLAUDE.md). Extraído e IGNORADO.
-  · 9 campos de MCID (mcid_valor, mcid_reportado, mcid_fonte_metodo, efeito_observado,
-    efeito_excede_limiar, ic_sustenta_relevancia, para_desfecho_duro, tipo_desfecho,
-    desfecho_primario). O modelo fazia a conta campo por campo e o motor lia UM: `classificacao`.
+═══ FILTRO DE DATA NA CHAVE 3 ═══
+Decisao dele: data de PUBLICACAO (1951→2026), padrao VAZIO. Data torta e ignorada COM AVISO;
+janela invertida AVISA; artigo sem data NUNCA e escondido. NameError pego na bancada: `_re`
+usado na linha 173 e importado na 256 — mesmo formato do `_VOO` de 10/Ago.
 
-META — o único schema que não perguntava NADA sobre financiamento.
+═══ PROTOCOLO DE ESTUDO NAO PONTUA ═══
+Tres "Rationale and Design" no Supabase, TODOS com nota 8. Palavras dele: "a intervencao nao
+ocorreu, nao tem taxa de eventos e nao tem aplicabilidade".
+E NINGUEM ERRAVA: o extrator via randomizacao, dois bracos e desfecho primario e escrevia
+`rct` — corretamente, porque o desenho DESCRITO e um RCT. Faltava a palavra `protocolo` no
+vocabulario. Duas portas agora: classificador descarta pelo titulo antes de gastar analise
+(449 titulos reais: pega os 3, ZERO falso positivo) e o motor recusa se algum escapar.
 
-REVISÃO — o mais saudável (3 órfãos em 28). Um deles: `tem_tabela_comparativa`.
+═══ O SILENCIO DO EXTRATOR VIRAVA SELO DE FRAMINGHAM ═══
+`if a.get("retrospectivo")` le None como falso. Das 27 coortes com nota 8, 18 tinham esse
+campo em BRANCO — silencio virava "e prospectiva" e o teto mais alto saia de graca.
+Agora `selo_prospectivo()` exige False EXPLICITO + os tres NHLBI em True explicito, e DIZ o
+que faltou. Efeito isolado: 15 notas mudam, ZERO artigo sai do ar.
 
-═══════════════════════════════════════════════════════════════════════════════
-2 · INDEPENDÊNCIA EDITORIAL — cada motor tratava dinheiro de um jeito, e ninguém decidiu
-═══════════════════════════════════════════════════════════════════════════════
+  ⚠️ O QUE EU QUASE FIZ, E ELE BARROU DUAS VEZES:
+  Propus unificar as duas tabelas de teto, com selo de (Recomendado) — 147 notas, 65 artigos
+  fora do ar. Estava ERRADO: as tabelas nao discordam, respondem PERGUNTAS diferentes. Para
+  etiologia/prognostico o RCT e impossivel e a coorte prospectiva E o teto que a pergunta
+  admite. Ele barrou no caso-limite ("o Framingham agora tira 6 — isto obviamente esta
+  errado!") e depois no escopo ("por que mexer tanto na classificacao de notas?").
+  Revertido. As duas tabelas voltaram inteiras.
+  LICAO DE METODO: eu mostrei so o custo de publicar menos, nunca o de reprovar o que era bom.
 
-  ANTES:  DIRETRIZ 6 campos/20%  ·  REVISÃO 2 campos/15%  ·  ORIGINAL 1 campo IGNORADO  ·  META 0
+═══ TRAVAS QUE NASCERAM ERRADAS (e por que isso importa) ═══
+Tres delas aprovavam lendo o lugar errado — docstring em vez de codigo, disco em vez do
+painel, parenteses dentro de string. E uma estava escrita AO CONTRARIO, chumbando a regua que
+ele recusou: trava com a regua errada nao deixa so o defeito passar, ELA IMPEDE O CONSERTO.
+Todas provadas por sabotagem antes de entrar.
 
-Um RCT patrocinado, com o financiador desenhando o estudo e escrevendo o manuscrito, tirava a
-MESMA nota de um ensaio acadêmico independente.
-
-RÉGUA DO DR. EDUARDO (05/Ago): diretriz até 20% · os outros três até 10%.
-  · DIRETRIZ mantém os 20% do domínio AGREE `independencia`.
-  · REVISÃO fica nos 15% que ELE aprovou em 02/Ago — baixar seria revogar decisão dele sem
-    que ele pedisse (LEI 3). Registrado, não esquecido.
-  · ORIGINAL e META ganham `desconto_independencia` de até 1,0 ponto (=10%):
-        financiador desenhou/analisou/escreveu ....... −1,0
-        patrocinou, mas ficou fora (declarado) ....... −0,3
-        público ou sem indústria ..................... 0
-  · a META ganhou 4 campos novos, incluindo o AMSTAR-2 item 10 (financiamento dos INCLUÍDOS).
-
-═══════════════════════════════════════════════════════════════════════════════
-3 · MCID CONFERIDO — a CONTA manda no RÓTULO, e nunca o contrário
-═══════════════════════════════════════════════════════════════════════════════
-
-Palavras dele: *"devemos usar este esquema que é muito bom — e deve pesar muito"*.
-
-O motor passa a CHECAR a conta que o extrator já fazia:
-        efeito_excede_limiar = false .................... teto 6
-        excede, mas ic_sustenta_relevancia = false ...... teto 7
-        'robusto' sem MCID declarado .................... teto 8  (é juízo, não medida)
-        'robusto' sobre desfecho substituto ............. teto 8
-
-A REGRA-MÃE é ASSIMÉTRICA de propósito: os fatos REBAIXAM o rótulo, nunca o PROMOVEM. Se o
-extrator disse "incerto" e a conta é boa, continua "incerto". Cautela não se desfaz por número.
-E `null` (não avaliável) NÃO capa — só `false` capa. Punir o silêncio do artigo em vez do defeito
-dele foi erro cometido duas vezes esta semana.
-
-O prompt do artigo original passa a AVISAR que esses campos deixaram de ser decorativos, com a
-instrução explícita de não inventar limiar para inflar nota de estudo que não mediu.
-
-═══════════════════════════════════════════════════════════════════════════════
-4 · A REVISÃO VALORIZA A TABELA COMPARATIVA
-═══════════════════════════════════════════════════════════════════════════════
-
-`tem_tabela_comparativa` estava no schema e ninguém lia — sendo que é a TAREFA #25 da lista dele,
-pendente desde 30/Jul ("Perícia com TABELAS"). Agora vale +1 em `conduta_acionavel` (30% da
-utilidade), igual ao `traz_valores_corte_ou_doses`. VALORIZA, não capa — mesma lógica do NNT.
-
-═══════════════════════════════════════════════════════════════════════════════
-5 · A COLUNA `descartado` FOI APAGADA DA TABELA
-═══════════════════════════════════════════════════════════════════════════════
-
-Nada jamais escreveu `true`: o ficha_site gravava False fixo e ninguém lia. E depois da decisão de
-04/Ago (artigo reprovado tem a LINHA APAGADA), ela perdeu o último sentido possível.
-
-A ORDEM IMPORTOU: a varredura achou SEIS blocos usando a coluna, e o `ALTER TABLE` só veio DEPOIS
-de os seis serem limpos — senão o painel de curadoria e o backfill quebrariam (filtravam
-`descartado=eq.false`) e o publicador também (validava o tipo no preflight).
-    ficha_site · publicador · contrato · administrador (×2) · painel_curadoria · backfill
-Tabela agora: 29 colunas.
-
-═══════════════════════════════════════════════════════════════════════════════
-6 · AS PALAVRAS-CHAVE — dois buracos diferentes, achados em sequência
-═══════════════════════════════════════════════════════════════════════════════
-
-  · TRÊS prompts pediam os termos "EM INGLÊS", com todas as letras. O focused update de
-    dislipidemia do ESC subiu com `dyslipidaemia`, `LDL cholesterol`, `bempedoic acid`. Medido:
-    18 de 18 diretrizes com termo em inglês, só 4 com português. O cardiologista brasileiro
-    digita `dislipidemia` e não achava nada — a diretriz é o documento mais buscado do acervo
-    e era o pior indexado.
-  · o prompt da META não dizia NADA (e o schema pedia o campo). Das 11 publicadas, 7 com inglês
-    e 9 com português — cada uma de um jeito, porque ninguém mandou.
-
-Corrigido nos 4 prompts E nos 4 schemas (description). Campo sem instrução é campo preenchido
-a esmo — e a esmo, em inglês.
-
-═══════════════════════════════════════════════════════════════════════════════
-7 · A DIRETRIZ NÃO TEM PORTA — a única exceção da LEI 10
-═══════════════════════════════════════════════════════════════════════════════
-
-*"As diretrizes — precisamos manter esta classificação mas não teremos nenhum impedimento para
-subir. Mesmo com as limitações, é o que tem para hoje."*
-
-Não é brecha: para uma meta ruim existe outra melhor, e reter não custa nada ao leitor. Não existe
-"outra diretriz de fibrilação atrial" — existe A diretriz. Se é fraca, o médico precisa saber que
-é fraca E mesmo assim precisa dela, porque é por ela que será cobrado.
-
-  · sobe em QUALQUER nota, com pacote completo (ACRI · perícia · visual · áudio)
-  · áudio com ROTEIRO PRÓPRIO: 6-8 min, 900-1.200 palavras (o dobro do artigo), e uma obrigação
-    que os outros não têm — dizer a nota EM VOZ ALTA e traduzir o jargão AGREE
-    ("ninguém de fora leu antes de publicar", "a maior parte é opinião de especialista")
-  · a exceção é SÓ da diretriz: *"ESTA REGRA SÓ VALE PARA DIRETRIZ."*
-Medido: 13 de 31 diretrizes ficavam retidas com nota 4 e 5 — ESC, AHA, ESPEN, NICE.
-
-═══════════════════════════════════════════════════════════════════════════════
-8 · O PORTÃO PASSA A RETRATAR
-═══════════════════════════════════════════════════════════════════════════════
-
-Ele publicava e nunca retratava. Um artigo reprovado de 8 para 5 saía para _RECUSADOS no disco e
-CONTINUAVA no banco valendo 8, pronto para ir ao ar — o inverso exato da LEI 10. Foi assim que a
-contradição `nota 9 · muda_conduta NÃO` reapareceu depois de a gente matá-la: era linha velha.
-Agora o `publicador` apaga a linha antiga quando o contrato recusa (opção A, decisão dele).
-
-═══════════════════════════════════════════════════════════════════════════════
-9 · O CARIMBO DO STAGING SÓ VIGIAVA OS PROMPTS
-═══════════════════════════════════════════════════════════════════════════════
-
-Ele rodou a Chave 2 depois de a régua da meta ser reescrita e a rodada terminou em SEGUNDOS —
-"reusado (staging pronto)" nos 24. Desconfiou sozinho: *"foi muito rápido, está certo isso?"*.
-Não estava: nenhum PROMPT tinha mudado, o que mudou foi o MOTOR — e o motor não estava no carimbo.
-Republicou as notas da régua velha. Agora `versoes_atuais` carimba também `notas_prototipo.py` e
-`analise.py`. AGRAVANTE MEU: numa auditoria que ELE pediu, conferi prompts, schemas, redatores,
-bateria e cadeias — e não conferi o carimbo, que era o que decidia se a rodada faria algo.
-
-═══════════════════════════════════════════════════════════════════════════════
-AS TRAVAS — 48 verdes, cada uma PROVADA POR SABOTAGEM
-═══════════════════════════════════════════════════════════════════════════════
-
-  teste_diretriz_nao_tem_porta ......... porta volta → 30 falhas · exceção vaza → 12 falhas
-  teste_keywords_em_portugues .......... 4 prompts + 4 schemas
-  teste_ficha_sem_contradicao .......... tipo · mês · gancho (as 3 sabotagens mordem)
-  teste_contrato_espelha_a_tabela ...... a coluna morta não renasce
-  teste_independencia_editorial ........ desconto zerado → 5 falhas
-  teste_mcid_confere_a_conta ........... rótulo aceito de volta → 5 falhas
-  teste_revisao_valoriza_tabela ........ valoriza sem punir quem não tem
-  teste_carimbo_ve_o_motor ............. carimbo cego → 2 falhas
-
-Quebrei cada regra de propósito e conferi que a bateria acusa. Trava que não morde não é trava.
-
-═══════════════════════════════════════════════════════════════════════════════
-O QUE ESTE COMMIT NÃO RESOLVE
-═══════════════════════════════════════════════════════════════════════════════
-
-  · NADA disto rodou com dado real ainda. É "testei aqui": função pura, fatos de mentira.
-    O carimbo mudou → as 24 metas e as 31 diretrizes serão REANALISADAS na próxima Chave 2.
-  · `achados_principais` (original) e `temas_principais`/`o_que_ensina` (revisão) seguem órfãos —
-    são texto que o redator talvez use pelo contexto. NÃO MEDI, então não afirmo.
-  · lentidão: 129s/artigo. O Visual Abstract tirou ~30s; faltam o PDF (WeasyPrint sobe do zero
-    a cada artigo) e o paralelismo entre artigos.
-  · tarefa #37 (PROVA DA EXTRAÇÃO) continua aberta — e ficou mais urgente: a régua agora depende
-    de 9 campos de MCID que só o extrator produz.
-
-Bateria: APROVADO · 48 travas · Tabela: 29 colunas
+65 travas passando. Vermelha so a de 3 pacotes meta na trilha de original (anterior a hoje).

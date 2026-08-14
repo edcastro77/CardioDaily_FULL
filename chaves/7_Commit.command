@@ -75,7 +75,40 @@ if [ -n "$SUSPEITOS" ] || [ -n "$VAZANDO" ]; then
 fi
 echo "   ✓ portão de segredo: nenhum arquivo com nome nem conteúdo de chave"
 echo
-echo "── MENSAGEM (primeiras linhas) ──"
+# ═══ 11/Ago/2026 — A MENSAGEM ESTAVA VELHA E NINGUÉM VIU ═══
+#
+# O Dr. Eduardo rodou a Chave 7 duas vezes hoje. Os dois commits saíram com o título
+# "A VARREDURA DOS 4 SCHEMAS — 05/Ago/2026" — uma mensagem escrita em 09/Ago, sobre trabalho
+# de 05/Ago. O que foi commitado hoje era outra coisa inteira: o telefone do distribuidor, o
+# ACRI do painel, o filtro de data, o bloqueio de protocolo, o teto do desenho.
+#
+# O histórico do git passou a MENTIR — e o histórico é o que sobra quando ninguém lembra.
+# Daqui a um mês, procurando "quando foi que o protocolo passou a ser bloqueado", a resposta
+# vai ser um commit chamado "varredura dos 4 schemas".
+#
+# A chave imprimia só as 3 primeiras linhas, ele lia "A VARREDURA DOS 4 SCHEMAS" e confirmava.
+# É a mesma família do dia: a tela mostra algo plausível e o estado é outro.
+#
+# Agora a chave COMPARA a idade do COMMIT_MSG.txt com a do arquivo mais novo da fila. Se a
+# mensagem for mais velha que o trabalho, ela PARA.
+NOVO=$(git diff --cached --name-only | while read -r f; do [ -f "$f" ] && stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null; done | sort -rn | head -1)
+MSG=$(stat -f %m COMMIT_MSG.txt 2>/dev/null || stat -c %Y COMMIT_MSG.txt 2>/dev/null)
+echo "── MENSAGEM ──"
+if [ -n "$NOVO" ] && [ -n "$MSG" ] && [ "$MSG" -lt "$NOVO" ]; then
+  echo
+  echo "   🔴 A MENSAGEM É MAIS VELHA QUE O TRABALHO — COMMIT RECUSADO"
+  echo
+  echo "      COMMIT_MSG.txt escrito em : $(date -r $MSG '+%d/%b %H:%M' 2>/dev/null)"
+  echo "      arquivo mais novo da fila : $(date -r $NOVO '+%d/%b %H:%M' 2>/dev/null)"
+  echo
+  echo "      Primeira linha da mensagem: \"$(head -1 COMMIT_MSG.txt)\""
+  echo
+  echo "   Em 11/Ago dois commits saíram com a mensagem de 05/Ago, e o histórico passou a"
+  echo "   mentir sobre o que foi feito. Reescreva o COMMIT_MSG.txt e rode a chave de novo."
+  echo
+  git reset -q
+  read -p "Enter para fechar. "; exit 1
+fi
 head -3 COMMIT_MSG.txt
 echo "   [...] (mensagem completa em COMMIT_MSG.txt)"
 echo
@@ -88,7 +121,34 @@ fi
 
 git commit -F COMMIT_MSG.txt && echo && git log --oneline -1
 echo
-echo "Para enviar ao GitHub:  git push"
+
+# ═══ 11/Ago — E O PUSH NUNCA ACONTECIA ═══
+# A chave imprimia "Para enviar ao GitHub: git push" e fechava. Ele rodou a Chave 7 duas
+# vezes hoje achando que o trabalho estava salvo — e estavam **10 commits** só no Mac dele.
+# Uma instrução impressa não é uma ação executada. A chave passa a OFERECER o push, e a
+# dizer com todas as letras quando NÃO enviou.
+FALTAM=$(git log --oneline @{u}..HEAD 2>/dev/null | wc -l | tr -d ' ')
+echo "══════════════════════════════════════════════════════════"
+if [ "${FALTAM:-0}" -eq 0 ]; then
+  echo "   ✅ O GitHub está em dia."
+else
+  echo "   ⚠️  $FALTAM commit(s) existem SÓ NESTE MAC."
+  echo "      Se o disco morrer agora, morre com ele."
+  echo
+  read -p "   Enviar ao GitHub agora? [s/N]: " P
+  echo
+  case "$P" in
+    s|S|sim|SIM)
+      if git push; then
+        echo; echo "   ✅ ENVIADO. Agora existe em outro lugar além deste Mac."
+      else
+        echo; echo "   🔴 O PUSH FALHOU (veja o erro acima). O trabalho continua só aqui."
+      fi ;;
+    *)
+      echo "   🔴 NÃO ENVIADO — os $FALTAM commit(s) continuam só neste Mac." ;;
+  esac
+fi
+echo "══════════════════════════════════════════════════════════"
 echo "(o cron do Actions roda do main — se este trabalho tem que ir pra produção, precisa ir pro main)"
 echo
 read -p "Enter para fechar. "
