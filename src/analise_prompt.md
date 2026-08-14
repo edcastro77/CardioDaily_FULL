@@ -10,7 +10,16 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
   "revista": "<revista>",
   "ano": "<ano>",
   "pergunta": "<um de: intervencao | etiologia | prognostico | diagnostico>  (intervencao = testa um TRATAMENTO; etiologia = fatores de risco/causa; prognostico = curso/desfecho; diagnostico = acurácia de teste)",
-  "desenho": "<um de: rct | meta | coorte | registro | observacional_ajustado | transversal | caso_controle | antes_depois_sem_controle | serie_de_casos | pre_clinico | nao_classificavel>
+  "desenho": "<um de: rct | meta | coorte | registro | observacional_ajustado | transversal | caso_controle | antes_depois_sem_controle | serie_de_casos | protocolo | pre_clinico | nao_classificavel>
+     ⚠️ protocolo = o ensaio AINDA NÃO ACONTECEU. O artigo descreve como o estudo VAI ser feito:
+        "Rationale and Design of…", "…: Design and Rationale", "Study Protocol", "Statistical Analysis Plan".
+        O TESTE DECISIVO É UM SÓ: **o artigo reporta o resultado do desfecho primário?**
+          · Não reporta — só diz o que PRETENDE medir, quantos PRETENDE recrutar → protocolo.
+          · Reporta número de desfecho medido (HR, RR, p, IC, curva de sobrevida) → NÃO é protocolo.
+        ⚠️ Um protocolo descreve randomização, dois braços e desfecho primário pré-especificado — tudo que
+        parece um RCT. NÃO escreva `rct`: o desenho descrito é de RCT, mas não há RESULTADO para avaliar.
+        Foi assim que três protocolos receberam nota 8 em 11/Ago. Baseline characteristics SOZINHAS
+        (sem desfecho) continuam sendo protocolo.
      ⚠️ pre_clinico = estudo em ANIMAL, CÉLULA, in vitro, ex vivo, modelo murino/knockout, bancada. NÃO é estudo clínico:
         não tem paciente, não tem aplicabilidade clínica. Se o artigo é mecanístico/experimental (mesmo publicado em
         Circulation/JACC/NEJM), use pre_clinico — NÃO force para coorte/observacional/rct.

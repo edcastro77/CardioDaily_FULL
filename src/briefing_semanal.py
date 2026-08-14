@@ -466,7 +466,18 @@ def _enviar_whatsapp(audio_url: str | None, wav_path: Path | None,
     zapi_instance = os.environ.get("ZAPI_INSTANCE_ID", "")
     zapi_token    = os.environ.get("ZAPI_TOKEN", "")
     zapi_client_t = os.environ.get("ZAPI_CLIENT_TOKEN", "")
-    phone         = os.environ.get("EDUARDO_PHONE", "5511999999999")  # número do Dr. Eduardo
+    # 11/Ago — VARREDURA DA LEI 9. O telefone do Dr. Eduardo vivia em três lugares:
+    #   distribuidor.py  "5527996089248"   (chumbado, e VELHO)
+    #   .env             EDUARDO_PHONE     (o certo — a Z-API confirma em /device)
+    #   AQUI             "5511999999999"   ← um número de SÃO PAULO, de exemplo, inventado
+    # Se o .env falhasse, este briefing mandaria o resumo semanal dele para um desconhecido em
+    # São Paulo — e o log diria "enviado". Um telefone de exemplo como plano B não é plano B:
+    # é um destinatário errado com cara de sucesso. Sem telefone, não manda e diz por quê.
+    phone = "".join(c for c in os.environ.get("EDUARDO_PHONE", "") if c.isdigit())
+    if not phone:
+        print("   ⚠️  EDUARDO_PHONE não está no .env — briefing NÃO enviado.")
+        print("      (Antes daqui saía para um número de exemplo. Confira na Chave 13.)")
+        return
 
     if not zapi_instance or not zapi_token:
         print("   ⚠️  Z-API não configurado — WhatsApp ignorado.")

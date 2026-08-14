@@ -69,6 +69,39 @@ if _missing:
 # Modo beta: quando BETA_PAUSADO=1, envia apenas para Dr. Eduardo
 BETA_PAUSADO = os.environ.get("BETA_PAUSADO", "1") == "1"
 
+# ═══ 11/Ago/2026 — HAVIA DOIS TELEFONES DO DR. EDUARDO, E NÃO ERAM O MESMO ═══
+#
+#     DR_EDUARDO_PHONE = "5527996089248"    chumbado lá embaixo, perto do fim do arquivo
+#     EDUARDO_PHONE    = "55279881…"        no .env — e é ESTE que a Z-API confirmou
+#                                           conectado ("phone":"5527988149519" em /device)
+#
+# A trava do beta é `if BETA_PAUSADO and phone != DR_EDUARDO_PHONE: pular`. Com o destinatário
+# vindo do .env (conserto de agora há pouco em buscar_assinantes_ativos), ela compararia
+# 55279881… com 55279960… e PULARIA o próprio dono — imprimindo "beta pausado, pulando
+# Dr. Eduardo". Ele leria isso sem ter como saber que o sistema guardava DOIS números dele e
+# escolheu o velho para se comparar.
+#
+# É a mesma família do resto do dia: duas fontes para a mesma coisa, uma delas velha, e nada
+# quebrando no meio. Aqui a trava de segurança se voltaria contra quem ela protege.
+#
+# A definição também SOBE para cá, junto das outras configurações: ela morava na linha 1067 e
+# era usada na 844. Funciona em Python (o nome só é resolvido na hora da chamada), mas é o tipo
+# de coisa que quebra no dia em que alguém importar o módulo e chamar a função direto.
+def so_digitos(fone):
+    """'+55 (27) 98814-9519' → '5527988149519'.
+
+    O telefone entra em DOIS lugares e os dois se importam com a pontuação:
+      · a COMPARAÇÃO do portão do beta — '+55 27…' != '5527…' para o Python;
+      · o ENVIO — a Z-API quer o número corrido, sem '+', parêntese ou hífen.
+    Se o Dr. Eduardo digitar o número no .env do jeito que a gente escreve telefone, as duas
+    coisas quebram em silêncio: o portão pula, e se não pulasse a Z-API recusaria. Normalizar
+    na ENTRADA resolve os dois de uma vez — daí esta função vir antes de tudo."""
+    return "".join(c for c in str(fone or "") if c.isdigit())
+
+
+# Normalizado JÁ AQUI: o resto do arquivo nunca vê pontuação.
+DR_EDUARDO_PHONE = so_digitos(os.environ.get("EDUARDO_PHONE", "")) or "5527996089248"
+
 # Distribuição
 ARTIGOS_POR_DIA = 1
 JANELA_DIAS    = 15          # busca nos últimos 15 dias
@@ -206,24 +239,62 @@ def conectar_supabase():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
+_TODOS_OS_TEMAS = ["coronaria", "arritmia", "miocardiopatias", "prevencao",
+                   "valvulopatias", "uti", "imagem", "cardiometabolico"]
+
+
+def _eduardo_do_env():
+    """O Dr. Eduardo, montado a partir do EDUARDO_PHONE.
+
+    11/Ago: lia `os.getenv("EDUARDO_PHONE")` por conta própria — ou seja, era a TERCEIRA
+    grafia do mesmo telefone no arquivo. Agora usa o DR_EDUARDO_PHONE, que é o mesmo valor
+    que o portão do beta compara. Um telefone, um lugar."""
+    if not DR_EDUARDO_PHONE:
+        return []
+    return [{"phone": DR_EDUARDO_PHONE, "nome": "Dr. Eduardo", "temas": list(_TODOS_OS_TEMAS),
+             "id": None, "ativo": True, "artigos_enviados": []}]
+
+
 def buscar_assinantes_ativos(sb):
+    """Quem recebe. Hoje: o Dr. Eduardo, e mais ninguém (beta).
+
+    ═══ 11/Ago/2026 — O FALLBACK SÓ VALIA PARA ERRO, NÃO PARA LISTA VAZIA ═══
+    Ele aprovou 2 artigos, a Z-API finalmente conectou, e o envio terminou assim:
+        Assinantes ativos com temas: 0
+        CONCLUÍDO — 0 artigo(s) entregue(s), nenhuma falha
+    A consulta ao Supabase NÃO falhou: devolveu HTTP 200 com uma lista vazia. A tabela
+    `whatsapp_users` não tem ninguém ativo com temas. O `except` nunca disparou, e por isso o
+    fallback do EDUARDO_PHONE — que existe justamente para ele receber — ficou inalcançável.
+
+    "Falhou" e "não achou ninguém" são coisas diferentes, e só a primeira estava tratada.
+    É a mesma família do timeout que virou "desconectada" e do NOT_FOUND que virou "instância
+    inexistente": UM caminho de erro cobrindo dois casos distintos.
+
+    E "0 entregues, nenhuma falha" é a frase mais perigosa deste programa. Zero entregue com
+    dois artigos aprovados NÃO é sucesso — é o envio inteiro não tendo acontecido.
+    """
     for tentativa in range(3):
         try:
             result = sb.table("whatsapp_users").select("*").eq("ativo", True).execute()
-            assinantes = [u for u in result.data if u.get("temas") and len(u["temas"]) > 0]
-            log.info(f"Assinantes ativos com temas: {len(assinantes)}")
-            return assinantes
+            assinantes = [u for u in (result.data or []) if u.get("temas") and len(u["temas"]) > 0]
+            if assinantes:
+                log.info(f"Assinantes ativos com temas: {len(assinantes)}")
+                return assinantes
+            # ── a consulta FUNCIONOU e não achou ninguém ──
+            log.warning("  A tabela `whatsapp_users` não tem ninguém ativo com temas.")
+            eu = _eduardo_do_env()
+            if eu:
+                log.warning(f"  → usando o EDUARDO_PHONE do .env ({eu[0]['phone'][:6]}…) como destinatário.")
+                log.warning("     É o beta: o CardioDaily manda para você e você repassa aos grupos.")
+                return eu
+            log.error("  E o EDUARDO_PHONE também está vazio no .env — NÃO HÁ PARA QUEM MANDAR.")
+            return []
         except Exception as e:
             log.warning(f"  Tentativa {tentativa+1}/3 buscar_assinantes_ativos falhou: {e}")
             if tentativa < 2:
                 import time; time.sleep(3)
-    log.error("  buscar_assinantes_ativos: todas as tentativas falharam — usando lista mínima")
-    # Fallback: Dr. Eduardo direto do env para não travar o envio do radar
-    import os
-    phone = os.getenv("EDUARDO_PHONE", "")
-    if phone:
-        return [{"phone": phone, "nome": "Dr. Eduardo", "temas": ["coronaria","arritmia","miocardiopatias","prevencao","valvulopatias","uti","imagem","cardiometabolico"], "ativo": True}]
-    return []
+    log.error("  buscar_assinantes_ativos: todas as tentativas falharam — usando o .env")
+    return _eduardo_do_env()
 
 
 def resolver_doencas(temas):
@@ -492,6 +563,16 @@ def montar_mensagem(artigo, html=False):
 
 
 def registrar_envio(sb, assinante_id, doc_ids, ja_enviados):
+    # ═══ 11/Ago — O DESTINATÁRIO DO .env NÃO TEM LINHA NA TABELA ═══
+    # Quando `buscar_assinantes_ativos` cai no EDUARDO_PHONE, o "assinante" é um dicionário
+    # montado na hora, com `id: None`. Um `.eq("id", None)` aqui não atualiza nada — e, pior,
+    # o log diria "Registrados N artigos como enviados" mesmo assim. Outra frase de sucesso
+    # sobre coisa que não aconteceu, no mesmo dia em que a gente caçou três delas.
+    # Sem linha no banco, o controle do que já foi mandado é a agenda da Chave 3, que é dele.
+    if assinante_id is None:
+        log.info(f"  (destinatário do .env, sem linha em whatsapp_users — os {len(doc_ids)} "
+                 f"artigo(s) NÃO ficam marcados no banco; o controle é a fila da Chave 3)")
+        return
     atualizados = list(ja_enviados or []) + doc_ids
     try:
         sb.table("whatsapp_users").update({
@@ -588,6 +669,55 @@ def zapi_check_connected() -> bool:
         log.error(f"  ⚠️  A Z-API respondeu, mas não entendi a resposta: {type(e).__name__}: {e}")
         log.error("      Isto NÃO quer dizer que o WhatsApp está desconectado.")
         return False
+
+
+def zapi_numero_da_instancia():
+    """O número que a Z-API USA PARA MANDAR. Devolve None se não der para perguntar.
+
+    ═══ 11/Ago/2026, 17h — O SISTEMA MANDOU A MENSAGEM PARA ELE MESMO ═══
+
+    O envio saiu com HTTP 200. A Z-API aceitou. E nada chegou no celular do Dr. Eduardo,
+    porque o destinatário era o número da PRÓPRIA INSTÂNCIA:
+
+        5527988149519   o número pareado na Z-API — QUEM MANDA
+        5527996089248   o celular do Dr. Eduardo   — PARA QUEM MANDAR
+
+    O `.env` tinha o primeiro em `EDUARDO_PHONE`. O WhatsApp permite mandar para si mesmo
+    ("Mensagens para você mesmo"), então a API respondeu 200 e o log escreveu
+    "WhatsApp texto → 5527988149519". Sucesso perfeito, entrega zero.
+
+    **E o erro de leitura foi MEU.** De manhã, o diagnóstico devolveu `"phone":"5527988149519"`
+    na rota `/device` e eu li aquilo como confirmação de que era o número dele. `/device`
+    responde QUEM MANDA, não PARA QUEM. Com base nessa leitura eu troquei o número chumbado
+    — que estava CERTO — pelo do `.env`, que era o do remetente. Ou seja: passei o dia
+    consertando um telefone que não estava quebrado, e quebrei o que funcionava.
+
+    A trava que faltava não é sobre qual número está no .env — é sobre uma coisa que NUNCA
+    faz sentido: destinatário igual a remetente. Isso não é envio, é eco. E é invisível,
+    porque devolve 200.
+    """
+    global _NUM_INSTANCIA
+    if _NUM_INSTANCIA is not _NAO_PERGUNTEI:
+        return _NUM_INSTANCIA
+    _NUM_INSTANCIA = None
+    try:
+        r = httpx.get(f"{ZAPI_BASE}/device", headers=ZAPI_HEADERS, timeout=20)
+        d = r.json() or {}
+        _NUM_INSTANCIA = so_digitos(d.get("phone") or d.get("number") or "") or None
+    except Exception as e:
+        log.warning(f"  ↻ não consegui perguntar à Z-API qual é o número dela ({type(e).__name__}) "
+                    f"— sigo sem essa conferência")
+    return _NUM_INSTANCIA
+
+
+_NAO_PERGUNTEI = object()
+_NUM_INSTANCIA = _NAO_PERGUNTEI
+
+
+def eco(phone):
+    """True se mandar para este número for mandar para si mesmo."""
+    n = zapi_numero_da_instancia()
+    return bool(n) and so_digitos(phone) == n
 
 
 def zapi_send_text(phone, text):
@@ -787,6 +917,31 @@ def distribuir_artigos(dry_run: bool = False):
 
     sb = conectar_supabase()
     assinantes = buscar_assinantes_ativos(sb)
+
+    # ═══ 11/Ago, 17h — DESTINATÁRIO NÃO PODE SER O REMETENTE ═══
+    # Às 16h56 tudo deu certo e nada chegou: o `EDUARDO_PHONE` do .env era o número da própria
+    # instância Z-API. O WhatsApp aceita mandar para si mesmo, devolveu 200, e o log escreveu
+    # "WhatsApp texto → 5527988149519". Sucesso perfeito, entrega zero — o pior tipo de defeito,
+    # porque não há o que investigar: está tudo verde.
+    # Isto é conferido ANTES de gastar qualquer envio, e para o programa. Mandar para si mesmo
+    # nunca é o que se quis fazer.
+    if not dry_run:
+        for a in list(assinantes):
+            if eco(a.get("phone", "")):
+                log.error("=" * 60)
+                log.error("❌ PAREI: o destinatário é o PRÓPRIO número da Z-API.")
+                log.error(f"   destinatário : {so_digitos(a.get('phone',''))}")
+                log.error(f"   instância    : {zapi_numero_da_instancia()}  ← quem MANDA")
+                log.error("")
+                log.error("   Mandar para si mesmo cai em «Mensagens para você mesmo» e a Z-API")
+                log.error("   devolve 200 — o log diz «enviado» e nada chega no seu celular.")
+                log.error("   Foi exatamente o que aconteceu às 16h56 de 11/Ago.")
+                log.error("")
+                log.error("   CONSERTO: no .env, EDUARDO_PHONE tem que ser o SEU CELULAR,")
+                log.error("   não o número pareado na Z-API.")
+                log.error("=" * 60)
+                sys.exit(1)
+
     total = 0
     nao_entregues = []          # 11/Ago: o que FALHOU, para o resumo não mentir
 
@@ -796,7 +951,10 @@ def distribuir_artigos(dry_run: bool = False):
         temas = assinante.get("temas", [])
         ja_enviados = assinante.get("artigos_enviados", [])
 
-        if BETA_PAUSADO and phone != DR_EDUARDO_PHONE:
+        # 11/Ago: comparava as duas strings CRUAS. Se o número do banco viesse com '+', espaço
+        # ou hífen, o portão pularia o próprio dono e diria "beta pausado" — mensagem certa,
+        # motivo errado. Compara só os dígitos.
+        if BETA_PAUSADO and so_digitos(phone) != so_digitos(DR_EDUARDO_PHONE):
             log.info(f"  ⏸️  Beta pausado — pulando {nome} ({phone})")
             continue
 
@@ -876,6 +1034,15 @@ def distribuir_artigos(dry_run: bool = False):
         log.error("   Os NÃO entregues NÃO foram marcados como enviados: continuam na fila")
         log.error("   e saem na próxima tentativa. Rode `python3 src/testar_zapi.py` para")
         log.error("   saber ONDE a corrente arrebentou (não envia nada, custo zero).")
+    elif total == 0:
+        # ═══ 11/Ago — ZERO ENTREGUE NÃO É SUCESSO ═══
+        # Saiu "CONCLUÍDO — 0 artigo(s) entregue(s), nenhuma falha" com DOIS artigos aprovados
+        # na fila. Tecnicamente verdade (nenhum envio falhou, porque nenhum foi tentado) e
+        # completamente enganoso: o envio inteiro não aconteceu e a tela disse CONCLUÍDO.
+        log.error("🔴 NADA FOI ENTREGUE — e havia artigo aprovado na fila.")
+        log.error("   Isto NÃO é 'nenhuma falha': é o envio inteiro não tendo acontecido.")
+        log.error("   Olhe as linhas acima: se disser 'não tem ninguém ativo com temas', o")
+        log.error("   destinatário é que está faltando — confira EDUARDO_PHONE no .env (Chave 13).")
     else:
         log.info(f"CONCLUÍDO — {total} artigo(s) entregue(s), nenhuma falha")
     log.info("=" * 60)
@@ -960,7 +1127,7 @@ def distribuir_radar():
     assinantes = buscar_assinantes_ativos(sb)
     for assinante in assinantes:
         phone = assinante.get("phone", "")
-        if BETA_PAUSADO and phone != DR_EDUARDO_PHONE:
+        if BETA_PAUSADO and so_digitos(phone) != so_digitos(DR_EDUARDO_PHONE):
             log.info(f"  ⏸️  Pulando {assinante.get('nome','?')} ({phone})")
             continue
         zapi_send_text(phone, msg_wa)
@@ -1009,8 +1176,6 @@ def modo_teste():
 # Envia 1 original + 1 revisão/meta diretamente para o número do Dr. Eduardo.
 # Sem filtro de assinante, sem registro de enviados — para revisão de qualidade.
 # =============================================================================
-
-DR_EDUARDO_PHONE = "5527996089248"
 
 def distribuir_eduardo():
     """Busca 1 original (nota ≥ 8) + 1 revisão/meta (nota ≥ 7) recentes e envia ao Dr. Eduardo."""
@@ -1241,7 +1406,7 @@ def distribuir_lista_diaria(dry_run: bool = False):
         phone = assinante.get("phone", "")
         temas = assinante.get("temas", [])
 
-        if BETA_PAUSADO and phone != DR_EDUARDO_PHONE:
+        if BETA_PAUSADO and so_digitos(phone) != so_digitos(DR_EDUARDO_PHONE):
             log.info(f"  ⏸️  Beta pausado — pulando {nome}")
             continue
 
@@ -1321,7 +1486,7 @@ def distribuir_lista_semanal(dry_run: bool = False):
         phone = assinante.get("phone", "")
         nome  = assinante.get("nome", phone)
 
-        if BETA_PAUSADO and phone != DR_EDUARDO_PHONE:
+        if BETA_PAUSADO and so_digitos(phone) != so_digitos(DR_EDUARDO_PHONE):
             log.info(f"  ⏸️  Beta pausado — pulando {nome}")
             continue
 

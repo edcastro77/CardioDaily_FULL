@@ -1807,6 +1807,541 @@ def teste_quem_grava_e_quem_le_apontam_para_o_mesmo_arquivo():
               "a chave aponta para outro lugar — ela diria 'a agenda não existe' para sempre")
 
 
+def teste_uma_tabela_de_teto_e_o_protocolo_nao_pontua():
+    """11/Ago — *"COMO QUE O SISTEMA ME DÁ NOTA 8 PARA ISSO?"*
+
+    Duas perguntas dele, mesma raiz: desenho fraco recebendo nota alta. As causas eram
+    DIFERENTES, e as duas estão travadas aqui.
+
+    ═══ CAUSA 1 · HAVIA DUAS TABELAS DE TETO ═══
+    O motor guardava `_TETO_INTERVENCAO` (coorte 6) e `_TETO_NAO_INTERVENCAO` (coorte 8), e
+    escolhia entre elas pelo tipo de PERGUNTA. Coorte de prognóstico pegava 8. A LEI 0 diz
+    *"coorte sem adjudicação central → 6"* e *"observacional recebendo NAC 8 → ERRADO"*.
+    Família do dia: duas fontes de verdade, no lugar mais caro que existe — a nota.
+    MEDIDO: 147 de 683 artigos (22 %) acima do teto do próprio desenho.
+    Decisão dele, com os números na mesa: UMA tabela, a da LEI 0.
+
+    ═══ CAUSA 2 · PROTOCOLO DE ESTUDO ═══
+    Três "Rationale and Design" no Supabase, **todos com nota 8**. O extrator leu randomização,
+    dois braços e desfecho primário e escreveu `rct` — CORRETAMENTE, porque o desenho descrito
+    é de RCT. O motor deu o teto do RCT, 10. Ninguém errou: faltava a palavra `protocolo` no
+    vocabulário. Um protocolo não tem resultado; não há o que aplicar à beira do leito.
+
+    ⚠️ O QUE ESTA TRAVA **NÃO** PODE DEIXAR PASSAR NO SENTIDO CONTRÁRIO: o Framingham. Ele
+    perde aplicabilidade (8→6) mas **mantém rigor 8**. Se a coleta impecável parar de valer no
+    rigor, a régua virou cega — e aí não é a LEI 10, é preguiça.
+    """
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import notas_prototipo as N
+
+    # ── 1) UMA tabela só, e ela é a da LEI 0 ──
+    checa("existe UMA tabela de teto (_TETO_LEI0)", hasattr(N, "_TETO_LEI0"),
+          "sumiu — sem ela não há régua de desenho")
+    for morta in ("_TETO_INTERVENCAO", "_TETO_NAO_INTERVENCAO"):
+        checa(f"a tabela morta {morta} NÃO voltou", not hasattr(N, morta),
+              "duas tabelas de teto foi a causa de 147 artigos acima do teto — não pode voltar")
+
+    LEI0 = {"coorte": 6, "registro": 6, "observacional_ajustado": 7, "caso_controle": 5,
+            "transversal": 5, "serie_de_casos": 5, "antes_depois_sem_controle": 5}
+
+    # ⚠️ ESTE BLOCO TAMBÉM ESTAVA ERRADO na primeira versão de hoje: eu cobrava "nenhuma
+    # pergunta levanta o teto", com os fatos TODOS preenchidos. Cobrava a régua que o Dr.
+    # Eduardo recusou. O que a régua diz de verdade é mais fino:
+    #     · SEM o selo prospectivo → a tabela A–E manda, e nada sobe. É o caso de 18 dos 27.
+    #     · COM o selo, e só para pergunta que o RCT não pode responder → sobe até o valor
+    #       NOMEADO em _TETO_SELO_PROSPECTIVO. É o caso Framingham.
+    for des, teto in LEI0.items():
+        piores = []
+        for q in ("intervencao", "etiologia", "prognostico", "diagnostico"):
+            # SEM selo: o extrator ficou calado sobre retrospectivo — o caso real de 11/Ago
+            a = {"desenho": des, "pergunta": q, "retrospectivo": None, "poder_ok": True,
+                 "desenho_apropriado": True, "qualidade_entrada": True,
+                 "follow_up_completo": True}
+            t = N.teto_desenho(a)
+            if t > teto:
+                piores.append(f"{q}={t}")
+        checa(f"{des}: SEM o selo, nenhuma pergunta levanta o teto acima de {teto}", not piores,
+              f"{', '.join(piores)} — silêncio do extrator virando selo é o defeito de 11/Ago")
+
+    # o caso concreto que ele apontou: coorte de intervenção nunca passa de 6
+    for q in ("prognostico", "etiologia", "diagnostico"):
+        a = {"desenho": "coorte", "pergunta": q, "retrospectivo": None, "poder_ok": True,
+             "desenho_apropriado": True, "qualidade_entrada": True, "follow_up_completo": True}
+        checa(f"coorte/{q} SEM selo tem teto 6, não 8", N.teto_desenho(a) == 6,
+              f"veio {N.teto_desenho(a)}")
+
+    # e a subida existe e é NOMEADA — se sumir, o Framingham cai para 6 outra vez
+    checa("a tabela do selo existe e nomeia até onde cada desenho sobe",
+          hasattr(N, "_TETO_SELO_PROSPECTIVO")
+          and N._TETO_SELO_PROSPECTIVO.get("coorte") == 8,
+          "sem ela, etiologia e prognóstico ficam capados em 6 — e para essas perguntas o "
+          "RCT é impossível")
+
+    # e o RCT de verdade continua podendo chegar a 10
+    a = {"desenho": "rct", "pergunta": "intervencao", "retrospectivo": False,
+         "poder_ok": True, "open_label": False}
+    checa("RCT de intervenção continua podendo chegar a 10", N.teto_desenho(a) == 10,
+          f"veio {N.teto_desenho(a)} — a régua ficou cega, não severa")
+
+    # ── 2) O SELO PROSPECTIVO — a subida NOMEADA, e ela não se ganha por silêncio ──
+    #
+    # ⚠️ Esta parte da trava já esteve ESCRITA AO CONTRÁRIO, hoje mesmo. Eu tinha posto
+    # `Framingham: aplicabilidade cai para 6` e chamado isso de "a decisão dele". O Dr.
+    # Eduardo recusou: *"não pode. Isto obviamente está errado!"*. Para etiologia o RCT é
+    # impossível — a coorte prospectiva é o teto que a pergunta admite. Uma trava que
+    # chumba a régua errada é pior que trava nenhuma: ela IMPEDE o conserto.
+    FRAM = {"pergunta": "etiologia", "desenho": "coorte", "retrospectivo": False,
+            "desenho_apropriado": True, "qualidade_entrada": True, "follow_up_completo": True,
+            "extrapolavel": True, "tipo_documento": "original"}
+    fr = N.score(dict(FRAM))
+    checa("Framingham (selo completo): aplicabilidade 8", fr["aplic"] == 8,
+          f"veio {fr['aplic']} — capar o Framingham em 6 é dizer que nenhum estudo de fator "
+          f"de risco pode ser aplicável")
+    checa("Framingham: rigor 8", fr["trabalho"] == 8, f"veio {fr['trabalho']}")
+
+    # o caso NEGATIVO — e é o que realmente estava quebrado: silêncio virava selo.
+    # Medido em 11/Ago: 18 das 27 coortes com nota 8 tinham `retrospectivo: null`.
+    for rot, mud in (("silêncio sobre retrospectivo", {"retrospectivo": None}),
+                     ("declarada retrospectiva", {"retrospectivo": True}),
+                     ("seguimento não informado", {"follow_up_completo": None}),
+                     ("seguimento incompleto", {"follow_up_completo": False}),
+                     ("qualidade da coleta não informada", {"qualidade_entrada": None}),
+                     ("desenho inapropriado", {"desenho_apropriado": False})):
+        a = dict(FRAM)
+        a.update(mud)
+        checa(f"sem selo ({rot}): coorte volta ao teto 6", N.teto_desenho(a) == 6,
+              f"veio {N.teto_desenho(a)} — o selo está sendo dado de graça")
+        ok, falta = N.selo_prospectivo(a)
+        checa(f"sem selo ({rot}): o motivo é dito, não é silêncio", (not ok) and bool(falta),
+              "reprovou sem dizer o que faltou — o redator não tem como explicar a nota")
+
+    # a subida é SÓ para pergunta que o RCT não pode responder
+    a = dict(FRAM)
+    a["pergunta"] = "intervencao"
+    checa("coorte de INTERVENÇÃO não sobe nem com o selo completo", N.teto_desenho(a) == 6,
+          f"veio {N.teto_desenho(a)} — para intervenção existe RCT, e a LEI 0 manda")
+
+    # ── 3) PROTOCOLO não pontua, nas DUAS portas ──
+    checa("o motor conhece a rota do protocolo", hasattr(N, "ROTA_PROTOCOLO"), "sumiu")
+    for q in ("intervencao", "prognostico"):
+        r = N.score({"desenho": "protocolo", "pergunta": q, "tipo_documento": "original",
+                     "retrospectivo": False, "poder_ok": True, "open_label": False,
+                     "desfecho_duro": True, "extrapolavel": True})
+        checa(f"protocolo/{q}: sai da escala clínica",
+              r["rota"] == getattr(N, "ROTA_PROTOCOLO", "?"), f"veio {r['rota']}")
+        checa(f"protocolo/{q}: aplicabilidade 0 (não passa em porta nenhuma)", r["aplic"] == 0,
+              f"veio {r['aplic']} — um ensaio que ainda não aconteceu viraria perícia e áudio")
+
+    # o schema tem de aceitar a palavra, senão o extrator nunca consegue dizê-la
+    try:
+        import analise as A
+        enum = A.SCHEMA_FATOS["properties"]["desenho"]["enum"]
+        checa("o schema de extração aceita `protocolo`", "protocolo" in enum,
+              "sem isso o extrator é obrigado a escrever `rct` num protocolo — foi assim que "
+              "três deles saíram com nota 8")
+    except Exception as e:
+        checa("dá para ler o schema de extração", False, f"{type(e).__name__}: {e}")
+
+    # ── 4) o classificador descarta protocolo pelo TÍTULO, antes de gastar análise ──
+    try:
+        import classificador_pubmed as CP
+        pegar = ["…: Design and Rationale of the PRAISE-MR Trial",
+                 "…: Rationale and Design of the LEVEL Trial",
+                 "Semaglutide in HFpEF: Study Protocol for a Randomized Controlled Trial"]
+        passar = ["Dapagliflozin in Patients with Heart Failure and Reduced Ejection Fraction",
+                  "Sudden Cardiac Death Due to Myocardial Infarction With Obstructive and "
+                  "Nonobstructive Coronary Arteries",
+                  "Study design considerations in cardiovascular outcome trials: a review",
+                  "Machine learning for the design of new cardiovascular drugs"]
+        checa("o classificador reconhece protocolo pelo título",
+              all(CP.eh_protocolo(t) for t in pegar),
+              f"escapou: {[t[:40] for t in pegar if not CP.eh_protocolo(t)]}")
+        falsos = [t for t in passar if CP.eh_protocolo(t)]
+        checa("e NÃO pega artigo com resultado (falso positivo custa artigo bom)", not falsos,
+              f"pegou indevidamente: {[t[:50] for t in falsos]}")
+        checa("protocolo é descartado antes de custar análise",
+              CP.eh_descartavel([], pegar[0], "ORIGINAL RESEARCH\n" + pegar[0]),
+              "passou pelo descarte — o 'ORIGINAL RESEARCH' impresso no topo o protegeria, "
+              "que é exatamente por que a checagem vem ANTES do rotulo_protege")
+    except Exception as e:
+        checa("dá para testar o classificador", False, f"{type(e).__name__}: {e}")
+
+
+def teste_o_filtro_de_data_nao_esconde_por_conta_propria():
+    """11/Ago — FILTRO DE DATA DE PUBLICAÇÃO NA CHAVE 3.
+
+    Pedido dele: *"fica aparecendo artigos de 1999 na curadoria"* · *"preciso de filtro de
+    data — data de inicio das buscas e final"*.
+
+    ═══ AS DUAS DECISÕES QUE FORAM DELE (LEI 6) ═══
+    1. **Qual data.** Medido antes de perguntar: `data_publicacao` vai de 1951 a out/2026;
+       `created_at` só cobre 5→11/ago, porque o banco foi refeito. Ele escolheu a data de
+       PUBLICAÇÃO — é a que produz o artigo de 1999.
+    2. **O padrão é VAZIO, mostra tudo.** Um filtro que já vem ligado é armadilha de memória:
+       um dia ele procura um artigo, não acha, e a causa é uma régua que ele não lembra que
+       existe. Nada some sem ele mandar.
+
+    ═══ O QUE A TRAVA GUARDA ═══
+    As três formas de o filtro esconder coisa em silêncio — todas do mesmo formato que nos
+    custou o dia 11/Ago (a tela plausível para o motivo errado):
+      · vir ligado de fábrica;
+      · engolir uma data malformada e filtrar por ela;
+      · esconder o artigo que não TEM data no metadado — punir o artigo pelo defeito do dado.
+    """
+    import ast
+    import os
+
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ad = os.path.join(raiz, "src", "administrador.py")
+    t = open(ad, encoding="utf-8").read()
+    try:
+        arv = ast.parse(t)
+    except SyntaxError as e:
+        checa("administrador.py compila", False, str(e))
+        return
+
+    # 1) o padrão dos dois campos é string vazia
+    achou = {}
+    for no in ast.walk(arv):
+        if isinstance(no, ast.Call) and isinstance(no.func, ast.Attribute) \
+                and no.func.attr == "text_input":
+            rot = no.args[0].value if no.args and isinstance(no.args[0], ast.Constant) else ""
+            if str(rot).startswith(("De ", "Até")):
+                v = next((k.value for k in no.keywords if k.arg == "value"), None)
+                achou[str(rot)] = (v.value if isinstance(v, ast.Constant) else "<?>")
+    checa("existem os dois campos de data (De · Até)", len(achou) == 2,
+          f"achei {sorted(achou)} — o filtro que ele pediu tem começo E fim")
+    for rot, val in achou.items():
+        checa(f"o campo «{rot}» começa VAZIO", val == "",
+              f"vem preenchido com {val!r} — esconde artigo sem ele mandar")
+
+    # 2) NENHUM atalho vem marcado
+    for no in ast.walk(arv):
+        if isinstance(no, ast.Call) and isinstance(no.func, ast.Attribute) \
+                and no.func.attr == "radio":
+            ops = next((a for a in no.args[1:] if isinstance(a, ast.List)), None)
+            if ops and any(isinstance(e, ast.Constant) and "dias" in str(e.value)
+                           for e in ops.elts):
+                idx = next((k.value for k in no.keywords if k.arg == "index"), None)
+                i = idx.value if isinstance(idx, ast.Constant) else 0
+                primeiro = ops.elts[0].value if isinstance(ops.elts[0], ast.Constant) else "?"
+                checa("o atalho de data começa em «nenhum»", i == 0 and primeiro == "—",
+                      f"abre marcado em {primeiro!r} (index={i}) — filtra sem ele pedir")
+
+    # 3) a função passa() — comportamento, não leitura
+    fn = next((n for n in arv.body if isinstance(n, ast.FunctionDef) and n.name == "passa"), None)
+    checa("o painel tem a função passa()", fn is not None, "sumiu — não há filtro nenhum")
+    if fn is None:
+        return
+
+    def roda(artigos, d_ini="", d_fim=""):
+        ns = {"nmin": 1, "nmax": 10, "f_tipo": [], "f_rev": [], "f_tema": [], "busca": "",
+              "_d_ini": d_ini, "_d_fim": d_fim,
+              "_dia": lambda a: str(a.get("data_publicacao") or "")[:10]}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), "<passa>", "exec"), ns)
+        return [a for a in artigos if ns["passa"](a)]
+
+    base = [{"titulo": "RALES", "data_publicacao": "1999-09-02", "nota_aplicabilidade": 9},
+            {"titulo": "PLATO", "data_publicacao": "2009-09-10", "nota_aplicabilidade": 9},
+            {"titulo": "de hoje", "data_publicacao": "2026-08-10", "nota_aplicabilidade": 8},
+            {"titulo": "SEM DATA", "data_publicacao": None, "nota_aplicabilidade": 9}]
+
+    checa("sem data digitada, o filtro não esconde NADA",
+          len(roda(base)) == 4,
+          f"escondeu {4 - len(roda(base))} com os campos vazios — o padrão dele é mostrar tudo")
+
+    r = [a["titulo"] for a in roda(base, d_ini="2026-01-01")]
+    checa("«De» corta o que é mais antigo", "RALES" not in r and "de hoje" in r, f"devolveu {r}")
+
+    r = [a["titulo"] for a in roda(base, d_fim="2010-12-31")]
+    checa("«Até» corta o que é mais novo", "de hoje" not in r and "RALES" in r, f"devolveu {r}")
+
+    # o coração: artigo sem data NUNCA é escondido pelo filtro de data
+    for i, f in (("2026-01-01", ""), ("", "2010-12-31"), ("2026-07-01", "2026-08-01")):
+        r = [a["titulo"] for a in roda(base, i, f)]
+        checa(f"artigo SEM data sobrevive ao filtro ({i or '—'} … {f or '—'})",
+              "SEM DATA" in r,
+              "sumiu — seria punir o artigo pelo defeito do metadado, e ele nunca saberia")
+
+
+def teste_o_painel_enxerga_o_pacote_onde_o_arquivador_o_deixou():
+    """11/Ago — O ACRI SUMIA DO PAINEL À MEDIDA QUE O SISTEMA ERA USADO.
+
+    ═══ O CASO ═══
+    O Dr. Eduardo: *"concerta o acri que nao esta mais aparecendo no administrador"*.
+
+    O painel monta uma ponte entre a linha do Supabase e o pacote no disco, para mostrar o
+    ACRI que ele copia e cola no grupo. O índice varria SÓ `outputs/STAGING/`. Mas a Chave 4
+    (Arquivador) **move** o pacote concluído para `outputs/ARQUIVO/AAAA-MM/` — é o trabalho
+    dela, e ela faz certo.
+
+        STAGING    196 pacotes ·  147 ACRI    ← o índice olhava só aqui
+        ARQUIVO    864 pacotes ·  571 ACRI    ← invisível
+
+    MEDIDO: dos 37 artigos nota 9 que o painel lista por padrão, **26 não achavam pacote
+    nenhum** (11/37). Depois de varrer as duas árvores: **37/37, todos com ACRI**.
+
+    ═══ POR QUE MERECE TRAVA ═══
+    O defeito PIORA COM O USO. Cada rodada do Arquivador esvazia mais um pedaço do painel, e
+    ninguém é avisado: o artigo continua na lista, ele clica, e o bloco do ACRI só não desenha.
+    É a mesma família da semana — duas pontas, uma escreve num lugar novo e a outra continua
+    lendo o velho, sem nada quebrando no meio:
+        09/Ago  o `agenda_envio.csv` era gravado e ninguém lia
+        11/Ago  gravar e ler o MESMO nome, em pastas diferentes (dois `..`)
+        11/Ago  DOIS telefones do dono, e a trava comparando com o velho
+        11/Ago  o pacote muda de pasta e o painel fica olhando a antiga
+
+    Esta trava não pergunta "existe uma variável _ARQUIVO?" — ela CONTA quantos pacotes o
+    índice do painel alcança e reprova se o ARQUIVO ficar de fora.
+    """
+    import os
+    import glob
+    import re
+
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = os.path.join(raiz, "outputs")
+    stg = os.path.join(out, "STAGING")
+    arq = os.path.join(out, "ARQUIVO")
+
+    def canonicos(base):
+        return (glob.glob(os.path.join(base, "*", "*_CANONICO.md")) +
+                glob.glob(os.path.join(base, "*", "*", "*_CANONICO.md")))
+
+    n_stg, n_arq = len(canonicos(stg)), len(canonicos(arq))
+
+    # 1) o código do painel varre as DUAS árvores
+    ad = os.path.join(raiz, "src", "administrador.py")
+    t = open(ad, encoding="utf-8").read()
+    try:
+        import ast
+        arv = ast.parse(t)
+        fn = next((n for n in ast.walk(arv)
+                   if isinstance(n, ast.FunctionDef) and n.name == "indice_do_disco"), None)
+    except SyntaxError as e:
+        fn = None
+        checa("administrador.py compila", False, str(e))
+    checa("o painel tem um indice_do_disco", fn is not None, "sumiu — a ponte com o ACRI acabou")
+
+    checa("o painel conhece a pasta ARQUIVO",
+          bool(re.search(r"_ARQUIVO\s*=.*ARQUIVO", t)),
+          "só conhece o STAGING — todo pacote já arquivado perde o ACRI no painel, "
+          f"e hoje isso são {n_arq} pacotes")
+
+    if fn is not None:
+        nomes = {n.id for n in ast.walk(fn) if isinstance(n, ast.Name)}
+        checa("o índice varre STAGING **e** ARQUIVO",
+              "_RAIZES" in nomes or {"_STAGING", "_ARQUIVO"} <= nomes,
+              "varre uma árvore só — o defeito PIORA a cada rodada da Chave 4")
+
+    # 2) A PROVA QUE IMPORTA — e ela precisa usar as raízes DO PAINEL.
+    #
+    #    ⚠️ A primeira versão desta checagem recalculava o índice aqui, com `(arq, stg)`
+    #    escritos por mim. Ou seja: media o DISCO, não o painel. Na sabotagem eu apontei o
+    #    painel só para o STAGING e esta linha continuou ✅ — porque ela nem olhava para o
+    #    painel. Trava que mede a coisa errada dá o mesmo resultado com e sem o defeito.
+    #    Agora as raízes são LIDAS do administrador.py e usadas como ele as usa.
+    raizes_do_painel = None
+    try:
+        ns = {"__file__": ad, "_os": os}
+        corpo = []
+        for no in ast.parse(t).body:
+            if isinstance(no, ast.Assign) and any(
+                    isinstance(a, ast.Name) and a.id in ("_OUT", "_STAGING", "_ARQUIVO", "_RAIZES")
+                    for a in no.targets):
+                corpo.append(no)
+        exec(compile(ast.Module(body=corpo, type_ignores=[]), "<raizes>", "exec"), ns)
+        raizes_do_painel = ns.get("_RAIZES") or tuple(
+            v for k, v in ns.items() if k in ("_ARQUIVO", "_STAGING"))
+    except Exception as e:
+        checa("dá para ler as raízes que o painel usa", False, f"{type(e).__name__}: {e}")
+
+    checa("o painel define alguma raiz de busca", bool(raizes_do_painel),
+          "não achei _RAIZES nem _STAGING/_ARQUIVO — a ponte com o ACRI não existe")
+
+    if raizes_do_painel and n_arq:
+        alcance = set()
+        for base in raizes_do_painel:
+            for can in canonicos(base):
+                try:
+                    txt = open(can, encoding="utf-8", errors="replace").read(4000)
+                except Exception:
+                    continue
+                m = re.search(r'doi:\s*"([^"]+)"', txt)
+                if m:
+                    alcance.add(m.group(1).strip().lower())
+        so_stg = set()
+        for can in canonicos(stg):
+            try:
+                txt = open(can, encoding="utf-8", errors="replace").read(4000)
+            except Exception:
+                continue
+            m = re.search(r'doi:\s*"([^"]+)"', txt)
+            if m:
+                so_stg.add(m.group(1).strip().lower())
+        checa("as raízes DO PAINEL alcançam os pacotes arquivados",
+              len(alcance) > len(so_stg),
+              f"o painel alcança {len(alcance)} DOI e o STAGING sozinho já tem {len(so_stg)} — "
+              f"os {n_arq} pacotes do ARQUIVO estão fora do alcance dele")
+
+    # 3) o ttl do cache não pode ser curto: 1.015 pacotes levam ~7s para indexar
+    #
+    #    ⚠️ Este pedaço já reprovou o código CERTO uma vez. Eu casava o decorador com
+    #    `@st\.cache_data\(ttl=(\d+)[^)]*\)` — e a mensagem do spinner é
+    #    "Lendo os pacotes no disco (STAGING + ARQUIVO)…", com parênteses DENTRO da string.
+    #    O `[^)]*\)` fechava no parêntese do texto e o casamento morria ali. Regex contando
+    #    parêntese é ilusão de precisão; agora acha o `def` pelo ast e lê o ttl do decorador.
+    ttl = None
+    tem_cache = False
+    if fn is not None:
+        for dec in fn.decorator_list:
+            alvo = dec.func if isinstance(dec, ast.Call) else dec
+            if "cache_data" in ast.dump(alvo):
+                tem_cache = True
+                if isinstance(dec, ast.Call):
+                    for kw in dec.keywords:
+                        if kw.arg == "ttl" and isinstance(kw.value, ast.Constant):
+                            ttl = kw.value.value
+    checa("o índice do disco tem cache", tem_cache,
+          "sem cache, cada clique relê ~1.000 pastas do disco")
+    if tem_cache:
+        checa("o cache do índice dura ao menos 15 minutos", isinstance(ttl, int) and ttl >= 900,
+              f"ttl={ttl}s — a cada expiração ele espera ~7s parado no meio da curadoria")
+
+
+def teste_um_telefone_do_dono_e_um_so():
+    """11/Ago — A TRAVA DE SEGURANÇA IA PULAR O DONO DO SISTEMA.
+
+    ═══ O CASO ═══
+    O `distribuidor.py` guardava DOIS telefones do Dr. Eduardo, e eles não eram o mesmo:
+
+        DR_EDUARDO_PHONE = "5527996089248"   chumbado no fim do arquivo
+        EDUARDO_PHONE    = "55279881…"       no .env — e é ESTE que a Z-API confirmou
+                                             conectado ("phone":"5527988149519" em /device)
+
+    O portão do beta é `if BETA_PAUSADO and phone != DR_EDUARDO_PHONE: pular`. Depois que o
+    `buscar_assinantes_ativos` passou a cair no `_eduardo_do_env()` (conserto de 11/Ago, quando
+    a consulta ao Supabase devolvia lista VAZIA sem levantar exceção), o destinatário passou a
+    vir do .env — e o portão o compararia com o número velho e o PULARIA, imprimindo
+    "⏸️ Beta pausado — pulando Dr. Eduardo". Ele leria essa linha sem ter como saber que o
+    sistema guardava dois números dele e escolhia o errado para se comparar.
+
+    ═══ POR QUE MERECE TRAVA ═══
+    É o QUARTO erro do mesmo formato em três dias — duas fontes para o mesmo fato, uma delas
+    velha, e nada quebrando no meio:
+        09/Ago  o `agenda_envio.csv` era gravado e ninguém lia
+        10/Ago  `tributo` (o tipo) e `DESCARTAR` (o destino): a mesma coisa com dois nomes
+        11/Ago  gravar e ler o MESMO nome, em pastas diferentes
+        11/Ago  DOIS telefones do dono, e a trava de segurança usando o velho
+    E este é o pior da série, porque a peça que erra é justamente a que existe para PROTEGER:
+    o portão do beta impede que o sistema mande mensagem para estranho — e mandaria para
+    ninguém.
+
+    Confere três coisas, por CÁLCULO:
+      1. o telefone vem do .env, não do código;
+      2. quem monta o destinatário usa a MESMA variável que o portão compara;
+      3. a comparação é por DÍGITOS — '+55 27 98814-9519' e '5527988149519' são o mesmo
+         telefone, e o `!=` de string diz que não são.
+    """
+    import os
+    import re
+
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dist = os.path.join(raiz, "distribuidor.py")
+    if not os.path.exists(dist):
+        checa("distribuidor.py existe", False, "sumiu")
+        return
+    t = open(dist, encoding="utf-8").read()
+
+    # 1) o telefone do dono vem do .env
+    m = re.search(r"^DR_EDUARDO_PHONE\s*=\s*(.+)$", t, re.M)
+    checa("DR_EDUARDO_PHONE existe", bool(m), "sumiu — o portão do beta não tem com quem comparar")
+    if m:
+        checa("o telefone do dono vem do .env, não do código",
+              "EDUARDO_PHONE" in m.group(1) and "environ" in m.group(1),
+              f"está chumbado: {m.group(1).strip()} — envelhece sem ninguém perceber")
+
+    # 2) quem MONTA o destinatário usa a MESMA variável que o portão COMPARA
+    #
+    #    ⚠️ Esta checagem já nasceu ERRADA uma vez, hoje mesmo, na bancada: eu procurava
+    #    "DR_EDUARDO_PHONE" no corpo da função — e a DOCSTRING da função cita esse nome. Na
+    #    sabotagem, troquei o código por `os.getenv("EDUARDO_PHONE")` e a trava continuou
+    #    dizendo ✅, porque leu o comentário. Uma trava que aprova olhando para o texto errado
+    #    é pior que trava nenhuma: ela dá confiança falsa. Agora a leitura é da ÁRVORE do
+    #    código (ast), onde comentário e docstring não existem.
+    try:
+        import ast as _ast
+        arv = _ast.parse(t)
+        fn = next((n for n in _ast.walk(arv)
+                   if isinstance(n, _ast.FunctionDef) and n.name == "_eduardo_do_env"), None)
+    except SyntaxError as e:
+        fn = None
+        checa("distribuidor.py compila", False, str(e))
+    checa("_eduardo_do_env existe", fn is not None,
+          "sumiu — sem ele a lista vazia não tem plano B")
+    if fn is not None:
+        # ⚠️ Segunda versão desta checagem. A primeira procurava o nome DR_EDUARDO_PHONE em
+        #    QUALQUER lugar do corpo — e a função tem um `if not DR_EDUARDO_PHONE:` logo na
+        #    entrada. Na sabotagem troquei o valor do telefone por os.getenv() e a trava
+        #    continuou ✅, porque o nome ainda aparecia na guarda. Olhar "em algum lugar" não
+        #    prova nada: o que importa é de onde sai o VALOR da chave "phone".
+        valor = None
+        for d in _ast.walk(fn):
+            if isinstance(d, _ast.Dict):
+                for k, v in zip(d.keys, d.values):
+                    if isinstance(k, _ast.Constant) and k.value == "phone":
+                        valor = v
+        checa("o destinatário tem uma chave 'phone'", valor is not None,
+              "sumiu — o distribuidor não sabe para onde mandar")
+        if valor is not None:
+            checa("o telefone do destinatário É o DR_EDUARDO_PHONE",
+                  isinstance(valor, _ast.Name) and valor.id == "DR_EDUARDO_PHONE",
+                  f"vem de `{_ast.dump(valor)[:60]}…` — é uma TERCEIRA grafia do mesmo número, "
+                  f"e o portão do beta compara com a OUTRA")
+
+    # 3) NENHUMA comparação de telefone em texto cru
+    cruas = [n for n, l in enumerate(t.splitlines(), 1)
+             if re.search(r"phone\s*[!=]=\s*DR_EDUARDO_PHONE", l)
+             and not l.strip().startswith("#")
+             and "so_digitos" not in l]
+    checa("nenhuma comparação de telefone é feita em texto cru",
+          not cruas,
+          f"linha(s) {cruas} comparam string — '+55 27…' e '5527…' são o mesmo telefone")
+
+    # 4) a função de normalizar existe e FAZ o que promete
+    #
+    #    ⚠️ Terceira armadilha da mesma trava, e a pior. Eu recortava o código do so_digitos
+    #    com regex + .split("\n\n") — e a DOCSTRING dela tem linha em branco. O recorte cortava
+    #    no meio da docstring, o exec levantava SyntaxError, e a exceção matava a bateria
+    #    INTEIRA: as outras 60 travas nem rodavam. É o mesmo defeito de 08/Ago (a sabotagem 3
+    #    derrubou a bateria em vez de reprovar). Trava que explode não reprova — some.
+    #    Agora recorta pela ÁRVORE, e o que der errado vira REPROVAÇÃO, nunca exceção.
+    fn_sd = None
+    if fn is not None or True:
+        try:
+            arv2 = _ast.parse(t)
+            fn_sd = next((n for n in _ast.walk(arv2)
+                          if isinstance(n, _ast.FunctionDef) and n.name == "so_digitos"), None)
+        except Exception:
+            fn_sd = None
+    checa("so_digitos() existe no distribuidor", fn_sd is not None,
+          "sem ela a comparação volta a ser por string e o número vai sujo para a Z-API")
+    if fn_sd is not None:
+        try:
+            ns = {}
+            exec(compile(_ast.Module(body=[fn_sd], type_ignores=[]), "<so_digitos>", "exec"), ns)
+            f = ns["so_digitos"]
+            checa("so_digitos normaliza a pontuação",
+                  f("+55 (27) 98814-9519") == f("5527988149519") == "5527988149519",
+                  f'devolveu {f("+55 (27) 98814-9519")!r} e {f("5527988149519")!r} — '
+                  f"o portão pularia o dono e a Z-API recusaria o número")
+            checa("so_digitos aguenta vazio e None", f("") == "" and f(None) == "",
+                  "quebra quando o telefone não existe — e é exatamente aí que ela é chamada")
+        except Exception as e:
+            checa("so_digitos roda", False, f"{type(e).__name__}: {e}")
+
+
 def teste_pagina_so_separa_revisao_de_ponto_de_vista():
     """10/Ago — O DR. EDUARDO TEVE DE REPETIR A REGRA PORQUE EU A ESTIQUEI.
 

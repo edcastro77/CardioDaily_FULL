@@ -90,9 +90,15 @@ SCHEMA_FATOS = {
         # 'nao_classificavel'. O enum fechado ANTIGO (7 opções) OBRIGAVA o modelo a chutar: um estudo em
         # camundongo virou "observacional_ajustado" e recebeu NAC 8 (Circulation, 27/Jul). Dizer "não sei"
         # passou a ser possível — e é preferível a forçar categoria errada.
+        # 11/Ago — `protocolo` entrou aqui. Sem ele, o extrator lia um "Design and Rationale"
+        # (ensaio que ainda vai acontecer), via randomização + dois braços + desfecho primário
+        # e escrevia `rct` — corretamente, porque o desenho DESCRITO é um RCT. O motor então
+        # dava o teto do RCT, 10, e saíam três protocolos com nota 8. O extrator não tinha a
+        # palavra para dizer "isto ainda não aconteceu".
         "desenho": {"type": "string", "enum": ["rct", "meta", "coorte", "registro",
                                                "observacional_ajustado", "transversal", "caso_controle",
                                                "antes_depois_sem_controle", "serie_de_casos",
+                                               "protocolo",
                                                "pre_clinico", "nao_classificavel"]},
         "retrospectivo": _B,
         "fracao_ejecao": {"type": "string",

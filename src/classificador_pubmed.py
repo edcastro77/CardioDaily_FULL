@@ -177,6 +177,58 @@ def eh_tributo(texto, linhas_do_topo=15):
     return None
 # cabeçalho de research letter (formato carta breve) → descarte (decisão do Dr. Eduardo)
 _LETTER_RE = re.compile(r"\bresearch letter\b|^\s*letters?\b", re.I)
+
+
+# ═══ 11/Ago/2026 — PROTOCOLO DE ESTUDO: O ENSAIO QUE AINDA NÃO ACONTECEU ═══
+#
+#   *"tem que tirar do supabase — não pode nem aparecer esses trocos"* — Dr. Eduardo, sobre
+#   *"...: Design and Rationale of the PRAISE-MR Trial"*
+#
+# Eram TRÊS no banco, todos do Journal of Cardiac Failure, **todos com nota 8**:
+#     PRAISE-MR   (Design and Rationale)
+#     LEVEL       (Rationale and Design)
+#     KETO-AHF    (Rationale and Design)
+#
+# POR QUE TIRARAM 8 — e é a coisa mais instrutiva do dia. O extrator leu o documento, viu
+# randomização, dois braços, desfecho primário pré-especificado e escreveu `desenho: rct`.
+# Estava CERTO: o desenho descrito É um RCT. O motor então deu o teto do RCT, 10. Ninguém
+# errou — o sistema inteiro só não tinha como saber que **o ensaio ainda não aconteceu**.
+# Um protocolo não tem resultado, não tem N final, não tem desfecho medido. Não há o que
+# aplicar à beira do leito, e "aplicabilidade clínica" é a única coisa que a nota mede.
+#
+# Não é caso de nota baixa: é caso de NÃO ENTRAR. Cada um destes custou análise completa —
+# perícia, ACRI, Visual Abstract, áudio — para descrever uma promessa.
+#
+# O reconhecimento é por TÍTULO e é seguro: a revista põe a marca no próprio título, e o
+# padrão é estável na literatura ("Rationale and Design of…", "…: Design and Rationale",
+# "Study Protocol", "Protocol for a…"). Vem ANTES do `rotulo_protege` pelo mesmo motivo do
+# tributo: o PDF de protocolo costuma trazer "ORIGINAL RESEARCH" impresso no topo, e sem
+# esta ordem o rótulo o protegeria do descarte e ele voltaria para a fila.
+_PROTOCOLO_RE = re.compile(
+    r"("
+    r"rationale\s+and\s+design"          # "Rationale and Design of the LEVEL Trial"
+    r"|design\s+and\s+rationale"         # "…: Design and Rationale of the PRAISE-MR Trial"
+    r"|study\s+protocol"                 # "…: Study Protocol"
+    r"|statistical\s+analysis\s+plan"    # SAP publicado à parte
+    r"|protocol\s+for\s+an?\s+"          # "Protocol for a Randomized…"
+    r"|design\s+of\s+the\s+\S+\s+(trial|study)"   # "Design of the XYZ Trial"
+    r"|trial\s+design\s+and\s+baseline"  # "Trial Design and Baseline Characteristics"
+    r"|:\s*design,?\s+methods"           # "…: Design, Methods and Baseline"
+    r")", re.I)
+
+
+def eh_protocolo(titulo, texto=""):
+    """Protocolo/desenho de ensaio ainda sem resultado. Devolve o trecho achado, ou None.
+
+    Olha o TÍTULO e o cabeçalho. Não olha o corpo: um artigo com resultados pode citar
+    "o desenho do estudo foi publicado previamente" no meio dos métodos, e isso NÃO faz
+    dele um protocolo — seria o erro de 'CITAR NÃO É SER' (R6 do classificador v6).
+    """
+    m = _PROTOCOLO_RE.search(titulo or "")
+    if m:
+        return m.group(0)
+    m = _PROTOCOLO_RE.search((texto or "")[:300])
+    return m.group(0) if m else None
 _NAO_DESCARTAR = {"Meta-Analysis", "Systematic Review", "Practice Guideline", "Guideline",
                   "Randomized Controlled Trial"}
 
@@ -371,6 +423,10 @@ def eh_descartavel(pubtypes, titulo, texto):
     # TRIBUTO vem ANTES do rótulo que protege: uma homenagem que mencione "review" no subtítulo
     # seria protegida do descarte e voltaria a entrar na fila (10/Ago — os 6 do Braunwald).
     if eh_tributo(texto):
+        return True
+    # PROTOCOLO também vem antes do rótulo: o PDF de protocolo traz "ORIGINAL RESEARCH"
+    # impresso no topo, e o rótulo o protegeria do descarte. Mesmo motivo do tributo.
+    if eh_protocolo(titulo, texto):
         return True
     prot = rotulo_protege(texto)
     if prot:

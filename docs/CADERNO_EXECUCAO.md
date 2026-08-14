@@ -90,6 +90,307 @@ Todo artigo aprovado percorre este caminho antes de chegar no celular do médico
 
 ---
 
+### 11/Ago/2026 · 16h20 — A CORRENTE DE ENVIO, DE PONTA A PONTA (5 defeitos, todos da mesma família)
+
+O Dr. Eduardo aprovou 2 artigos na Chave 3 às 09h25 e passou o dia inteiro sem recebê-los. Não
+era UM defeito: eram cinco, empilhados, e **nenhum deles levantava exceção**. Cada um imprimia
+uma mensagem plausível e passava a vez para o seguinte.
+
+| # | onde | o que dizia na tela | o que era |
+|---|---|---|---|
+| 1 | `administrador.py` | "Agendado para 11/08" | gravava a agenda **fora do projeto** (dois `..`); quem lia, lia do mesmo lugar errado |
+| 2 | `.env` · `ZAPI_BASE` | "Erro ao verificar status Z-API" | a URL tinha `/send-text` grudado no fim: 104 caracteres onde cabiam 94. `{base}/status` virava endereço inexistente |
+| 3 | `distribuidor.py` | "0 entregue(s), **nenhuma falha**" | o plano B do `EDUARDO_PHONE` só rodava se a consulta **levantasse exceção** — e ela voltava com lista VAZIA, que é sucesso |
+| 4 | `distribuidor.py` | "0 entregue(s), nenhuma falha" | zero entregue era relatado como dia tranquilo |
+| 5 | `distribuidor.py` | "⏸️ Beta pausado — pulando Dr. Eduardo" | **dois telefones dele**, diferentes: `5527996089248` chumbado no código e outro no `.env`. A trava que existe para não mandar a estranho pularia o dono |
+| 6 | `.env` · `EDUARDO_PHONE` | "✅ WhatsApp texto → 5527988149519" · HTTP **200** | o número no `.env` era o da **própria instância Z-API**. O sistema mandou a mensagem **para ele mesmo** |
+
+**O 6 é o pior de todos, e o erro de leitura foi MEU.** Às 16h56 o envio saiu com HTTP 200, a
+Z-API aceitou, o log escreveu `WhatsApp texto → 5527988149519`, e nada chegou. O `EDUARDO_PHONE`
+do `.env` era o número **pareado na instância** — quem MANDA — e não o celular dele. O WhatsApp
+permite mandar para si mesmo ("Mensagens para você mesmo"), então a API devolve 200. **Sucesso
+perfeito, entrega zero:** o único tipo de defeito que não dá o que investigar, porque está tudo
+verde.
+
+De manhã, o diagnóstico devolveu `"phone":"5527988149519"` na rota `/device` e **eu li aquilo
+como confirmação de que era o número dele**. `/device` responde QUEM MANDA, não PARA QUEM. Com
+base nessa leitura errada eu troquei o número chumbado — que estava **CERTO** — pelo do `.env`,
+que era o do remetente. Passei o dia consertando um telefone que não estava quebrado e quebrei
+o que funcionava. Quem achou foi ele, em uma linha: *"o numero que esta cadastrado para a z api
+usar e o 5527988149519, o meu celular é 5527996089248"*.
+
+**A trava certa não é sobre qual número está no `.env`** — é sobre uma coisa que nunca faz
+sentido: **destinatário igual a remetente**. Isso não é envio, é eco. Agora é conferido antes de
+gastar o primeiro envio (`eco()` pergunta à Z-API qual é o número dela) e o programa PARA,
+dizendo qual é qual.
+
+**O 5 fecha a lei do dia:** a peça que erra é justamente a que existe para PROTEGER. E a
+mensagem que ela imprime — "beta pausado" — é verdadeira e inútil: não há como o Dr. Eduardo
+adivinhar, lendo aquilo, que o sistema guardava dois números dele e escolheu o velho.
+
+**A varredura da LEI 9 achou um QUARTO telefone**, que ninguém procurava: o
+`briefing_semanal.py` usava `os.environ.get("EDUARDO_PHONE", "5511999999999")` — um número de
+**São Paulo, inventado como exemplo**, no lugar do plano B. Se o `.env` falhasse, o briefing
+semanal dele sairia para um desconhecido e o log diria "enviado". Telefone de exemplo como
+fallback não é fallback: é destinatário errado com cara de sucesso. Agora não manda e diz por quê.
+
+**O que passou a valer:**
+
+- o telefone vem do `.env`, **normalizado na entrada** (`so_digitos`) — o resto do arquivo
+  nunca vê pontuação. Resolve as duas pontas de uma vez: a comparação do portão e o envio
+  (a Z-API quer o número corrido);
+- as **4** comparações do portão do beta passaram a ser por dígitos;
+- `_eduardo_do_env()` usa a MESMA variável que o portão compara — não lê o `.env` por conta;
+- trava `teste_um_telefone_do_dono_e_um_so`, provada contra 4 sabotagens.
+
+**A trava nasceu errada TRÊS vezes na bancada, e vale registrar porque é o mesmo defeito do
+sistema, dentro da prova:**
+1. procurava `DR_EDUARDO_PHONE` no corpo da função → achava na **docstring** e aprovava;
+2. corrigido para `ast`, ainda achava no `if not DR_EDUARDO_PHONE` da guarda → aprovava sem
+   olhar de onde saía o VALOR. Agora lê o valor da chave `"phone"` no dicionário;
+3. recortava o `so_digitos` com regex + `split("\n\n")` → cortava no meio da docstring,
+   `SyntaxError`, e a exceção **matava a bateria inteira** (as outras 60 travas nem rodavam) —
+   repetição literal do defeito de 08/Ago. Trava que explode não reprova: some.
+
+### 11/Ago/2026 · 19h — 🔴 A LEI 0 VOLTOU A SER A ÚNICA RÉGUA DE TETO (147 artigos mudam)
+
+*"VC PRECISA CRIAR UMA MANEIRA DE BLOQUEAR DESENHO DE ESTUDOS DE RECEBEREM NOTAS ALTAS...
+SE FOR DESENHO — COMO QUE O SISTEMA ME DÁ NOTA 8 PARA ISSO?"*
+
+**A maneira já existia: é a LEI 0. O que não existia era ela ser a ÚNICA.** O motor guardava
+DUAS tabelas de teto e escolhia entre elas pelo tipo de PERGUNTA:
+
+| desenho | `_TETO_INTERVENCAO` | `_TETO_NAO_INTERVENCAO` | LEI 0 (CLAUDE.md) |
+|---|---|---|---|
+| coorte | 6 | **8** | **6** |
+| registro | 6 | **7** | **6** |
+| caso_controle | 6 | **7** | **5** |
+| transversal | 5 | **6** | **5** |
+
+Uma coorte de prognóstico/etiologia/diagnóstico caía na segunda tabela e pegava teto 8. A LEI 0
+diz, com todas as letras: *"coorte sem adjudicação central → 6"* e *"Observacional sem propensity
+score recebendo NAC 8 → ERRADO"*. **Família de defeito da semana inteira — duas fontes de verdade
+para o mesmo fato — só que no lugar mais caro que existe: a nota.** Não era o modelo errando; era
+o código com duas réguas e uma chave para escolher entre elas.
+
+**MEDIDO em 683 artigos com desenho avaliável, antes de mudar uma linha: 147 (22 %) estavam acima
+do teto do próprio desenho.**
+
+```
+74 coorte 7→6 · 27 coorte 8→6 · 21 transversal 6→5 · 14 transversal 7-8→5
+ 6 observacional_ajustado 8→7 · 3 caso_controle 7→5 · 2 registro 7→6
+```
+
+| porta | antes | com a LEI 0 |
+|---|---|---|
+| publica + perícia + ACRI (≥6) | 423 | 385 |
+| Visual Abstract (≥7) | 253 | **133** |
+| áudio (≥8) | 77 | **40** |
+
+Um deles era **o JACC de morte súbita que ele aprovou e mandou no WhatsApp neste mesmo dia**:
+coorte, etiologia, nota 8. Pela LEI 0 é 6 — e 6 não gera Visual Abstract nem áudio.
+
+**Primeira decisão: uma tabela só.** E ela durou vinte minutos — porque estava errada. O que
+aconteceu em seguida é a parte importante deste registro.
+
+---
+
+#### 🔴 A CORREÇÃO DA CORREÇÃO — EU RECOMENDEI ERRADO, E ELE PEGOU NO CASO-LIMITE
+
+Eu apresentei "uma tabela só" com o selo **(Recomendado)**. Ele aceitou, eu troquei o gabarito do
+Framingham de 8 para 6, e escrevi na resposta que o Framingham agora tirava 6. Ele recusou na hora:
+
+> *"não pode — o Framingham agora tira 6 — isto obviamente está errado!"*
+
+**Ele estava certo.** Para **etiologia** e **prognóstico** o RCT é impossível, e muitas vezes
+antiético: ninguém randomiza gente para fumar, para ter LDL alto, para envelhecer. **A coorte
+prospectiva É o teto do que a pergunta admite.** Capar em 6 significa afirmar que nenhum estudo
+de fator de risco pode ser muito aplicável — e o Framingham mudou a cardiologia mais que quase
+todo RCT já publicado. O próprio GRADE prevê SUBIR observacional por efeito grande, dose-resposta
+e confundimento que iria contra o achado.
+
+**O que eu fiz de errado tem nome: apaguei uma distinção científica legítima porque o PORTÃO dela
+estava frouxo.** Consertar o portão era o trabalho. Apagar a regra foi preguiça disfarçada de rigor
+— e o mais grave é que eu a vendi como a opção recomendada, com números que só mostravam o custo
+de publicar menos, nunca o custo de reprovar o que era bom.
+
+**ONDE ESTAVA O BURACO DE VERDADE — medido depois que ele recusou:**
+
+O portão do "piso 8" **já existia** no código:
+```
+if teto >= 8 and not (desenho_apropriado and qualidade_entrada and follow_up_completo): teto = 7
+if a.get("retrospectivo"): teto = min(teto, 7)
+```
+
+Das 27 coortes que chegaram a 8:
+
+| `retrospectivo` | quantas |
+|---|---|
+| **`null` — o extrator não respondeu** | **18** |
+| `False` — declarada prospectiva | 8 |
+| `True` — e passou assim mesmo | 1 |
+
+`if a.get("retrospectivo")` lê `None` como falso. **Silêncio do extrator virava "é prospectiva"**
+— dois terços dos casos. Este projeto já corrigiu exatamente este erro na contagem NHLBI e nos
+fatos da meta; *"não confunda 'não reportado' com 'não fez'"* está escrito no próprio
+`analise_prompt.md`. Aqui ele estava vivo, e **premiando** em vez de punir.
+
+E os três booleanos são moles: nas 192 coortes o LLM diz `True` em 59 %, 79 % e 70 % — três
+julgamentos narrativos que, caindo juntos, entregavam o crachá de Framingham.
+
+**A REGRA FINAL — `selo_prospectivo()`.** O teto 8 da coorte não é piso que se ganha por silêncio:
+é um **selo que se conquista**, e só com o artigo DECLARANDO cada item. `None` reprova.
+
+| exige | e o motivo |
+|---|---|
+| `retrospectivo is False` **explícito** | silêncio não é prova de coleta prospectiva |
+| `desenho_apropriado is True` | a coorte tem de ser o desenho certo PARA A PERGUNTA |
+| `qualidade_entrada is True` | é a coleta impecável que sustenta a subida |
+| `follow_up_completo is True` | coorte com perda alta não é Framingham |
+
+E a subida é **nomeada**, não genérica: `_TETO_SELO_PROSPECTIVO` = coorte 8 · registro 7 ·
+caso-controle 6 · transversal 6. **Só para pergunta não-interventiva** — coorte de intervenção
+continua em 6 com selo ou sem, porque para intervenção o RCT existe.
+
+**O resultado, medido nos mesmos 658 artigos:**
+
+| porta | antes | "uma tabela só" (errado) | **LEI 0 + selo** |
+|---|---|---|---|
+| publica (≥6) | 423 | 385 | 385 |
+| Visual Abstract (≥7) | 253 | 133 | **144** |
+| áudio (≥8) | 77 | 40 | **44** |
+
+**11 artigos salvos** — 8 coortes que ficam com 8 e 3 que ficam com 7 — todos com o selo declarado.
+São exatamente os 8 que tinham `retrospectivo: False`. Os 18 do silêncio caem, que era o objetivo.
+
+**A trava também estava escrita ao contrário**, e isso é o mais perigoso de tudo: eu tinha chumbado
+`Framingham: aplicabilidade cai para 6` e chamado de "a decisão dele". Uma trava que guarda a régua
+errada não só deixa passar o defeito — **ela impede o conserto**, porque reprova quem tenta arrumar.
+
+**UMA REGRESSÃO MINHA, PEGA PELA TABELA DE CASOS:** ao reescrever, pus `min(teto, 8)` na meta de
+intervenção — régua que **ele removeu em 04/Ago** (*"a nota da meta tem que ser somatória, não tem
+muito o que ficar inventando"*). Só apareceu porque a tabela mostrou `meta/prognóstico = 10` e
+`meta/intervenção = 8`, invertido e sem sentido. Removida, com aviso no código para não voltar.
+
+---
+
+### 11/Ago/2026 · 19h — PROTOCOLO DE ESTUDO: O ENSAIO QUE AINDA NÃO ACONTECEU
+
+*"tem que tirar do supabase — não pode nem aparecer esses trocos"*, sobre
+*"…: Design and Rationale of the PRAISE-MR Trial"*.
+
+Eram **três**, todos do Journal of Cardiac Failure, **todos com nota 8**: PRAISE-MR, LEVEL,
+KETO-AHF. Nenhum tem resultado — descrevem um ensaio que ainda vai acontecer.
+
+**POR QUE TIRARAM 8, e é a coisa mais instrutiva do dia: ninguém errou.** O extrator leu o
+documento, viu randomização, dois braços e desfecho primário pré-especificado, e escreveu
+`desenho: rct`. Estava **certo** — o desenho *descrito* É um RCT. O motor deu o teto do RCT, 10.
+Faltava a palavra `protocolo` no vocabulário do sistema: não havia como o extrator dizer *"isto
+ainda não aconteceu"*.
+
+**DUAS PORTAS, porque uma só é fé:**
+1. **Classificador** (`eh_protocolo`, em `classificador_pubmed.py`) — descarta pelo TÍTULO, antes
+   de gastar um centavo de análise. Vem ANTES do `rotulo_protege` pelo mesmo motivo do tributo: o
+   PDF de protocolo traz "ORIGINAL RESEARCH" impresso no topo e o rótulo o protegeria.
+2. **Motor** (`ROTA_PROTOCOLO`) — se um escapar com título atípico, sai da escala clínica com
+   `aplic = 0`, pelo mesmo argumento do pré-clínico: **erro de categoria**. Não há desfecho
+   medido; "aplicabilidade clínica" é a única coisa que a nota mede.
+
+Mais o `protocolo` no enum do schema e a regra no `analise_prompt.md`, com o teste decisivo
+escrito para o extrator: *"o artigo reporta o resultado do desfecho primário?"*.
+
+**MEDIDO nos 449 títulos reais do banco: pega os 3, ZERO falso positivo.** Testado também contra
+os que NÃO podem ser pegos — "Study design considerations… a review", "Machine learning for the
+design of new drugs", "Rationale for lipid lowering in the elderly".
+
+SQL de remoção em `saidas/apagar_protocolos_11ago.sql` — com conferência antes e depois, para ele
+rodar. Apagar linha é irreversível; quem roda é o dono.
+
+Trava: `teste_uma_tabela_de_teto_e_o_protocolo_nao_pontua`, provada contra 4 sabotagens (a segunda
+tabela voltando · a rota sumindo · o classificador cego · o regex ganancioso pegando artigo bom).
+
+---
+
+### 11/Ago/2026 · 18h — FILTRO DE DATA NA CHAVE 3
+
+*"fica aparecendo artigos de 1999 na curadoria"* · *"preciso de filtro de data — data de
+inicio das buscas e final"*.
+
+**As duas decisões foram dele (LEI 6), com os números na mesa antes de perguntar:**
+
+| campo | amplitude medida | responde |
+|---|---|---|
+| `data_publicacao` | 1951-01-01 → 2026-10-01 | "o que saiu na literatura nesta janela" |
+| `created_at` | 2026-08-05 → 2026-08-11 | "o que entrou na minha fila" — 6 dias só, o banco foi refeito |
+
+Escolha dele: **data de publicação** (é a que produz o artigo de 1999) e **padrão VAZIO,
+mostra tudo**. Filtro que já vem ligado é armadilha de memória: um dia ele procura um artigo,
+não acha, e a causa é uma régua que ele não lembra que existe.
+
+Dos 449, 418 são de 2026 e 20 anteriores a 2024 — os clássicos (RALES, MERIT-HF, PLATO, FAME).
+Medido com os dados reais: na tela padrão (nota 8–10) são 123 artigos, dos quais 7 anteriores a
+2024; com o atalho de 90 dias, 97.
+
+**As três formas de esconder em silêncio, todas fechadas** — é o formato que custou o dia:
+· data malformada (`2026/08`) é **ignorada com aviso na tela**, não filtra por lixo;
+· janela invertida (fim < início) **diz que está invertida** — sem isso sobrava 1 artigo de 7 e
+  ele não teria como saber por quê;
+· artigo **sem data no metadado nunca é escondido** — sumir por falta de dado é punir o artigo
+  pelo defeito do dado.
+E o rodapé agora imprime *quais* filtros estão ativos e *quantos* artigos eles escondem.
+
+**Um `NameError` foi pego na bancada, e é o formato exato do `_VOO` de 10/Ago:** o filtro usa
+`_re` na linha 173, e o `import re as _re` estava na linha 256. Compila perfeito; quebraria com
+o painel abrindo. Import de módulo mora no topo.
+
+Trava: `teste_o_filtro_de_data_nao_esconde_por_conta_propria`, provada contra 4 sabotagens.
+
+---
+
+### 11/Ago/2026 · 17h30 — O ACRI SUMIA DO PAINEL À MEDIDA QUE O SISTEMA ERA USADO
+
+Pedido dele: *"concerta o acri que nao esta mais aparecendo no administrador"*.
+
+O painel liga a linha do Supabase ao pacote no disco (pelo DOI) para mostrar o ACRI que ele
+copia e cola no grupo. O índice varria **só** `outputs/STAGING/`. Mas a Chave 4 (Arquivador)
+**move** o pacote concluído para `outputs/ARQUIVO/AAAA-MM/` — é o trabalho dela, e ela faz certo.
+
+| | pacotes | com ACRI |
+|---|---|---|
+| `outputs/STAGING/` | 196 | 147 | ← o índice olhava só aqui |
+| `outputs/ARQUIVO/` | 864 | 571 | ← invisível para o painel |
+
+**MEDIDO:** dos 37 artigos nota 9 que o painel lista por padrão, **26 não achavam pacote nenhum**
+(11/37). Varrendo as duas árvores: **37/37, todos com ACRI**.
+
+**O que torna este defeito diferente: ele PIORA COM O USO.** Cada rodada do Arquivador esvazia
+mais um pedaço do painel. No começo funcionava; quanto mais o CardioDaily rodava, menos ACRI
+aparecia — e nada avisa, porque o artigo continua na lista, ele clica, e o bloco só não desenha.
+Quarta ocorrência da família da semana: duas pontas, uma passa a escrever num lugar novo, a
+outra continua lendo o velho, nada quebra no meio.
+
+Junto: o silêncio era metade do problema. "Sem ACRI" e "índice quebrado" desenhavam a MESMA
+tela, e são coisas opostas — uma é defeito, a outra é a LEI 10 funcionando (o card só nasce com
+nota ≥6). Agora cada caso diz o que é. E o `ttl` do cache subiu de 300s para 3600s: com 1.015
+pacotes a indexação leva ~7s, e esperar isso a cada 5 minutos no meio da curadoria é castigo.
+
+Trava: `teste_o_painel_enxerga_o_pacote_onde_o_arquivador_o_deixou`. **Ela também nasceu errada
+duas vezes**, e as duas valem registro porque são o defeito do sistema aparecendo dentro da prova:
+1. o regex do decorador (`ttl=(\d+)[^)]*\)`) fechava no parêntese que está DENTRO da mensagem do
+   spinner — e **reprovou o código certo**. Regex contando parêntese é ilusão de precisão;
+2. a checagem de alcance recalculava o índice com as pastas que EU escrevi — media o disco, não
+   o painel. Na sabotagem eu apontei o painel só para o STAGING e ela continuou ✅, porque nem
+   olhava para lá. Agora as raízes são lidas do `administrador.py` e usadas como ele as usa.
+
+---
+
+⚠️ **Nada disto é RESOLVIDO** (LEI 7): não consigo chamar o Supabase nem a Z-API daqui. Está
+"testei aqui" — corrente simulada de ponta a ponta com Supabase e Z-API falsos, os 2 doc_id
+conferidos direto no banco (notas 9 e 8, gancho/VA/áudio/PDF presentes nos dois). Vira
+RESOLVIDO quando as duas mensagens chegarem no celular dele.
+
+---
+
 ## PARTE 4 — ARQUITETURA: COMO O SISTEMA FUNCIONA
 
 ### O cérebro: Supabase
