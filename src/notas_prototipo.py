@@ -43,116 +43,49 @@ def rota(a):
 
 # ─────────────────────────── AS REGRAS ───────────────────────────
 
-# ─────────────────────────────────────────────────────────────────────────────────────
-# LÁPIDE — 11/Ago/2026
-#
-# Aqui viviam `_TETO_INTERVENCAO` e `_TETO_NAO_INTERVENCAO`, DUAS tabelas de teto que
-# discordavam entre si (coorte 6 vs 8, transversal 5 vs 6, registro 6 vs 7), e o motor
-# escolhia entre elas pelo tipo de PERGUNTA. Foram substituídas por `_TETO_LEI0`, logo
-# abaixo — uma só, a tabela A–E do CLAUDE.md.
-#
-# Estão APAGADAS, não comentadas. Tabela morta que continua no arquivo é convite: alguém
-# lê `_TETO_NAO_INTERVENCAO["coorte"] = 8`, acha que é a régua, e o defeito volta por uma
-# porta que a gente mesmo deixou encostada. Se o histórico for preciso, ele está no git e
-# no CADERNO_EXECUCAO.md.
-# ─────────────────────────────────────────────────────────────────────────────────────
-
-
 # ═══════════════════════════════════════════════════════════════════════════════════════
-# 11/Ago/2026 — HAVIA DUAS TABELAS DE TETO, E ELAS DISCORDAVAM. A LEI 0 VOLTOU A MANDAR.
+# 11/Ago/2026 — AS DUAS TABELAS FICAM. ELAS NÃO ERAM O DEFEITO.
 #
-#   *"VC PRECISA CRIAR UMA MANEIRA DE BLOQUEAR DESENHO DE ESTUDOS DE RECEBEREM NOTAS
-#     ALTAS... SE FOR DESENHO — COMO QUE O SISTEMA ME DÁ NOTA 8 PARA ISSO?"* — Dr. Eduardo
+# Durante algumas horas de 11/Ago eu apaguei estas duas tabelas e pus uma só no lugar,
+# alegando "duas fontes de verdade". **Foi erro meu, e o Dr. Eduardo reverteu.** As duas
+# tabelas não discordam: elas respondem PERGUNTAS DIFERENTES, e a distinção é científica.
 #
-# A maneira já existia: é a LEI 0, a tabela A–E do CLAUDE.md. O que não existia era ela ser
-# a ÚNICA. O motor guardava duas, e escolhia pela PERGUNTA:
+#   Para INTERVENÇÃO ("funciona no meu paciente?") existe RCT. Uma coorte é o que sobrou
+#   quando ninguém randomizou — teto 6, e ponto.
 #
-#     _TETO_INTERVENCAO       coorte 6 · transversal 5 · registro 6 · caso_controle 6
-#     _TETO_NAO_INTERVENCAO   coorte 8 · transversal 6 · registro 7 · caso_controle 7
+#   Para ETIOLOGIA e PROGNÓSTICO o RCT é IMPOSSÍVEL, e em geral antiético: ninguém
+#   randomiza gente para fumar, para ter LDL alto, para envelhecer. A coorte prospectiva
+#   É o melhor desenho que a pergunta admite. Capá-la em 6 seria dizer que nenhum estudo
+#   de fator de risco pode ser aplicável — e o Framingham mudou a cardiologia mais que
+#   quase todo RCT publicado. O GRADE prevê justamente SUBIR observacional por efeito
+#   grande, dose-resposta e confundimento que iria contra o achado.
 #
-# Uma coorte de prognóstico caía na segunda e pegava teto 8. A LEI 0 diz, com todas as
-# letras: *"Registro prospectivo SEM grupo controle, coorte sem adjudicação central → 6"* e
-# *"Observacional sem propensity score recebendo NAC 8 → ERRADO"*.
+# Palavras dele quando viu o Framingham em 6: *"não pode. Isto obviamente está errado!"*
 #
-# É a família de defeito da semana inteira — duas fontes de verdade para o mesmo fato, e
-# nada quebrando no meio — só que no lugar mais caro que existe: a NOTA. Não era o modelo
-# errando; era o código com duas réguas e uma chave para escolher entre elas.
-#
-# MEDIDO em 683 artigos com desenho avaliável, antes de mudar uma linha:
-#     147 (22 %) estavam acima do teto do próprio desenho
-#      74 coorte 7→6 · 27 coorte 8→6 · 21 transversal 6→5 · 14 transversal 7-8→5
-#       6 observacional_ajustado 8→7 · 3 caso_controle 7→5 · 2 registro 7→6
-#     Visual Abstract (≥7): 253 → 133      áudio (≥8): 77 → 40
-#
-# Um deles era o JACC de morte súbita que ele APROVOU E MANDOU no WhatsApp em 11/Ago:
-# coorte, etiologia, nota 8. Pela LEI 0 é 6 — e 6 não vai para o Visual Abstract nem para
-# o áudio.
-#
-# Decisão dele, com esses números na mesa: **UMA TABELA SÓ, a da LEI 0.** Nas palavras que
-# ele já tinha escrito na LEI 10: *"CardioDaily publica muito menos e reprova muito mais —
-# esta é a regra."*
-#
-# O QUE MORREU JUNTO: o "piso 8 do Framingham". O argumento era honesto — coleta impecável,
-# codebook, laboratório calibrado, seguimento completo — mas ele valia como ARGUMENTO, não
-# como teto. Coleta boa continua contando: entra na `nota_trabalho_estatistico`, que é o
-# outro termo do `min()`. O que não pode é coleta boa TRANSFORMAR coorte em quase-RCT.
+# O QUE ERA O DEFEITO DE VERDADE está logo abaixo, em `selo_prospectivo()`: o portão do
+# teto 8 lia o SILÊNCIO do extrator como "é prospectiva". Consertar o portão era o
+# trabalho; apagar a regra foi preguiça disfarçada de rigor.
 # ═══════════════════════════════════════════════════════════════════════════════════════
-_TETO_LEI0 = {                 # a tabela A–E do CLAUDE.md — o teto BASE de todo desenho
-    "rct": 10,                 # A — teto; o refinamento de cegamento/poder vem abaixo
-    "meta": 10,                # A — meta de RCTs; a escada da LEI 10 desce a partir daqui
-    "observacional_ajustado": 7,   # C — controle + propensity/multivariada robusta
-    "coorte": 6,               # D — sem randomização, sem adjudicação central
-    "registro": 6,             # D — registro prospectivo SEM grupo controle
-    "caso_controle": 5,        # E
-    "transversal": 5,          # E
+_TETO_INTERVENCAO = {          # "funciona no meu paciente?" — existe RCT, então exige-se RCT
+    "meta": 8,                 # meta de RCTs
+    "observacional_ajustado": 7,   # nível C: controle + propensity/multivariada robusta
+    "caso_controle": 6,
+    "coorte": 6,               # nível D: sem randomização, sem adjudicação central
+    "registro": 6,             # registro prospectivo SEM grupo controle
+    "transversal": 5,          # nível E
     "antes_depois_sem_controle": 5,
-    "serie_de_casos": 5,       # E
+    "serie_de_casos": 5,
 }
-
-# ═══════════════════════════════════════════════════════════════════════════════════════
-# 11/Ago/2026, 19h30 — A CORREÇÃO DA CORREÇÃO. EU ERREI, E O DR. EDUARDO PEGOU.
-#
-#   *"não pode — o Framingham agora tira 6 — isto obviamente está errado!"*
-#
-# Ele está certo, e o erro foi MEU: eu recomendei "uma tabela só" com o selo de recomendado,
-# e o que eu fiz foi APAGAR UMA DISTINÇÃO CIENTÍFICA LEGÍTIMA porque o portão dela estava
-# frouxo. Consertar o portão era o trabalho; apagar a regra foi preguiça disfarçada de rigor.
-#
-# ═══ POR QUE A DISTINÇÃO É LEGÍTIMA ═══
-# Para ETIOLOGIA e PROGNÓSTICO o RCT é impossível — e frequentemente antiético. Ninguém
-# randomiza gente para fumar, para ter LDL alto, para envelhecer. A COORTE PROSPECTIVA É o
-# teto do que a pergunta admite. Capar em 6 significa dizer que nenhum estudo de fator de
-# risco pode ser muito aplicável, o que é falso: o Framingham mudou a prática de cardiologia
-# mais que quase todo RCT já publicado. O próprio GRADE prevê SUBIR observacional por efeito
-# grande, dose-resposta e confundimento que iria contra o achado.
-#
-# ═══ ONDE ESTAVA O BURACO DE VERDADE — MEDIDO, NÃO SUPOSTO ═══
-# O portão do "piso 8" já existia:
-#     if teto >= 8 and not (desenho_apropriado and qualidade_entrada and follow_up_completo)
-#     if a.get("retrospectivo"): teto = min(teto, 7)
-#
-# Das 27 coortes que chegaram a 8:
-#     18  tinham `retrospectivo: null`   ← o extrator NÃO RESPONDEU
-#      8  tinham `retrospectivo: False`  ← declarada prospectiva
-#      1  tinha  `retrospectivo: True`   ← e passou assim mesmo
-#
-# `if a.get("retrospectivo")` lê `None` como falso. Ou seja: **SILÊNCIO DO EXTRATOR VIRAVA
-# "É PROSPECTIVA"**. Dois terços dos casos. Este projeto já corrigiu exatamente este erro na
-# contagem NHLBI e nos fatos da meta — *"não confunda 'não reportado' com 'não fez'"* está
-# escrito no próprio analise_prompt.md. Aqui ele estava vivo, e premiando em vez de punir.
-#
-# E os três booleanos são MOLES: nas 192 coortes o LLM diz True em 59 %, 79 % e 70 %. Três
-# julgamentos narrativos que, quando caem juntos, entregam o crachá de Framingham.
-#
-# ═══ A REGRA AGORA ═══
-# O teto 8 da coorte não é um piso que se ganha por silêncio: é um SELO que se conquista, e
-# só com o artigo DECLARANDO cada item. Silêncio não qualifica — reprova.
-# ═══════════════════════════════════════════════════════════════════════════════════════
-_TETO_SELO_PROSPECTIVO = {     # só para pergunta NÃO-interventiva, e só com o selo abaixo
-    "coorte": 8,               # o caso Framingham: prospectiva, coleta desenhada antes
-    "registro": 7,             # registro prospectivo com coleta padronizada
-    "caso_controle": 6,        # NHLBI: controles concorrentes, mesma população
-    "transversal": 6,          # transversal cego com padrão-ouro (acurácia diagnóstica)
+_TETO_NAO_INTERVENCAO = {      # etiologia / prognóstico / diagnóstico — o RCT não é possível
+    "rct": 8,                  # análise secundária de RCT respondendo pergunta não-interventiva
+    "meta": 8,
+    "coorte": 8,               # o caso Framingham — mas SÓ com o selo (ver selo_prospectivo)
+    "observacional_ajustado": 7,
+    "caso_controle": 7,        # NHLBI Case-Control: controles concorrentes, mesma população
+    "registro": 7,
+    "transversal": 6,          # não separa exposição de desfecho no tempo
+    "antes_depois_sem_controle": 5,
+    "serie_de_casos": 5,       # NHLBI Case Series: sem comparação, viés de seleção
 }
 
 
@@ -178,51 +111,47 @@ def selo_prospectivo(a):
 
 
 def teto_desenho(a):
-    """REGRA 0 — teto por DESENHO, com UMA subida nomeada e conquistada.
+    """REGRA 0 — teto por TIPO DE PERGUNTA × DESENHO.
 
-    Base: a tabela A–E da LEI 0 (`_TETO_LEI0`). Duas coisas podem mexer nela:
-      · a PERGUNTA + o SELO PROSPECTIVO podem SUBIR — só para etiologia/prognóstico/
-        diagnóstico, onde o RCT é impossível, e só com o selo inteiro (ver acima);
-      · tudo o mais só ABAIXA.
+    Duas tabelas, e elas NÃO discordam: respondem perguntas diferentes (ver o bloco lá em
+    cima). Para intervenção existe RCT, então exige-se RCT. Para etiologia/prognóstico/
+    diagnóstico o RCT é impossível, e a coorte prospectiva é o melhor que a pergunta admite.
+
+    A ÚNICA mudança de 11/Ago está no portão do teto 8: ele exige o SELO (`selo_prospectivo`),
+    e o selo não se ganha por silêncio. Antes, `if a.get("retrospectivo")` lia `None` como
+    "não é retrospectivo" e concedia o 8 — 18 das 27 coortes com nota 8 tinham esse campo
+    em branco. Nada mais na régua mudou: decisão do Dr. Eduardo em 11/Ago, depois de eu ter
+    proposto (e ele ter recusado) unificar as duas tabelas.
     """
     q = a["pergunta"]
     d = a.get("desenho")
-    teto = _TETO_LEI0.get(d, 6)
 
-    # A ÚNICA SUBIDA DO MOTOR, e ela é nominal: pergunta que o RCT não pode responder +
-    # selo prospectivo COMPLETO. Sem o selo, fica na tabela A–E e ponto.
-    if q != "intervencao" and d in _TETO_SELO_PROSPECTIVO:
-        ok, _ = selo_prospectivo(a)
-        if ok:
-            teto = max(teto, _TETO_SELO_PROSPECTIVO[d])
+    if q == "intervencao":
+        if d == "rct":
+            # Nível B (teto 8): sem cegamento, OU poder limítrofe — MAS parada precoce por
+            # benefício não conta como "poder ruim" (o benefício foi esmagador). US Carvedilol.
+            if a.get("open_label") or (not a.get("poder_ok", True)
+                                       and not a.get("parado_cedo_por_beneficio")):
+                return 8
+            return 10               # Nível A: RCT duro, cegado, poder ok
+        return _TETO_INTERVENCAO.get(d, 6)
 
-    if d == "rct":
-        # Nível B (teto 8): sem cegamento, OU poder limítrofe — MAS parada precoce por
-        # benefício não conta como "poder ruim" (o benefício foi esmagador). US Carvedilol.
-        if a.get("open_label") or (not a.get("poder_ok", True)
-                                   and not a.get("parado_cedo_por_beneficio")):
-            teto = min(teto, 8)
-        # RCT respondendo pergunta NÃO-interventiva é análise secundária: não foi para isso
-        # que ele foi randomizado. Continua valendo o 8 que já valia.
-        if q != "intervencao":
-            teto = min(teto, 8)
+    # etiologia / prognóstico / diagnóstico
+    teto = _TETO_NAO_INTERVENCAO.get(d, 6)
 
-    # ⚠️ NÃO PONHA TETO 8 NA META AQUI. Eu tentei, agora há pouco, e é uma REGRESSÃO: em
-    # 04/Ago o Dr. Eduardo removeu exatamente essa régua — *"a nota da meta-análise tem que
-    # ser somatória, não tem muito o que ficar inventando"*. O `_TETO_INTERVENCAO["meta"]=8`
-    # era um teto colocado POR CIMA da ponderação dos 6 domínios que ele desenhou: uma meta
-    # impecável saía 8 de qualquer jeito e o scorecard não decidia nada. Quem capa a meta é
-    # a ESCADA da LEI 10, dentro de `nota_meta` (IPD/RCT sem teto · observacional 7 · rede
-    # sem transitividade 8 · contaminação 5 · NI mal lida 6 · I² alto 6), e o `veredito`
-    # força `td = 10` para a meta logo abaixo. Peguei isto porque a tabela de casos mostrou
-    # meta/prognóstico com teto 10 e meta/intervenção com 8 — invertido, e sem sentido.
-
-    # RETROSPECTIVO desce mais um degrau, nunca sobe. `is True` de propósito: aqui o `None`
-    # NÃO desce (não vamos punir o silêncio), mas ele também não SOBE — quem lida com o
-    # silêncio é o selo acima, que exige `False` explícito. As duas leituras do mesmo campo
-    # são assimétricas de caso pensado: para BAIXAR exige-se prova; para SUBIR também.
+    # retrospectivo DECLARADO desce um degrau (observacional com ajuste é capado em 7)
     if a.get("retrospectivo") is True:
         teto = min(teto, 7)
+
+    # ═══ O CONSERTO DE 11/Ago — E É SÓ ISTO QUE MUDOU ═══
+    # O teto 8 é um SELO que se conquista com o artigo DECLARANDO cada item; `None` reprova.
+    # Antes: `not (desenho_apropriado and qualidade_entrada and follow_up_completo)` — e o
+    # `retrospectivo: null` passava batido, porque `if a.get("retrospectivo")` é falso para
+    # None. Silêncio virava "é prospectiva", e o crachá de Framingham saía de graça.
+    if teto >= 8:
+        ok, _falta = selo_prospectivo(a)
+        if not ok:
+            teto = 7
 
     return teto
 

@@ -1836,48 +1836,25 @@ def teste_uma_tabela_de_teto_e_o_protocolo_nao_pontua():
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import notas_prototipo as N
 
-    # ── 1) UMA tabela só, e ela é a da LEI 0 ──
-    checa("existe UMA tabela de teto (_TETO_LEI0)", hasattr(N, "_TETO_LEI0"),
-          "sumiu — sem ela não há régua de desenho")
-    for morta in ("_TETO_INTERVENCAO", "_TETO_NAO_INTERVENCAO"):
-        checa(f"a tabela morta {morta} NÃO voltou", not hasattr(N, morta),
-              "duas tabelas de teto foi a causa de 147 artigos acima do teto — não pode voltar")
-
-    LEI0 = {"coorte": 6, "registro": 6, "observacional_ajustado": 7, "caso_controle": 5,
-            "transversal": 5, "serie_de_casos": 5, "antes_depois_sem_controle": 5}
-
-    # ⚠️ ESTE BLOCO TAMBÉM ESTAVA ERRADO na primeira versão de hoje: eu cobrava "nenhuma
-    # pergunta levanta o teto", com os fatos TODOS preenchidos. Cobrava a régua que o Dr.
-    # Eduardo recusou. O que a régua diz de verdade é mais fino:
-    #     · SEM o selo prospectivo → a tabela A–E manda, e nada sobe. É o caso de 18 dos 27.
-    #     · COM o selo, e só para pergunta que o RCT não pode responder → sobe até o valor
-    #       NOMEADO em _TETO_SELO_PROSPECTIVO. É o caso Framingham.
-    for des, teto in LEI0.items():
-        piores = []
-        for q in ("intervencao", "etiologia", "prognostico", "diagnostico"):
-            # SEM selo: o extrator ficou calado sobre retrospectivo — o caso real de 11/Ago
-            a = {"desenho": des, "pergunta": q, "retrospectivo": None, "poder_ok": True,
-                 "desenho_apropriado": True, "qualidade_entrada": True,
-                 "follow_up_completo": True}
-            t = N.teto_desenho(a)
-            if t > teto:
-                piores.append(f"{q}={t}")
-        checa(f"{des}: SEM o selo, nenhuma pergunta levanta o teto acima de {teto}", not piores,
-              f"{', '.join(piores)} — silêncio do extrator virando selo é o defeito de 11/Ago")
-
-    # o caso concreto que ele apontou: coorte de intervenção nunca passa de 6
-    for q in ("prognostico", "etiologia", "diagnostico"):
-        a = {"desenho": "coorte", "pergunta": q, "retrospectivo": None, "poder_ok": True,
-             "desenho_apropriado": True, "qualidade_entrada": True, "follow_up_completo": True}
-        checa(f"coorte/{q} SEM selo tem teto 6, não 8", N.teto_desenho(a) == 6,
-              f"veio {N.teto_desenho(a)}")
-
-    # e a subida existe e é NOMEADA — se sumir, o Framingham cai para 6 outra vez
-    checa("a tabela do selo existe e nomeia até onde cada desenho sobe",
-          hasattr(N, "_TETO_SELO_PROSPECTIVO")
-          and N._TETO_SELO_PROSPECTIVO.get("coorte") == 8,
-          "sem ela, etiologia e prognóstico ficam capados em 6 — e para essas perguntas o "
-          "RCT é impossível")
+    # ── 1) AS DUAS TABELAS FICAM. Elas não discordam: respondem perguntas diferentes ──
+    #
+    # ⚠️ ESTA TRAVA JÁ ESTEVE ESCRITA AO CONTRÁRIO, no mesmo dia. Eu tinha posto
+    # `a tabela morta _TETO_NAO_INTERVENCAO NÃO voltou` e chamado a unificação de "decisão
+    # dele". Não era: eu propus, ele aceitou sem ver o caso-limite, e recusou assim que viu
+    # (*"o Framingham agora tira 6 — isto obviamente está errado!"*). Uma trava que chumba a
+    # régua errada não deixa só o defeito passar — **ela impede o conserto**, porque reprova
+    # quem tenta arrumar. É o pior tipo de trava que existe.
+    for viva in ("_TETO_INTERVENCAO", "_TETO_NAO_INTERVENCAO"):
+        checa(f"{viva} existe", hasattr(N, viva),
+              "as duas tabelas respondem PERGUNTAS diferentes; para etiologia/prognóstico o "
+              "RCT é impossível e a coorte prospectiva é o teto que a pergunta admite")
+    checa("_TETO_NAO_INTERVENCAO['coorte'] continua 8",
+          getattr(N, "_TETO_NAO_INTERVENCAO", {}).get("coorte") == 8,
+          "capar a coorte de etiologia em 6 é dizer que nenhum estudo de fator de risco pode "
+          "ser aplicável — o Framingham mudou a cardiologia mais que quase todo RCT")
+    checa("_TETO_INTERVENCAO['coorte'] continua 6",
+          getattr(N, "_TETO_INTERVENCAO", {}).get("coorte") == 6,
+          "para INTERVENÇÃO existe RCT; coorte não pode subir")
 
     # e o RCT de verdade continua podendo chegar a 10
     a = {"desenho": "rct", "pergunta": "intervencao", "retrospectivo": False,
@@ -1911,17 +1888,24 @@ def teste_uma_tabela_de_teto_e_o_protocolo_nao_pontua():
                      ("desenho inapropriado", {"desenho_apropriado": False})):
         a = dict(FRAM)
         a.update(mud)
-        checa(f"sem selo ({rot}): coorte volta ao teto 6", N.teto_desenho(a) == 6,
+        checa(f"sem selo ({rot}): coorte cai de 8 para 7", N.teto_desenho(a) == 7,
               f"veio {N.teto_desenho(a)} — o selo está sendo dado de graça")
         ok, falta = N.selo_prospectivo(a)
         checa(f"sem selo ({rot}): o motivo é dito, não é silêncio", (not ok) and bool(falta),
               "reprovou sem dizer o que faltou — o redator não tem como explicar a nota")
 
-    # a subida é SÓ para pergunta que o RCT não pode responder
+    # O CASO QUE ORIGINOU TUDO, nomeado: silêncio não é selo.
+    a = dict(FRAM)
+    a["retrospectivo"] = None
+    checa("SILÊNCIO sobre `retrospectivo` NÃO concede o teto 8", N.teto_desenho(a) == 7,
+          f"veio {N.teto_desenho(a)} — 18 das 27 coortes com nota 8 tinham esse campo em "
+          f"branco; `if a.get('retrospectivo')` lia None como 'não é retrospectivo'")
+
+    # e a pergunta de intervenção não sobe nunca — para ela existe RCT
     a = dict(FRAM)
     a["pergunta"] = "intervencao"
-    checa("coorte de INTERVENÇÃO não sobe nem com o selo completo", N.teto_desenho(a) == 6,
-          f"veio {N.teto_desenho(a)} — para intervenção existe RCT, e a LEI 0 manda")
+    checa("coorte de INTERVENÇÃO não passa de 6 nem com o selo completo",
+          N.teto_desenho(a) == 6, f"veio {N.teto_desenho(a)}")
 
     # ── 3) PROTOCOLO não pontua, nas DUAS portas ──
     checa("o motor conhece a rota do protocolo", hasattr(N, "ROTA_PROTOCOLO"), "sumiu")

@@ -152,125 +152,81 @@ sistema, dentro da prova:**
    `SyntaxError`, e a exceção **matava a bateria inteira** (as outras 60 travas nem rodavam) —
    repetição literal do defeito de 08/Ago. Trava que explode não reprova: some.
 
-### 11/Ago/2026 · 19h — 🔴 A LEI 0 VOLTOU A SER A ÚNICA RÉGUA DE TETO (147 artigos mudam)
+### 11/Ago/2026 · 20h — O SILÊNCIO DO EXTRATOR VIRAVA SELO DE FRAMINGHAM
 
 *"VC PRECISA CRIAR UMA MANEIRA DE BLOQUEAR DESENHO DE ESTUDOS DE RECEBEREM NOTAS ALTAS...
-SE FOR DESENHO — COMO QUE O SISTEMA ME DÁ NOTA 8 PARA ISSO?"*
+COMO QUE O SISTEMA ME DÁ NOTA 8 PARA ISSO?"*
 
-**A maneira já existia: é a LEI 0. O que não existia era ela ser a ÚNICA.** O motor guardava
-DUAS tabelas de teto e escolhia entre elas pelo tipo de PERGUNTA:
+#### O QUE FOI FEITO — e é PEQUENO de propósito
 
-| desenho | `_TETO_INTERVENCAO` | `_TETO_NAO_INTERVENCAO` | LEI 0 (CLAUDE.md) |
-|---|---|---|---|
-| coorte | 6 | **8** | **6** |
-| registro | 6 | **7** | **6** |
-| caso_controle | 6 | **7** | **5** |
-| transversal | 5 | **6** | **5** |
+O portão do teto 8 (etiologia/prognóstico/diagnóstico) exigia três booleanos do NHLBI e que o
+estudo não fosse retrospectivo. O código dizia `if a.get("retrospectivo")` — e `None` é falso
+em Python. **Silêncio do extrator virava "é prospectiva"**, e o teto mais alto saía de graça.
 
-Uma coorte de prognóstico/etiologia/diagnóstico caía na segunda tabela e pegava teto 8. A LEI 0
-diz, com todas as letras: *"coorte sem adjudicação central → 6"* e *"Observacional sem propensity
-score recebendo NAC 8 → ERRADO"*. **Família de defeito da semana inteira — duas fontes de verdade
-para o mesmo fato — só que no lugar mais caro que existe: a nota.** Não era o modelo errando; era
-o código com duas réguas e uma chave para escolher entre elas.
-
-**MEDIDO em 683 artigos com desenho avaliável, antes de mudar uma linha: 147 (22 %) estavam acima
-do teto do próprio desenho.**
-
-```
-74 coorte 7→6 · 27 coorte 8→6 · 21 transversal 6→5 · 14 transversal 7-8→5
- 6 observacional_ajustado 8→7 · 3 caso_controle 7→5 · 2 registro 7→6
-```
-
-| porta | antes | com a LEI 0 |
-|---|---|---|
-| publica + perícia + ACRI (≥6) | 423 | 385 |
-| Visual Abstract (≥7) | 253 | **133** |
-| áudio (≥8) | 77 | **40** |
-
-Um deles era **o JACC de morte súbita que ele aprovou e mandou no WhatsApp neste mesmo dia**:
-coorte, etiologia, nota 8. Pela LEI 0 é 6 — e 6 não gera Visual Abstract nem áudio.
-
-**Primeira decisão: uma tabela só.** E ela durou vinte minutos — porque estava errada. O que
-aconteceu em seguida é a parte importante deste registro.
-
----
-
-#### 🔴 A CORREÇÃO DA CORREÇÃO — EU RECOMENDEI ERRADO, E ELE PEGOU NO CASO-LIMITE
-
-Eu apresentei "uma tabela só" com o selo **(Recomendado)**. Ele aceitou, eu troquei o gabarito do
-Framingham de 8 para 6, e escrevi na resposta que o Framingham agora tirava 6. Ele recusou na hora:
-
-> *"não pode — o Framingham agora tira 6 — isto obviamente está errado!"*
-
-**Ele estava certo.** Para **etiologia** e **prognóstico** o RCT é impossível, e muitas vezes
-antiético: ninguém randomiza gente para fumar, para ter LDL alto, para envelhecer. **A coorte
-prospectiva É o teto do que a pergunta admite.** Capar em 6 significa afirmar que nenhum estudo
-de fator de risco pode ser muito aplicável — e o Framingham mudou a cardiologia mais que quase
-todo RCT já publicado. O próprio GRADE prevê SUBIR observacional por efeito grande, dose-resposta
-e confundimento que iria contra o achado.
-
-**O que eu fiz de errado tem nome: apaguei uma distinção científica legítima porque o PORTÃO dela
-estava frouxo.** Consertar o portão era o trabalho. Apagar a regra foi preguiça disfarçada de rigor
-— e o mais grave é que eu a vendi como a opção recomendada, com números que só mostravam o custo
-de publicar menos, nunca o custo de reprovar o que era bom.
-
-**ONDE ESTAVA O BURACO DE VERDADE — medido depois que ele recusou:**
-
-O portão do "piso 8" **já existia** no código:
-```
-if teto >= 8 and not (desenho_apropriado and qualidade_entrada and follow_up_completo): teto = 7
-if a.get("retrospectivo"): teto = min(teto, 7)
-```
-
-Das 27 coortes que chegaram a 8:
-
-| `retrospectivo` | quantas |
+| das 27 coortes com nota 8 | |
 |---|---|
-| **`null` — o extrator não respondeu** | **18** |
+| **`retrospectivo: null` — o extrator não respondeu** | **18** |
 | `False` — declarada prospectiva | 8 |
 | `True` — e passou assim mesmo | 1 |
 
-`if a.get("retrospectivo")` lê `None` como falso. **Silêncio do extrator virava "é prospectiva"**
-— dois terços dos casos. Este projeto já corrigiu exatamente este erro na contagem NHLBI e nos
-fatos da meta; *"não confunda 'não reportado' com 'não fez'"* está escrito no próprio
-`analise_prompt.md`. Aqui ele estava vivo, e **premiando** em vez de punir.
+Este projeto já corrigiu exatamente este erro na contagem NHLBI e nos fatos da meta; *"não
+confunda 'não reportado' com 'não fez'"* está escrito no próprio `analise_prompt.md`. Aqui ele
+estava vivo, e **premiando** em vez de punir.
 
-E os três booleanos são moles: nas 192 coortes o LLM diz `True` em 59 %, 79 % e 70 % — três
-julgamentos narrativos que, caindo juntos, entregavam o crachá de Framingham.
+Agora o teto 8 é um **selo** (`selo_prospectivo()`) que exige `retrospectivo is False`
+EXPLÍCITO e os três NHLBI em `True` explícito. `None` reprova, **e a função diz o que faltou**,
+para o redator poder explicar a nota.
 
-**A REGRA FINAL — `selo_prospectivo()`.** O teto 8 da coorte não é piso que se ganha por silêncio:
-é um **selo que se conquista**, e só com o artigo DECLARANDO cada item. `None` reprova.
+**EFEITO MEDIDO, isolando só esta mudança** (mesmo motor, com e sem o conserto — não comparar
+com as notas guardadas, que foram feitas por versões de dias diferentes):
 
-| exige | e o motivo |
+| | |
 |---|---|
-| `retrospectivo is False` **explícito** | silêncio não é prova de coleta prospectiva |
-| `desenho_apropriado is True` | a coorte tem de ser o desenho certo PARA A PERGUNTA |
-| `qualidade_entrada is True` | é a coleta impecável que sustenta a subida |
-| `follow_up_completo is True` | coorte com perda alta não é Framingham |
+| notas que mudam | **15** — todas coorte com `retrospectivo: null` |
+| **saem do ar (≥6 → <6)** | **0** |
+| perdem Visual Abstract (≥7) | 1 |
+| perdem áudio (≥8) | 14 |
 
-E a subida é **nomeada**, não genérica: `_TETO_SELO_PROSPECTIVO` = coorte 8 · registro 7 ·
-caso-controle 6 · transversal 6. **Só para pergunta não-interventiva** — coorte de intervenção
-continua em 6 com selo ou sem, porque para intervenção o RCT existe.
+---
 
-**O resultado, medido nos mesmos 658 artigos:**
+#### ⚠️ O QUE EU QUASE FIZ, E O DR. EDUARDO BARROU DUAS VEZES
 
-| porta | antes | "uma tabela só" (errado) | **LEI 0 + selo** |
-|---|---|---|---|
-| publica (≥6) | 423 | 385 | 385 |
-| Visual Abstract (≥7) | 253 | 133 | **144** |
-| áudio (≥8) | 77 | 40 | **44** |
+Investigando o pedido dele eu achei que `_TETO_INTERVENCAO` e `_TETO_NAO_INTERVENCAO` eram
+"duas fontes de verdade discordando" — o defeito que perseguimos o dia inteiro — e propus
+unificá-las numa tabela só, **com selo de (Recomendado)**. Ele aceitou com base no que eu
+mostrei. Efeito: 147 notas mexidas, Visual Abstract de 253 → 133, áudio de 77 → 40.
 
-**11 artigos salvos** — 8 coortes que ficam com 8 e 3 que ficam com 7 — todos com o selo declarado.
-São exatamente os 8 que tinham `retrospectivo: False`. Os 18 do silêncio caem, que era o objetivo.
+**Estava errado, e o erro era conceitual.** As duas tabelas não discordam: respondem
+PERGUNTAS DIFERENTES. Para intervenção existe RCT, então exige-se RCT. Para **etiologia e
+prognóstico o RCT é impossível, e em geral antiético** — ninguém randomiza gente para fumar.
+A coorte prospectiva **É** o melhor desenho que a pergunta admite. O GRADE prevê justamente
+SUBIR observacional por efeito grande, dose-resposta e confundimento contrário ao achado.
 
-**A trava também estava escrita ao contrário**, e isso é o mais perigoso de tudo: eu tinha chumbado
-`Framingham: aplicabilidade cai para 6` e chamado de "a decisão dele". Uma trava que guarda a régua
-errada não só deixa passar o defeito — **ela impede o conserto**, porque reprova quem tenta arrumar.
+**BARRADO 1 — o caso-limite.** Eu troquei o gabarito do Framingham para 6 e escrevi isso na
+resposta. Ele leu e recusou: *"não pode. O Framingham agora tira 6. Isto obviamente está
+errado!"*. Consertei o Framingham — mas deixei o resto da mudança de pé.
 
-**UMA REGRESSÃO MINHA, PEGA PELA TABELA DE CASOS:** ao reescrever, pus `min(teto, 8)` na meta de
-intervenção — régua que **ele removeu em 04/Ago** (*"a nota da meta tem que ser somatória, não tem
-muito o que ficar inventando"*). Só apareceu porque a tabela mostrou `meta/prognóstico = 10` e
-`meta/intervenção = 8`, invertido e sem sentido. Removida, com aviso no código para não voltar.
+**BARRADO 2 — o escopo.** *"tem pouco mais de 400 artigos no Supabase, com esta alteração vai
+tirar 65? A mudança que eu queria era não permitir que papers que apenas descrevem como
+deveria ser o trabalho... eu ainda não entendi por que mexer tanto na classificação de notas."*
+Ele estava certo de novo: eu tinha **empacotado o pedido dele com um achado meu** e
+transformado um conserto de 3 artigos numa reavaliação da base inteira.
+
+Pus as três opções na mesa com número: **A** (só protocolo, 0 notas mexidas) · **B** (A + o
+conserto do silêncio, 0 artigos fora do ar) · **C** (o que eu tinha feito, 65 fora do ar).
+**Ele escolheu B.** O C foi revertido — as duas tabelas voltaram inteiras.
+
+**A LIÇÃO DE MÉTODO, e ela é minha:** eu apresentei números que mostravam só o custo de
+publicar menos, nunca o custo de **reprovar o que era bom**. Régua nova precisa de um caso
+nomeado de cada lado — foi o Framingham que revelou o erro, não a estatística.
+
+**E A TRAVA ESTAVA ESCRITA AO CONTRÁRIO.** Eu tinha chumbado `Framingham: aplicabilidade cai
+para 6` e `a tabela morta _TETO_NAO_INTERVENCAO NÃO voltou`, chamando aquilo de "decisão dele".
+Trava com a régua errada não deixa só o defeito passar — **ela impede o conserto**, porque
+reprova quem tenta arrumar. É o pior tipo de trava que existe.
+
+Trava final: `teste_uma_tabela_de_teto_e_o_protocolo_nao_pontua`, provada contra sabotagem nos
+dois sentidos (o silêncio voltando a valer selo · alguém unificando as tabelas de novo).
 
 ---
 
