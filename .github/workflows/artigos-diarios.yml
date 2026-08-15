@@ -1,10 +1,26 @@
-name: Artigos Diários (MANUAL — curadoria pelo painel)
+name: Artigos Diários (07:00 — só o que o Dr. Eduardo aprovou na Chave 3)
 
-# DESLIGADO o envio automático em 27/Jul/2026 (decisão do Dr. Eduardo): o sistema NÃO publica/envia
-# artigo sozinho. A curadoria passa a ser MANUAL pelo Painel de Curadoria (src/painel_curadoria.py).
-# Só o Radar continua automático (radar.yml). Este workflow fica só como disparo manual de emergência.
+# ═══ 14/Ago/2026 — O CRON VOLTOU, E AGORA PODE VOLTAR ═══
+#
+# Pergunta do Dr. Eduardo: *"por que o sistema não usa o mesmo do radar, que envia todos os
+# dias independente de como meu computador estiver ligado ou não?"*
+#
+# O automático foi desligado em 27/Jul por decisão dele — *"o sistema NÃO publica/envia artigo
+# sozinho"* — e naquele momento estava CERTO: a curadoria não existia, então automático
+# significava a máquina escolhendo. Hoje é o contrário: **quem escolhe é ele, na Chave 3**, e
+# o cron só cumpre o horário. O distribuidor lê a tabela `agenda_envio` e nada mais; agenda
+# vazia = nada sai. Não existe seleção por tema, por nota nem por data.
+#
+# O QUE DESTRAVOU: até 14/Ago a agenda morava em `saidas/agenda_envio.csv`, no Mac dele — e a
+# nuvem não enxerga o disco dele. Era o ÚNICO motivo pelo qual isto não podia rodar como o
+# Radar. A agenda foi para o Supabase; o obstáculo era um arquivo.
+#
+# 10:00 UTC = 07:00 BRT. Meia hora antes do Radar (10:30 UTC), de propósito: ele pediu o
+# artigo junto com o Radar, e o artigo vem primeiro.
 on:
-  workflow_dispatch:        # SÓ manual — o cron automático foi removido de propósito
+  schedule:
+    - cron: '0 10 * * *'    # 10:00 UTC = 07:00 BRT
+  workflow_dispatch:        # e continua disparável na mão, quando ele quiser
 
 jobs:
   distribuir:

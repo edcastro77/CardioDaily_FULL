@@ -152,6 +152,75 @@ sistema, dentro da prova:**
    `SyntaxError`, e a exceção **matava a bateria inteira** (as outras 60 travas nem rodavam) —
    repetição literal do defeito de 08/Ago. Trava que explode não reprova: some.
 
+### 14/Ago/2026 — O ENVIO PASSOU A RODAR COMO O RADAR (a agenda saiu do disco)
+
+*"programei os artigos ontem que deveria receber nos próximos 3 dias, mas não funcionou"*
+
+Causa: **nada rodava sozinho.** O cron do `artigos-diarios.yml` foi removido em 27/Jul por
+decisão dele — *"o sistema NÃO publica/envia artigo sozinho"* — e naquele momento estava
+CERTO, porque a curadoria não existia e automático significava a máquina escolhendo. Hoje é
+o contrário: quem escolhe é ele, na Chave 3, e o cron só cumpre o horário.
+
+**MEU PRIMEIRO CONSERTO FOI RUIM, E ELE VIU NA HORA.** Montei um agendador `launchd` no
+macOS — que só funciona com o notebook ligado e acordado às 07:00. Ele é **plantonista**.
+Aquilo resolvia o meu problema (era o caminho curto), não o dele. A pergunta que derrubou:
+
+> *"Por que o sistema não usa o mesmo do radar, que envia todos os dias independente de como
+> meu computador estiver ligado ou não?"*
+
+**A resposta era um arquivo.** O Radar roda na nuvem porque não depende de NADA no Mac dele:
+nasce no Supabase, lê no Supabase, manda de lá. O envio de artigos era idêntico — mesma
+Z-API, mesmo distribuidor, mesmo tipo de workflow — com UMA diferença: a lista do que enviar
+morava em `saidas/agenda_envio.csv`, no disco dele.
+
+**A agenda foi para o Supabase** (tabela `agenda_envio`), o cron voltou (`0 10 * * *` =
+07:00 BRT, meia hora antes do Radar), e o Mac deixou de importar.
+
+**E A TABELA COMEU O LIVRO DE BORDO — que eu tinha criado UMA HORA ANTES.** Para o agendador
+do Mac não repetir mensagem, criei `saidas/enviados.csv`. Com a agenda na tabela, a coluna
+`enviado_em` responde *"já saiu?"* na MESMA LINHA que responde *"está agendado?"*. Dois
+arquivos locais que podiam discordar viraram uma linha que não pode. Apagados, não comentados.
+
+| defeito que o modo manual escondia | |
+|---|---|
+| não existia registro do que já foi enviado | a agenda não era limpa, e `registrar_envio` sai na porta para o destinatário do `.env` (`id: None`, sem linha em `whatsapp_users`) |
+| com o cron, um clique na Chave 21 às 10h repetiria tudo | agora a consulta pede `enviado_em IS NULL` |
+
+**O AVISO DIÁRIO — e este é o conserto que mais importa.** O defeito dos dias 12 e 13 não foi
+só a falta do agendador: foi que **nada o avisou**. Ele aprovou, o dia passou, e o silêncio era
+idêntico a "está tudo funcionando". Com o envio na nuvem isso pioraria — ele não vê tela
+nenhuma. Agora sai um WhatsApp cobrindo os quatro estados, **nenhum deles silêncio**: saiu N ·
+agenda vazia · já tinha saído · falhou. Telegram descartado a pedido dele: *"serve mais de
+laboratório, ninguém usa, inclusive eu — quando abro tem mais de 100 mensagens que não vejo"*.
+
+**Migração:** as 12 linhas do CSV foram para a tabela com o histórico correto — 5 marcadas
+como já enviadas (11 e 14/Ago, que ele confirmou ter recebido), 7 pendentes. A Chave 3 agora
+mostra em VERMELHO, no topo, os artigos com data já passada e não enviados — os 5 dos dias 12
+e 13 aparecem lá, e não saem sozinhos: a data precisa ser refeita.
+
+**Erro de leitura ≠ dia vazio:** se o Supabase não responder, `fila_aprovada` devolve `None`
+(não `[]`) e o envio PARA. `[]` faria o log dizer "nada aprovado para hoje" — a mensagem certa
+pelo motivo errado, a família de defeito da semana inteira.
+
+**A Chave 21 mudou de papel:** era "o jeito de enviar", virou "enviar FORA DE HORA". E o
+agendador do macOS que eu tinha montado foi **removido no mesmo passo** — dois agendadores
+vivos seria "duas fontes de verdade" outra vez.
+
+⚠️ **TRÊS travas minhas aprovaram o defeito na bancada, hoje:**
+1. `"_avisar_do_dia(total" in fonte` casava com a linha do **def**, não com a chamada —
+   removi a chamada e a trava continuou ✅;
+2. o `return None` era procurado no arquivo INTEIRO, e outras funções têm `return None`;
+3. (11/Ago, mesmo formato) a docstring citando o nome que a trava procurava.
+Procurar texto num arquivo de 1.500 linhas é achar o que se quer, não o que existe. As três
+foram reescritas para ler a ÁRVORE do código.
+
+Trava: `teste_a_agenda_mora_na_nuvem_e_nao_repete_mensagem`, provada contra 5 sabotagens.
+
+⚠️ **NÃO é RESOLVIDO** (LEI 7): o cron só prova amanhã às 07:00. Está "testei aqui" — corrente
+inteira simulada com Supabase e Z-API falsos, as 4 mensagens do aviso conferidas uma a uma.
+
+---
+
 ### 11/Ago/2026 · 20h — O SILÊNCIO DO EXTRATOR VIRAVA SELO DE FRAMINGHAM
 
 *"VC PRECISA CRIAR UMA MANEIRA DE BLOQUEAR DESENHO DE ESTUDOS DE RECEBEREM NOTAS ALTAS...

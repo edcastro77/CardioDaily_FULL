@@ -45,3 +45,8 @@ chaves/.DS_Store
 !outputs/PROVA/gabarito.csv
 !outputs/PROVA/gabarito.xlsx
 !outputs/PROVA/prova_bruta.csv
+
+# 14/Ago — o livro de bordo do envio: registro LOCAL, muda todo dia.
+# Se fosse versionado, cada envio viraria conflito de merge e a Chave 7 pediria commit
+# por causa de um arquivo que ninguém lê no repositório.
+saidas/enviados.csv

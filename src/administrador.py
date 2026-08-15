@@ -2,7 +2,8 @@
 administrador.py — ADMINISTRADOR.app (chave 3). CABINE DE CURADORIA.
 Lê o Supabase (tabela `artigos`), mostra o top numa TABELA enxuta (revista · data · nome · NAC · MCID + links),
 você VÊ o PDF/infográfico, OUVE o áudio, e APROVA marcando uma DATA DE ENVIO.
-A aprovação grava a fila em `saidas/agenda_envio.csv` (nome + data) — versionável no git, lida pelo enviador diário.
+A aprovação grava a fila na tabela `agenda_envio` do Supabase (14/Ago/2026), lida pelo cron das 07:00
+na nuvem — o envio NÃO depende deste Mac estar ligado, igual ao Radar.
 
 Roda no seu notebook:  streamlit run administrador.py
 """
@@ -16,29 +17,21 @@ import streamlit as st
 AZUL = "#0B3D91"
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-# ═══ 11/Ago/2026 — UM `..` A MAIS, E A APROVAÇÃO CAÍA FORA DO PROJETO ═══
+# ─────────────────────────────────────────────────────────────────────────────────────
+# LÁPIDE — 14/Ago/2026 · a agenda em ARQUIVO acabou
 #
-# Era `os.path.join(_HERE, "..", "..", "saidas", ...)`. Este arquivo mora em
-# `CardioDaily_FULL/src/`, então DOIS `..` sobem para `CardioDaily_FULL` e depois para
-# `~/projetos` — e a agenda era gravada FORA do projeto:
-#     gravava em : ~/projetos/saidas/agenda_envio.csv
-#     lida em    : ~/projetos/CardioDaily_FULL/saidas/agenda_envio.csv
+# Aqui vivia `AGENDA = <raiz>/saidas/agenda_envio.csv`, e acima dela um comentário longo
+# sobre o `..` a mais que fazia a aprovação cair FORA do projeto (11/Ago). Aquele defeito
+# era real e o conserto foi certo — mas o problema de fundo era outro: **agenda em arquivo
+# no Mac dele**. Enquanto ela morasse no disco, a nuvem não podia enviar, e o envio dependia
+# de ele clicar.
 #
-# Enquanto ninguém lia o arquivo (até 10/Ago), o erro era invisível: o painel dizia
-# "Agendado para <data>", a fila aparecia na tela — porque `ler_agenda` lia do mesmo lugar
-# errado — e tudo parecia funcionar. O defeito só apareceu quando a Chave 21 passou a
-# procurar a agenda no lugar CERTO e não achou.
+# Agora a agenda é a tabela `agenda_envio` no Supabase. Não há caminho de arquivo para
+# errar, não há `..` para contar, e o cron das 07:00 lê de qualquer lugar do mundo.
 #
-# É o formato mais perigoso de erro deste projeto, e o terceiro do mesmo tipo em dois dias:
-# gravar e ler no mesmo lugar errado é internamente coerente. Nada quebra, ninguém percebe,
-# e a confiança do Dr. Eduardo é gasta num "aprovei e não chegou".
-#
-# Um `..` só. E confirmado por cálculo, não por leitura — a linha abaixo tem de bater com o
-# que a Chave 21 procura: `$CD_FULL/saidas/agenda_envio.csv`.
-_RAIZ = os.path.dirname(_HERE)                       # .../CardioDaily_FULL
-AGENDA = os.path.join(_RAIZ, "saidas", "agenda_envio.csv")
-
-
+# O arquivo `saidas/agenda_envio.csv` continua no disco como histórico do que foi curado
+# até 14/Ago. NINGUÉM MAIS O LÊ.
+# ─────────────────────────────────────────────────────────────────────────────────────
 def _carregar_env():
     from dotenv import load_dotenv
     d = _HERE
@@ -87,19 +80,81 @@ def buscar():
         return None, f"{type(e).__name__}: {e}"
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════
+# 14/Ago/2026 — A AGENDA MUDOU DE CASA: DO DISCO PARA O SUPABASE
+#
+# Pergunta do Dr. Eduardo: *"por que o sistema não usa o mesmo do radar, que envia todos
+# os dias independente de como meu computador estiver ligado ou não?"*
+#
+# Porque o Radar não depende de nada no Mac dele. O envio de artigos era igual — mesma
+# Z-API, mesmo distribuidor — mas a lista do que enviar morava num CSV no disco, e a nuvem
+# não enxerga o disco dele. Era só isso: um arquivo.
+#
+# Agora a Chave 3 grava na tabela `agenda_envio`, e o cron das 07:00 lê de lá. O Mac deixa
+# de importar — ele pode estar de plantão com o notebook fechado.
+#
+# `enviado_em` mora na MESMA linha: NULL = ainda não saiu. A pergunta "está agendado?" e a
+# pergunta "já foi enviado?" passam a ter uma fonte só.
+#
+# ⚠️ O CSV continua no disco como histórico do que foi curado até hoje, mas NINGUÉM MAIS O
+#    LÊ. Se voltar a ser lido, são duas agendas — e agenda em dois lugares é o defeito que
+#    custou os dias 09, 10 e 11.
+# ═══════════════════════════════════════════════════════════════════════════════════
 def ler_agenda():
-    if not os.path.exists(AGENDA):
+    """A fila inteira, do Supabase. Devolve [] com aviso na tela se a leitura falhar."""
+    url, key = _url(), _key()
+    try:
+        r = requests.get(f"{url}/rest/v1/agenda_envio",
+                         params={"select": "data_envio,doc_id,titulo,revista,enviado_em",
+                                 "order": "data_envio.asc"},
+                         headers={"apikey": key, "Authorization": f"Bearer {key}"}, timeout=30)
+        r.raise_for_status()
+        # mantém os nomes que o resto do painel já usa (`nome` era o título no CSV)
+        return [{"data_envio": l["data_envio"], "nome": l.get("titulo") or "",
+                 "revista": l.get("revista") or "", "doc_id": l["doc_id"],
+                 "enviado_em": l.get("enviado_em")} for l in (r.json() or [])]
+    except Exception as e:
+        st.error(f"Não consegui ler a agenda no Supabase: {type(e).__name__}: {e}")
         return []
-    return list(csv.DictReader(open(AGENDA, encoding="utf-8")))
 
 
-def gravar_agenda(linhas):
-    os.makedirs(os.path.dirname(AGENDA), exist_ok=True)
-    with open(AGENDA, "w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["data_envio", "nome", "revista", "doc_id"])
-        w.writeheader()
-        for l in sorted(linhas, key=lambda x: x.get("data_envio", "")):
-            w.writerow(l)
+def agendar(artigo, data_envio):
+    """Põe UM artigo na fila para uma data. Devolve (ok, mensagem).
+
+    Um upsert por (data_envio, doc_id): clicar duas vezes no mesmo artigo e na mesma data
+    não cria linha dupla — a tabela tem UNIQUE, e sem isso ele receberia em dobro.
+    """
+    url, key = _url(), _key()
+    try:
+        r = requests.post(
+            f"{url}/rest/v1/agenda_envio",
+            params={"on_conflict": "data_envio,doc_id"},
+            headers={"apikey": key, "Authorization": f"Bearer {key}",
+                     "Content-Type": "application/json",
+                     "Prefer": "resolution=merge-duplicates,return=representation"},
+            json={"data_envio": str(data_envio), "doc_id": artigo.get("doc_id"),
+                  "titulo": (artigo.get("titulo") or "")[:400],
+                  "revista": artigo.get("revista") or ""},
+            timeout=30)
+        r.raise_for_status()
+        return True, ""
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
+
+
+def desagendar(doc_id, data_envio):
+    """Tira da fila. Só remove o que AINDA NÃO SAIU — o que já foi é histórico e fica."""
+    url, key = _url(), _key()
+    try:
+        r = requests.delete(
+            f"{url}/rest/v1/agenda_envio",
+            params={"doc_id": f"eq.{doc_id}", "data_envio": f"eq.{data_envio}",
+                    "enviado_em": "is.null"},
+            headers={"apikey": key, "Authorization": f"Bearer {key}"}, timeout=30)
+        r.raise_for_status()
+        return True, ""
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
 
 
 st.set_page_config(page_title="CardioDaily — Administrador", page_icon="🫀", layout="wide")
@@ -419,17 +474,50 @@ if lista:
     with c2:
         data = st.date_input("Enviar em", dt.date.today())
         if st.button("✅ Aprovar e agendar", use_container_width=True):
-            ag = [l for l in ler_agenda() if l.get("doc_id") != a.get("doc_id")]
-            ag.append({"data_envio": str(data), "nome": a.get("titulo", ""),
-                       "revista": a.get("revista", ""), "doc_id": a.get("doc_id", "")})
-            gravar_agenda(ag)
-            st.success(f"Agendado para {data}.")
+            # 14/Ago — grava no Supabase, e SÓ diz "agendado" se o banco confirmar.
+            # A versão anterior escrevia no CSV e imprimia "Agendado para <data>" sem
+            # conferir nada. Foi assim que ele aprovou para os dias 12 e 13, leu a mensagem
+            # de sucesso, e nada chegou. Mensagem de sucesso tem que custar uma confirmação.
+            ok, erro = agendar(a, data)
+            if ok:
+                st.success(f"✅ Agendado para {data} — sai às 07:00, sem você precisar clicar.")
+                st.rerun()
+            else:
+                st.error(f"🔴 NÃO agendei — o Supabase recusou: {erro}\n\n"
+                         f"O artigo NÃO vai sair. Tente de novo.")
 
-# ---------- a FILA (nome + data) ----------
-st.markdown("### Fila de envio (nome · data) — `saidas/agenda_envio.csv`")
+# ---------- a FILA ----------
+st.markdown("### Fila de envio — tabela `agenda_envio` no Supabase")
+st.caption("Sai automaticamente às 07:00, pela nuvem. Não depende do seu Mac estar ligado.")
 ag = ler_agenda()
 if ag:
-    st.dataframe([{"Enviar em": l["data_envio"], "Nome": l["nome"], "Revista": l.get("revista", "")} for l in ag],
-                 use_container_width=True, hide_index=True)
+    _hoje = dt.date.today().isoformat()
+    _pend = [l for l in ag if not l.get("enviado_em")]
+    _fut = [l for l in _pend if l["data_envio"] >= _hoje]
+    _atrasados = [l for l in _pend if l["data_envio"] < _hoje]
+
+    if _atrasados:
+        # 14/Ago — os dias 12 e 13 passaram em branco e NADA avisou. O silêncio era idêntico
+        # a "está tudo funcionando". Agora a fila atrasada aparece em vermelho, no topo.
+        st.error(f"⚠️ {len(_atrasados)} artigo(s) com data JÁ PASSADA e ainda não enviados. "
+                 f"Eles não saem sozinhos — a data precisa ser refeita para hoje ou depois.")
+        st.dataframe([{"Era para sair em": l["data_envio"], "Nome": l["nome"][:80],
+                       "Revista": l.get("revista", "")} for l in _atrasados],
+                     use_container_width=True, hide_index=True)
+
+    st.markdown(f"**Programado ({len(_fut)})**")
+    if _fut:
+        st.dataframe([{"Sai em": l["data_envio"], "Nome": l["nome"][:80],
+                       "Revista": l.get("revista", "")} for l in _fut],
+                     use_container_width=True, hide_index=True)
+    else:
+        st.caption("nada programado para hoje em diante.")
+
+    _enviados = [l for l in ag if l.get("enviado_em")]
+    with st.expander(f"✅ já enviados ({len(_enviados)})"):
+        st.dataframe([{"Enviado em": (l.get("enviado_em") or "")[:16].replace("T", " "),
+                       "Data marcada": l["data_envio"], "Nome": l["nome"][:80]}
+                      for l in reversed(_enviados)],
+                     use_container_width=True, hide_index=True)
 else:
     st.caption("fila vazia — aprove artigos acima para agendar.")

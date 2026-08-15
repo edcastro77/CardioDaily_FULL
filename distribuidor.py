@@ -385,31 +385,104 @@ def _extrair_dois_enviados(sb, doc_ids):
 # SAI NADA — e o log diz isso com todas as letras. Um dia sem mensagem é um fato; uma mensagem
 # que ele não viu é um risco, e enquanto a perícia não tiver o conferidor de números
 # (S3·1, ainda aberto), a leitura dele é a única trava contra publicar dado errado.
-AGENDA_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saidas", "agenda_envio.csv")
+# 14/Ago — `AGENDA_CSV` foi embora junto: a agenda mora no Supabase (tabela `agenda_envio`).
+# O arquivo `saidas/agenda_envio.csv` continua no disco como HISTÓRICO do que foi curado até
+# 14/Ago, mas NINGUÉM MAIS O LÊ. Se ele voltar a ser lido em algum lugar, são duas agendas.
+
+# ─────────────────────────────────────────────────────────────────────────────────────
+# LÁPIDE — 14/Ago/2026, mesma tarde
+#
+# Aqui viveram `LIVRO_CSV`, `ja_enviados_hoje()` e `anotar_envio()`: um livro de bordo em
+# arquivo local, escrito nesta mesma tarde para impedir mensagem repetida quando o agendador
+# do macOS e a Chave 21 rodassem no mesmo dia.
+#
+# Duraram uma hora. O Dr. Eduardo perguntou por que o envio não roda na nuvem como o Radar,
+# a agenda foi para o Supabase — e a coluna `enviado_em` passou a responder "já saiu?" na
+# MESMA LINHA que responde "está agendado?". Um livro separado ao lado da agenda seria
+# exatamente a "duas fontes de verdade" que este projeto persegue há uma semana.
+#
+# Apagados, não comentados. Código morto no arquivo é convite para alguém usar de novo.
+# ─────────────────────────────────────────────────────────────────────────────────────
 
 
-def fila_aprovada(data=None):
-    """Os doc_id que o Dr. Eduardo aprovou no Administrador para ESTA data.
+def fila_aprovada(sb, data=None):
+    """Os doc_id que o Dr. Eduardo aprovou na Chave 3 para ESTA data e que AINDA NÃO saíram.
 
-    Devolve [] se o arquivo não existir ou não houver nada marcado para hoje — e quem chama
-    trata isso como "não envie", nunca como "escolha você".
+    ═══ 14/Ago/2026 — A AGENDA MUDOU DE CASA: DO DISCO PARA O SUPABASE ═══
+
+    Pergunta dele: *"por que o sistema não usa o mesmo do radar, que envia todos os dias
+    independente de como meu computador estiver ligado ou não?"*
+
+    Porque o Radar não depende de NADA no Mac dele: nasce no Supabase, lê no Supabase, manda
+    de lá. O envio de artigos era idêntico — mesma Z-API, mesmo distribuidor, mesmo tipo de
+    workflow — com UMA diferença: esta função lia `saidas/agenda_envio.csv`, no disco dele.
+    A nuvem não enxerga esse arquivo. **Era só isso.** Um arquivo.
+
+    Eu tinha resolvido com um agendador no macOS, que só funciona com o notebook ligado e
+    acordado às 07:00 — e ele é plantonista. Aquilo resolvia o meu problema, não o dele.
+
+    ═══ E A TABELA COMEU O LIVRO DE BORDO ═══
+    Eram DOIS arquivos locais que podiam discordar:
+        saidas/agenda_envio.csv   o que ele aprovou
+        saidas/enviados.csv       o que já saiu
+    Agora é UMA linha: `enviado_em IS NULL` significa "ainda não saiu". A pergunta "está
+    agendado?" e a pergunta "já foi?" passam a ter a mesma fonte — e some a chance de as
+    duas discordarem, que é a família de defeito que custou 09, 10 e 11 de agosto.
+
+    Devolve [] se não houver nada para hoje — e quem chama trata isso como "não envie",
+    NUNCA como "escolha você".
     """
-    import csv as _csv
     alvo = data or datetime.now(timezone(timedelta(hours=-3))).strftime("%Y-%m-%d")
-    if not os.path.exists(AGENDA_CSV):
-        log.warning(f"  [FILA] {AGENDA_CSV} não existe — o Administrador ainda não gravou nada.")
-        return []
     try:
-        linhas = list(_csv.DictReader(open(AGENDA_CSV, encoding="utf-8")))
+        r = (sb.table("agenda_envio").select("doc_id, titulo, enviado_em")
+             .eq("data_envio", alvo).is_("enviado_em", "null").execute())
     except Exception as e:
-        log.error(f"  [FILA] não consegui ler a agenda: {type(e).__name__}: {e}")
-        return []
-    hoje = [l for l in linhas if (l.get("data_envio") or "").strip()[:10] == alvo
-            and (l.get("doc_id") or "").strip()]
-    if not hoje:
-        datas = sorted({(l.get("data_envio") or "")[:10] for l in linhas if l.get("data_envio")})
-        log.warning(f"  [FILA] nada aprovado para {alvo}. Datas na agenda: {datas[-4:] or 'nenhuma'}")
-    return [l["doc_id"].strip() for l in hoje]
+        # Não conseguir LER a agenda não pode virar "então não tem nada aprovado": essa é a
+        # mensagem certa pelo motivo errado, o defeito que passamos a semana caçando.
+        log.error(f"  [FILA] NÃO CONSEGUI LER a agenda no Supabase: {type(e).__name__}: {e}")
+        log.error("         Isto é DIFERENTE de 'nada aprovado'. Nada será enviado, e o")
+        log.error("         que estava marcado para hoje continua marcado para hoje.")
+        return None                      # None ≠ [] — quem chama tem de distinguir
+
+    linhas = r.data or []
+    if not linhas:
+        # por que está vazio? já saiu tudo, ou não havia nada? são coisas diferentes.
+        try:
+            tot = (sb.table("agenda_envio").select("doc_id, enviado_em")
+                   .eq("data_envio", alvo).execute()).data or []
+        except Exception:
+            tot = []
+        if tot:
+            log.info(f"  [FILA] os {len(tot)} artigo(s) de {alvo} JÁ FORAM ENVIADOS. Nada a fazer.")
+        else:
+            prox = []
+            try:
+                prox = [l["data_envio"] for l in (sb.table("agenda_envio")
+                        .select("data_envio").gte("data_envio", alvo)
+                        .order("data_envio").limit(4).execute()).data or []]
+            except Exception:
+                pass
+            log.warning(f"  [FILA] nada aprovado para {alvo}."
+                        + (f" Próximas datas na agenda: {sorted(set(prox))}" if prox else ""))
+    return [l["doc_id"] for l in linhas if l.get("doc_id")]
+
+
+def marcar_enviado(sb, doc_id, data=None, por="chave21"):
+    """Carimba `enviado_em`. É o livro de bordo — só que na mesma linha do agendamento.
+
+    Chamado UM A UM, logo depois de a mensagem sair. Se o programa morrer no meio, o que já
+    saiu está carimbado; carimbar no fim do laço perderia o registro de tudo que já tinha ido.
+    """
+    alvo = data or datetime.now(timezone(timedelta(hours=-3))).strftime("%Y-%m-%d")
+    try:
+        sb.table("agenda_envio").update(
+            {"enviado_em": datetime.now(timezone.utc).isoformat(), "enviado_por": por}
+        ).eq("data_envio", alvo).eq("doc_id", doc_id).execute()
+    except Exception as e:
+        # A mensagem JÁ SAIU. Falhar aqui não desfaz nada — mas o próximo disparo de hoje
+        # repetiria este artigo, e é melhor ele saber agora do que descobrir no celular.
+        log.error(f"  [AGENDA] a mensagem SAIU mas não consegui carimbar: {type(e).__name__}: {e}")
+        log.error(f"           → {doc_id} pode ser reenviado no próximo disparo de hoje.")
 
 
 def buscar_aprovados(sb, doc_ids):
@@ -966,7 +1039,12 @@ def distribuir_artigos(dry_run: bool = False):
         # continua no arquivo — mas como REDE, não como escolha: se ele não aprovou nada, o
         # dia passa sem mensagem e o log diz por quê. Antes disto, a Chave 3 gravava a fila e
         # este programa escolhia sozinho: a decisão dele morria no CSV.
-        aprovados = fila_aprovada()
+        aprovados = fila_aprovada(sb)
+        if aprovados is None:
+            # 14/Ago — "não consegui ler" ≠ "nada aprovado". Sair daqui como se fosse dia
+            # vazio faria o log dizer a mensagem certa pelo motivo errado.
+            log.error("  Não vou enviar: a agenda no Supabase não respondeu (veja acima).")
+            continue
         if aprovados:
             selecionados = buscar_aprovados(sb, aprovados)
             for s in selecionados:
@@ -977,11 +1055,11 @@ def distribuir_artigos(dry_run: bool = False):
             if not selecionados:
                 log.error("  A fila tinha doc_id, mas NENHUM foi encontrado no banco. Nada será enviado.")
                 continue
-        else:
-            log.warning("  ⏸️  NADA APROVADO PARA HOJE no Administrador (Chave 3) — não vou enviar.")
-            log.warning("      Isto NÃO é falha: é a regra que você definiu em 10/Ago — só sai o que")
-            log.warning("      você aprovou. Abra a Chave 3, marque os artigos e a data, e rode de novo.")
-            continue
+
+            # 14/Ago — O CORTE DO QUE JÁ SAIU AGORA É FEITO PELA PRÓPRIA CONSULTA:
+            # `fila_aprovada` pede `enviado_em IS NULL`. Não existe mais um livro separado
+            # para discordar da agenda — é a mesma linha. Se ele clicar a Chave 21 depois de
+            # o cron das 07:00 ter rodado, a consulta simplesmente devolve vazio.
 
         doc_ids = []
         for artigo in selecionados:
@@ -1017,6 +1095,10 @@ def distribuir_artigos(dry_run: bool = False):
                 # marcar um que falhou seria perdê-lo para sempre, em silêncio.
                 doc_ids.append(artigo["doc_id"])
                 total += 1
+                # 14/Ago — carimba AQUI, artigo por artigo, e não no fim do laço. Se o
+                # programa morrer no meio (rede, Ctrl+C), o que já saiu está carimbado.
+                marcar_enviado(sb, artigo["doc_id"],
+                               por=("nuvem" if os.getenv("GITHUB_ACTIONS") else "chave21"))
             else:
                 nao_entregues.append((artigo.get("titulo", "")[:52], falhas))
 
@@ -1046,6 +1128,59 @@ def distribuir_artigos(dry_run: bool = False):
     else:
         log.info(f"CONCLUÍDO — {total} artigo(s) entregue(s), nenhuma falha")
     log.info("=" * 60)
+
+    # ═══ 14/Ago — O AVISO DIÁRIO. É O CONSERTO DOS DIAS 12 E 13. ═══
+    #
+    # O defeito daqueles dias não foi só a falta do agendador: foi que NADA O AVISOU. Ele
+    # aprovou artigos, o dia passou, e o silêncio era idêntico a "está tudo funcionando".
+    # Com o envio na nuvem isso piora: ele não vê tela nenhuma. Um envio automático que
+    # falha em silêncio é PIOR que o manual — ele para de conferir e não fica sabendo.
+    #
+    # Só na execução DESACOMPANHADA (nuvem). Quando ele clica a Chave 21, está olhando o
+    # log; um WhatsApp por cima disso seria ruído, e ruído treina a ignorar o aviso.
+    if not dry_run and os.getenv("GITHUB_ACTIONS"):
+        _avisar_do_dia(total, nao_entregues, len(assinantes))
+
+
+def _avisar_do_dia(total, nao_entregues, n_destinatarios):
+    """Um WhatsApp por dia dizendo o que aconteceu — INCLUSIVE quando não aconteceu nada.
+
+    ═══ 14/Ago/2026 — O CONSERTO DO SILÊNCIO ═══
+    O Dr. Eduardo aprovou artigos para 12 e 13 de agosto e não recebeu nada. A causa era o
+    agendador que não existia — mas o que fez o problema DURAR TRÊS DIAS foi outra coisa:
+    ninguém o avisou. O dia passou, e não receber era indistinguível de "hoje não tinha nada".
+
+    As quatro mensagens cobrem os quatro estados, e nenhum deles é silêncio:
+        · saiu             → quantos, e a hora
+        · agenda vazia     → não é falha, é dia sem curadoria
+        · já tinha saído   → ele clicou depois do cron; nada repetido
+        · falhou           → em vermelho, com o que fazer
+    """
+    hoje = datetime.now(timezone(timedelta(hours=-3))).strftime("%d/%m")
+    hora = datetime.now(timezone(timedelta(hours=-3))).strftime("%H:%M")
+
+    if nao_entregues:
+        msg = (f"🚨 *CardioDaily {hoje}* — o envio das 07:00 falhou em parte.\n\n"
+               f"Entregues: {total} · Não entregues: {len(nao_entregues)}\n"
+               + "\n".join(f"❌ {t}" for t, _ in nao_entregues[:3])
+               + "\n\nOs não entregues CONTINUAM na fila e saem na próxima tentativa.")
+    elif total > 0:
+        msg = (f"🫀 *CardioDaily {hoje}* — {total} artigo(s) enviado(s) às {hora}, "
+               f"conforme você aprovou na Chave 3.")
+    elif n_destinatarios == 0:
+        msg = (f"🚨 *CardioDaily {hoje}* — o envio rodou mas NÃO HAVIA DESTINATÁRIO.\n"
+               f"Confira EDUARDO_PHONE no .env / nos secrets do GitHub.")
+    else:
+        msg = (f"🫀 *CardioDaily {hoje}* — nada saiu hoje: a agenda estava vazia ou o que "
+               f"estava marcado já tinha sido enviado.\n\n"
+               f"Não é falha. Para programar, abra a Chave 3 e marque a data.")
+    try:
+        ok = zapi_send_text(DR_EDUARDO_PHONE, msg)
+        log.info(f"  📣 aviso do dia {'enviado' if ok else '🔴 NÃO enviado'}")
+    except Exception as e:
+        # Falhar o AVISO não pode derrubar o envio (que já aconteceu). Mas registra alto:
+        # sem o aviso, ele volta a ficar cego, que é o defeito que isto veio consertar.
+        log.error(f"  🔴 não consegui mandar o aviso do dia: {type(e).__name__}: {e}")
 
 
 # =============================================================================

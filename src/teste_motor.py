@@ -2194,6 +2194,153 @@ def teste_o_painel_enxerga_o_pacote_onde_o_arquivador_o_deixou():
               f"ttl={ttl}s — a cada expiração ele espera ~7s parado no meio da curadoria")
 
 
+def teste_a_agenda_mora_na_nuvem_e_nao_repete_mensagem():
+    """14/Ago — O ENVIO PASSOU A RODAR COMO O RADAR, E A AGENDA SAIU DO DISCO.
+
+    ═══ O CASO ═══
+    *"programei os artigos ontem que deveria receber nos próximos 3 dias, mas não funcionou"*
+    e, depois: *"por que o sistema não usa o mesmo do radar, que envia todos os dias
+    independente de como meu computador estiver ligado ou não?"*
+
+    A primeira resposta era "nada roda sozinho" (o cron foi desligado em 27/Jul). Eu montei
+    um agendador no macOS — que só funciona com o notebook ligado às 07:00, e ele é
+    plantonista. **Aquilo resolvia o meu problema, não o dele.** Ele perguntou o óbvio, e o
+    óbvio estava certo: o Radar roda na nuvem porque não depende de NADA no Mac dele. O envio
+    de artigos era idêntico, com UMA diferença — a agenda morava em `saidas/agenda_envio.csv`,
+    e a nuvem não enxerga o disco dele. Era um arquivo.
+
+    ═══ E A TABELA COMEU O LIVRO DE BORDO ═══
+    Na mesma tarde eu tinha criado um segundo arquivo local (`saidas/enviados.csv`) para
+    impedir mensagem repetida entre o agendador e a Chave 21. Durou uma hora: com a agenda na
+    tabela, `enviado_em` responde "já saiu?" NA MESMA LINHA que responde "está agendado?".
+    Dois arquivos que podem discordar viraram uma linha que não pode.
+
+    ═══ O QUE A TRAVA GUARDA ═══
+    1. o distribuidor lê a AGENDA DO SUPABASE, não de arquivo — senão volta a depender do Mac;
+    2. a consulta pede `enviado_em IS NULL` — senão o cron das 07:00 e um clique às 10:00
+       mandam os mesmos artigos duas vezes;
+    3. falha de leitura devolve `None`, não `[]` — `[]` significaria "nada aprovado hoje", a
+       mensagem certa pelo motivo errado. Mesma família do `retrospectivo: null` de 11/Ago:
+       tratar "não sei" como "não";
+    4. o carimbo é artigo por artigo, não no fim do laço;
+    5. o AVISO DIÁRIO existe — foi a ausência dele que fez os dias 12 e 13 passarem em branco
+       sem ninguém perceber. Envio automático sem aviso é pior que manual.
+    """
+    import os
+    import sys
+    import types
+
+    for m in ("supabase", "httpx", "dotenv"):
+        sys.modules.setdefault(m, types.ModuleType(m))
+    sys.modules["supabase"].create_client = lambda *a, **k: None
+    sys.modules["supabase"].Client = object
+    sys.modules["dotenv"].load_dotenv = lambda *a, **k: None
+    sys.modules["httpx"].get = sys.modules["httpx"].post = lambda *a, **k: None
+    sys.modules["httpx"].Timeout = lambda *a, **k: None
+    sys.modules["httpx"].Client = lambda *a, **k: None
+    os.environ.setdefault("SUPABASE_URL", "x")
+    os.environ.setdefault("SUPABASE_SERVICE_KEY", "x")
+    os.environ.setdefault("ZAPI_BASE", "x")
+    os.environ.setdefault("ZAPI_CLIENT_TOKEN", "x")
+    os.environ.setdefault("EDUARDO_PHONE", "5527996089248")
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, raiz)
+    try:
+        import distribuidor as D
+    except Exception as e:
+        checa("dá para importar o distribuidor", False, f"{type(e).__name__}: {e}")
+        return
+
+    fonte = open(os.path.join(raiz, "distribuidor.py"), encoding="utf-8").read()
+
+    # 1) a agenda vem do SUPABASE, não de arquivo
+    checa("fila_aprovada recebe o cliente do Supabase",
+          "def fila_aprovada(sb" in fonte,
+          "ainda lê arquivo — o envio volta a depender do Mac dele estar ligado")
+    checa('a consulta é na tabela `agenda_envio`',
+          'table("agenda_envio")' in fonte, "não achei a tabela na consulta")
+    for morto in ("AGENDA_CSV", "LIVRO_CSV", "ja_enviados_hoje"):
+        vivos = [n for n, l in enumerate(fonte.splitlines(), 1)
+                 if morto in l and not l.strip().startswith("#")]
+        checa(f"o arquivo local `{morto}` não é mais lido", not vivos,
+              f"linha(s) {vivos} — duas agendas é o defeito que custou 09, 10 e 11/Ago")
+
+    # 2) só o que AINDA NÃO SAIU
+    checa("a consulta pede `enviado_em IS NULL`",
+          'is_("enviado_em", "null")' in fonte,
+          "sem isto o cron das 07:00 e um clique às 10:00 mandam os mesmos artigos 2x")
+    checa("existe marcar_enviado()", "def marcar_enviado(" in fonte,
+          "sem carimbo, todo disparo do dia repete tudo")
+    checa("o carimbo é artigo por artigo, não no fim do laço",
+          "marcar_enviado(sb, artigo[" in fonte,
+          "se carimbar só no fim, uma queda no meio perde o registro do que já saiu")
+
+    # ── daqui para baixo é pela ÁRVORE do código, não por procurar texto ──
+    #
+    # ⚠️ DUAS destas checagens já aprovaram o defeito, hoje, na bancada:
+    #   · `"_avisar_do_dia(total" in fonte` casava com a linha do **def**, não com a chamada.
+    #     Sabotei removendo a chamada e a trava continuou ✅.
+    #   · o `return None` era procurado no arquivo INTEIRO, e outras funções têm `return None`.
+    # Procurar texto num arquivo de 1.500 linhas é achar o que se quer, não o que existe.
+    import ast as _a
+    try:
+        arv = _a.parse(fonte)
+    except SyntaxError as e:
+        checa("distribuidor.py compila", False, str(e))
+        return
+
+    def _fn(nome):
+        return next((n for n in _a.walk(arv)
+                     if isinstance(n, _a.FunctionDef) and n.name == nome), None)
+
+    def _chamadas(dentro):
+        return {n.func.id for n in _a.walk(dentro)
+                if isinstance(n, _a.Call) and isinstance(n.func, _a.Name)}
+
+    # 3) erro de leitura ≠ dia vazio
+    fa = _fn("fila_aprovada")
+    checa("existe fila_aprovada", fa is not None, "sumiu")
+    if fa is not None:
+        devolve_none = any(isinstance(n, _a.Return) and isinstance(n.value, _a.Constant)
+                           and n.value.value is None for n in _a.walk(fa))
+        checa("fila_aprovada devolve None quando NÃO CONSEGUE LER", devolve_none,
+              "devolver [] num erro de rede faz o log dizer 'nada aprovado' — a mensagem "
+              "certa pelo motivo errado, o defeito que passamos a semana caçando")
+    da = _fn("distribuir_artigos")
+    if da is not None:
+        trata = any(isinstance(n, _a.Compare) and isinstance(n.ops[0], _a.Is)
+                    and isinstance(n.comparators[0], _a.Constant)
+                    and n.comparators[0].value is None
+                    and isinstance(n.left, _a.Name) and n.left.id == "aprovados"
+                    for n in _a.walk(da))
+        checa("quem chama distingue None de lista vazia", trata,
+              "a distinção existe na função e some em quem usa — vira decoração")
+
+    # 4) o aviso diário — o conserto do silêncio dos dias 12 e 13
+    av = _fn("_avisar_do_dia")
+    checa("existe o aviso diário", av is not None,
+          "sem aviso, um envio automático que falha é invisível: ele para de conferir")
+    checa("o aviso é CHAMADO no fim do envio",
+          da is not None and "_avisar_do_dia" in _chamadas(da),
+          "a função existe e ninguém chama — trava aprovando por ausência")
+    if av is not None:
+        textos = " ".join(n.value for n in _a.walk(av)
+                          if isinstance(n, _a.Constant) and isinstance(n.value, str))
+        for pedaco, porque in (("nada saiu hoje", "o dia sem envio ficaria em silêncio — "
+                                                  "que é o defeito original"),
+                               ("falhou", "a falha ficaria só no log da nuvem, que ele não lê"),
+                               ("DESTINATÁRIO", "sem destinatário o envio roda e não entrega")):
+            checa(f"o aviso cobre o caso «{pedaco}»", pedaco.lower() in textos.lower(), porque)
+
+    # 5) e o cron existe, senão nada disso roda
+    wf = os.path.join(raiz, ".github", "workflows", "artigos-diarios.yml")
+    if os.path.exists(wf):
+        y = open(wf, encoding="utf-8").read()
+        checa("o workflow de artigos tem cron",
+              "schedule:" in y and "cron:" in y,
+              "só workflow_dispatch — volta a depender de alguém apertar o botão")
+
+
 def teste_um_telefone_do_dono_e_um_so():
     """11/Ago — A TRAVA DE SEGURANÇA IA PULAR O DONO DO SISTEMA.
 

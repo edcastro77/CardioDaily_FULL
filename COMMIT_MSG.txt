@@ -1,63 +1,66 @@
-A ENTREGA CHEGOU AO WHATSAPP · O ACRI VOLTOU · O PROTOCOLO NAO PONTUA (11/Ago/2026)
+O ENVIO PASSOU A RODAR COMO O RADAR — a agenda saiu do disco (14/Ago/2026)
 
-Um dia inteiro contra a MESMA familia de defeito: duas pontas de acordo sobre uma coisa errada,
-ou em desacordo sobre uma coisa certa, e NADA quebrando no meio. Nenhum destes levanta excecao.
+"programei os artigos ontem que deveria receber nos proximos 3 dias, mas nao funcionou."
 
-═══ A CORRENTE DE ENTREGA — 6 defeitos empilhados ═══
-O Dr. Eduardo aprovou 2 artigos as 09h25 e passou o dia sem receber.
+CAUSA: nada rodava sozinho. O cron do artigos-diarios.yml foi removido em 27/Jul por decisao
+dele — "o sistema NAO publica/envia artigo sozinho" — e naquele momento estava CERTO, porque
+a curadoria nao existia e automatico significava a maquina escolhendo. Hoje e o contrario:
+quem escolhe e ele, na Chave 3, e o cron so cumpre o horario.
 
- 1. administrador.py gravava a agenda FORA do projeto (dois `..`); quem lia, lia do mesmo
-    lugar errado — por isso ninguem via.
- 2. .env · ZAPI_BASE tinha "/send-text" grudado no fim: 104 caracteres onde cabiam 94.
-    {base}/status virava endereco inexistente. Achado por aritmetica, nao por tentativa.
- 3. buscar_assinantes_ativos so caia no plano B se a consulta levantasse EXCECAO — e ela
-    voltava com lista VAZIA, que e sucesso. "0 entregue, nenhuma falha".
- 4. zero entregue era relatado como dia tranquilo. Agora e bloco de ERRO.
- 5. DOIS telefones do dono, diferentes. A trava do beta — que existe para NAO mandar a
-    estranho — pularia o proprio dono. Normalizado na entrada (so_digitos).
- 6. O PIOR: HTTP 200 e nada chegou. O EDUARDO_PHONE era o numero da PROPRIA INSTANCIA Z-API.
-    O sistema mandou a mensagem para ele mesmo. Sucesso perfeito, entrega zero.
-    ERRO DE LEITURA MEU: li /device (quem MANDA) como se fosse o destinatario, e troquei o
-    numero chumbado — que estava CERTO — pelo do remetente.
-    Trava nova: destinatario nunca pode ser igual ao remetente. Isso e eco, nao envio.
+═══ MEU PRIMEIRO CONSERTO FOI RUIM, E ELE VIU NA HORA ═══
+Montei um agendador launchd no macOS — que so funciona com o notebook ligado e acordado as
+07:00. Ele e PLANTONISTA. Aquilo resolvia o meu problema (o caminho curto), nao o dele.
+A pergunta que derrubou: "por que o sistema nao usa o mesmo do radar, que envia todos os dias
+independente de como meu computador estiver ligado ou nao?"
 
-═══ O ACRI SUMIA A MEDIDA QUE O SISTEMA ERA USADO ═══
-O painel indexava so outputs/STAGING (196 pacotes). A Chave 4 move o concluido para
-outputs/ARQUIVO/AAAA-MM (864 pacotes). Dos 37 artigos nota 9 listados, 26 nao achavam pacote.
-Varrendo as duas arvores: 37/37, todos com ACRI. Defeito que PIORA COM O USO.
+A RESPOSTA ERA UM ARQUIVO. O Radar roda na nuvem porque nao depende de NADA no Mac dele:
+nasce no Supabase, le no Supabase, manda de la. O envio de artigos era identico — mesma
+Z-API, mesmo distribuidor, mesmo tipo de workflow — com UMA diferenca: a lista do que enviar
+morava em saidas/agenda_envio.csv, no disco dele.
 
-═══ FILTRO DE DATA NA CHAVE 3 ═══
-Decisao dele: data de PUBLICACAO (1951→2026), padrao VAZIO. Data torta e ignorada COM AVISO;
-janela invertida AVISA; artigo sem data NUNCA e escondido. NameError pego na bancada: `_re`
-usado na linha 173 e importado na 256 — mesmo formato do `_VOO` de 10/Ago.
+  · agenda → tabela `agenda_envio` no Supabase (LEI 5 intacta: nao mexe em `artigos`)
+  · cron de volta: '0 10 * * *' = 07:00 BRT, meia hora antes do Radar
+  · o agendador do macOS foi REMOVIDO no mesmo passo (dois agendadores vivos seria "duas
+    fontes de verdade" outra vez)
+  · Chave 21 muda de papel: era "o jeito de enviar", virou "enviar FORA DE HORA"
 
-═══ PROTOCOLO DE ESTUDO NAO PONTUA ═══
-Tres "Rationale and Design" no Supabase, TODOS com nota 8. Palavras dele: "a intervencao nao
-ocorreu, nao tem taxa de eventos e nao tem aplicabilidade".
-E NINGUEM ERRAVA: o extrator via randomizacao, dois bracos e desfecho primario e escrevia
-`rct` — corretamente, porque o desenho DESCRITO e um RCT. Faltava a palavra `protocolo` no
-vocabulario. Duas portas agora: classificador descarta pelo titulo antes de gastar analise
-(449 titulos reais: pega os 3, ZERO falso positivo) e o motor recusa se algum escapar.
+═══ A TABELA COMEU O LIVRO DE BORDO, QUE EU TINHA CRIADO UMA HORA ANTES ═══
+Para o agendador do Mac nao repetir mensagem eu criei saidas/enviados.csv. Com a agenda na
+tabela, `enviado_em` responde "ja saiu?" na MESMA LINHA que responde "esta agendado?". Dois
+arquivos locais que podiam discordar viraram uma linha que nao pode. Apagados, nao comentados.
 
-═══ O SILENCIO DO EXTRATOR VIRAVA SELO DE FRAMINGHAM ═══
-`if a.get("retrospectivo")` le None como falso. Das 27 coortes com nota 8, 18 tinham esse
-campo em BRANCO — silencio virava "e prospectiva" e o teto mais alto saia de graca.
-Agora `selo_prospectivo()` exige False EXPLICITO + os tres NHLBI em True explicito, e DIZ o
-que faltou. Efeito isolado: 15 notas mudam, ZERO artigo sai do ar.
+O defeito que o modo manual escondia: NAO EXISTIA registro do que ja foi enviado (a agenda
+nao era limpa, e registrar_envio sai na porta para o destinatario do .env — id: None, sem
+linha em whatsapp_users). Com o cron, um clique na Chave 21 as 10h repetiria tudo.
 
-  ⚠️ O QUE EU QUASE FIZ, E ELE BARROU DUAS VEZES:
-  Propus unificar as duas tabelas de teto, com selo de (Recomendado) — 147 notas, 65 artigos
-  fora do ar. Estava ERRADO: as tabelas nao discordam, respondem PERGUNTAS diferentes. Para
-  etiologia/prognostico o RCT e impossivel e a coorte prospectiva E o teto que a pergunta
-  admite. Ele barrou no caso-limite ("o Framingham agora tira 6 — isto obviamente esta
-  errado!") e depois no escopo ("por que mexer tanto na classificacao de notas?").
-  Revertido. As duas tabelas voltaram inteiras.
-  LICAO DE METODO: eu mostrei so o custo de publicar menos, nunca o de reprovar o que era bom.
+═══ O AVISO DIARIO — o conserto que mais importa ═══
+O defeito dos dias 12 e 13 nao foi so a falta do agendador: foi que NADA O AVISOU. O dia
+passou e o silencio era identico a "esta tudo funcionando". Com o envio na nuvem isso
+pioraria — ele nao ve tela nenhuma. Agora sai um WhatsApp cobrindo os 4 estados, NENHUM
+deles silencio: saiu N · agenda vazia · ja tinha saido · FALHOU.
+(Telegram descartado a pedido dele: "ninguem usa, inclusive eu — quando abro tem mais de 100
+mensagens que nao vejo". Aviso que ninguem le e pior que aviso nenhum.)
 
-═══ TRAVAS QUE NASCERAM ERRADAS (e por que isso importa) ═══
-Tres delas aprovavam lendo o lugar errado — docstring em vez de codigo, disco em vez do
-painel, parenteses dentro de string. E uma estava escrita AO CONTRARIO, chumbando a regua que
-ele recusou: trava com a regua errada nao deixa so o defeito passar, ELA IMPEDE O CONSERTO.
-Todas provadas por sabotagem antes de entrar.
+═══ MIGRACAO ═══
+As 12 linhas do CSV foram para a tabela com o historico correto: 5 marcadas como ja enviadas
+(11 e 14/Ago, que ele confirmou), 7 pendentes. A Chave 3 mostra em VERMELHO, no topo, os
+artigos com data JA PASSADA e nao enviados — os 5 dos dias 12 e 13 estao la, e nao saem
+sozinhos: a data precisa ser refeita.
 
-65 travas passando. Vermelha so a de 3 pacotes meta na trilha de original (anterior a hoje).
+ERRO DE LEITURA ≠ DIA VAZIO: se o Supabase nao responder, fila_aprovada devolve None (nao [])
+e o envio PARA. [] faria o log dizer "nada aprovado para hoje" — a mensagem certa pelo motivo
+errado, a familia de defeito da semana inteira.
+
+═══ TRES TRAVAS MINHAS APROVARAM O DEFEITO NA BANCADA, HOJE ═══
+1. `"_avisar_do_dia(total" in fonte` casava com a linha do DEF, nao com a chamada — removi a
+   chamada na sabotagem e a trava continuou ✅;
+2. o `return None` era procurado no arquivo INTEIRO, e outras funcoes tem `return None`;
+3. (11/Ago, mesmo formato) a docstring citando o nome que a trava procurava.
+Procurar texto num arquivo de 1.500 linhas e achar o que se quer, nao o que existe. As tres
+foram reescritas para ler a ARVORE do codigo.
+
+Trava: teste_a_agenda_mora_na_nuvem_e_nao_repete_mensagem, provada contra 5 sabotagens
+(agenda voltando pro arquivo · sem filtro de enviado_em · erro virando dia vazio · o aviso
+deixando de ser chamado · o cron sumindo do workflow).
+
+⚠️ NAO E RESOLVIDO (LEI 7): o cron so prova amanha as 07:00.
