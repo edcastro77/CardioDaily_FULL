@@ -12,6 +12,7 @@ Roda no seu notebook:  streamlit run administrador.py
 # do `_VOO` que custou 10 artigos pagos em 10/Ago. Import de módulo mora no topo, ponto.
 import os, csv, re as _re, datetime as dt
 import requests
+from supabase_chaves import cabecalhos
 import streamlit as st
 
 AZUL = "#0B3D91"
@@ -73,7 +74,7 @@ def buscar():
                                            "nota_aplicabilidade,nota_trabalho_estatistico,mcid_avaliacao,"
                                            "caminho_pdf,caminho_audio,caminho_visual_abstract,publicar_no_site",
                                  "order": "nota_aplicabilidade.desc"},
-                         headers={"apikey": key, "Authorization": f"Bearer {key}"}, timeout=40)
+                         headers=cabecalhos(key), timeout=40)
         r.raise_for_status()
         return r.json(), None
     except Exception as e:
@@ -107,7 +108,7 @@ def ler_agenda():
         r = requests.get(f"{url}/rest/v1/agenda_envio",
                          params={"select": "data_envio,doc_id,titulo,revista,enviado_em",
                                  "order": "data_envio.asc"},
-                         headers={"apikey": key, "Authorization": f"Bearer {key}"}, timeout=30)
+                         headers=cabecalhos(key), timeout=30)
         r.raise_for_status()
         # mantém os nomes que o resto do painel já usa (`nome` era o título no CSV)
         return [{"data_envio": l["data_envio"], "nome": l.get("titulo") or "",
@@ -129,9 +130,8 @@ def agendar(artigo, data_envio):
         r = requests.post(
             f"{url}/rest/v1/agenda_envio",
             params={"on_conflict": "data_envio,doc_id"},
-            headers={"apikey": key, "Authorization": f"Bearer {key}",
-                     "Content-Type": "application/json",
-                     "Prefer": "resolution=merge-duplicates,return=representation"},
+            headers=cabecalhos(key, {"Content-Type": "application/json",
+                                     "Prefer": "resolution=merge-duplicates,return=representation"}),
             json={"data_envio": str(data_envio), "doc_id": artigo.get("doc_id"),
                   "titulo": (artigo.get("titulo") or "")[:400],
                   "revista": artigo.get("revista") or ""},
@@ -150,7 +150,7 @@ def desagendar(doc_id, data_envio):
             f"{url}/rest/v1/agenda_envio",
             params={"doc_id": f"eq.{doc_id}", "data_envio": f"eq.{data_envio}",
                     "enviado_em": "is.null"},
-            headers={"apikey": key, "Authorization": f"Bearer {key}"}, timeout=30)
+            headers=cabecalhos(key), timeout=30)
         r.raise_for_status()
         return True, ""
     except Exception as e:

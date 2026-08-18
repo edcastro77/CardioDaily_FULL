@@ -2194,6 +2194,97 @@ def teste_o_painel_enxerga_o_pacote_onde_o_arquivador_o_deixou():
               f"ttl={ttl}s — a cada expiração ele espera ~7s parado no meio da curadoria")
 
 
+def teste_o_envio_sobrevive_ao_dia_vazio():
+    """17/Ago — O CRON MORREU NO CAMINHO MAIS COMUM: O DIA SEM NADA AGENDADO.
+
+    ═══ O CASO ═══
+        UnboundLocalError: cannot access local variable 'selecionados'
+        distribuidor.py, em distribuir_artigos
+
+    Em 14/Ago eu removi o bloco do "livro de bordo" com um recorte por ÍNDICE de texto
+    (`t[:i] + t[j:]`) e levei junto o `else:` que tratava a fila vazia. O arquivo compilou,
+    a bateria inteira passou, e o defeito ficou invisível — porque só aparece quando NÃO há
+    nada agendado, que é o dia comum.
+
+    Medido no GitHub Actions: 15 e 16/Ago o cron enviou certo. 17/Ago a fila estava vazia às
+    07:00 e o processo morreu com exit code 1, sem mandar nada e sem avisar ninguém.
+
+    ⚠️ E EU DIAGNOSTIQUEI ERRADO. Olhei a tabela `agenda_envio`, vi `enviado_em IS NULL`, e
+    disse ao Dr. Eduardo que "o robô rodou, não achou nada e foi embora corretamente". Ele
+    abriu o log do Actions e me mostrou a exceção. **Dado ausente não diz a causa da
+    ausência** — banco vazio e programa morto produzem exatamente a mesma linha.
+
+    ═══ POR QUE ESTA TRAVA É DIFERENTE DAS OUTRAS ═══
+    As outras leem o código. Esta EXECUTA `distribuir_artigos` inteira, com um Supabase que
+    devolve lista vazia — o caminho que quebrou. Nenhuma leitura de fonte teria pego isto:
+    o arquivo estava sintaticamente perfeito.
+    """
+    import os
+    import sys
+    import types
+
+    for m in ("supabase", "httpx", "dotenv"):
+        sys.modules.setdefault(m, types.ModuleType(m))
+    sys.modules["supabase"].create_client = lambda *a, **k: None
+    sys.modules["supabase"].Client = object
+    sys.modules["dotenv"].load_dotenv = lambda *a, **k: None
+    sys.modules["httpx"].get = sys.modules["httpx"].post = lambda *a, **k: None
+    sys.modules["httpx"].Timeout = lambda *a, **k: None
+    sys.modules["httpx"].Client = lambda *a, **k: None
+    for k, v in (("SUPABASE_URL", "x"), ("SUPABASE_SERVICE_KEY", "x"), ("ZAPI_BASE", "x"),
+                 ("ZAPI_CLIENT_TOKEN", "x"), ("EDUARDO_PHONE", "5527996089248"),
+                 ("CD_PULAR_CHECK_ZAPI", "1")):
+        os.environ.setdefault(k, v)
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    try:
+        import distribuidor as D
+    except Exception as e:
+        checa("dá para importar o distribuidor", False, f"{type(e).__name__}: {e}")
+        return
+
+    class _R:
+        def __init__(s, d):
+            s.data = d
+
+    class _SBVazio:
+        """o Supabase de um dia sem curadoria: tudo responde lista vazia"""
+        def table(s, *a): return s
+        def select(s, *a, **k): return s
+        def eq(s, *a, **k): return s
+        def is_(s, *a, **k): return s
+        def gte(s, *a, **k): return s
+        def order(s, *a, **k): return s
+        def limit(s, *a, **k): return s
+        def execute(s): return _R([])
+
+    conectar, enviar = D.conectar_supabase, D.zapi_send_text
+    D.conectar_supabase = lambda: _SBVazio()
+    D.zapi_send_text = lambda p, m: True
+    try:
+        import io
+        import logging
+        buf = io.StringIO()
+        h = logging.StreamHandler(buf)
+        logging.getLogger().addHandler(h)
+        try:
+            D.distribuir_artigos(dry_run=False)
+            checa("o envio SOBREVIVE ao dia sem nada agendado", True)
+            saida = buf.getvalue()
+            # 17/Ago — o resumo gritava "NADA FOI ENTREGUE e HAVIA artigo aprovado" mesmo
+            # com a fila vazia. Alarme que toca no dia normal é alarme que se aprende a
+            # ignorar — e foi assim que 12 e 13/Ago passaram em branco.
+            checa("e NÃO grita alarme falso no dia vazio",
+                  "NADA FOI ENTREGUE" not in saida,
+                  "diz 'havia artigo aprovado' quando não havia — o alarme perde o valor")
+        except Exception as e:
+            checa("o envio SOBREVIVE ao dia sem nada agendado", False,
+                  f"{type(e).__name__}: {e} — é o defeito de 17/Ago voltando")
+        finally:
+            logging.getLogger().removeHandler(h)
+    finally:
+        D.conectar_supabase, D.zapi_send_text = conectar, enviar
+
+
 def teste_a_agenda_mora_na_nuvem_e_nao_repete_mensagem():
     """14/Ago — O ENVIO PASSOU A RODAR COMO O RADAR, E A AGENDA SAIU DO DISCO.
 

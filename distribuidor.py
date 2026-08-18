@@ -1017,6 +1017,11 @@ def distribuir_artigos(dry_run: bool = False):
 
     total = 0
     nao_entregues = []          # 11/Ago: o que FALHOU, para o resumo não mentir
+    # 17/Ago — o resumo dizia "NADA FOI ENTREGUE e HAVIA artigo aprovado" mesmo quando a fila
+    # estava vazia. Duas situações opostas com a mesma frase de alarme: uma é defeito, a outra
+    # é o dia normal. Alarme que toca no dia normal é alarme que se aprende a ignorar — e foi
+    # assim que os dias 12 e 13 passaram em branco.
+    houve_fila = False
 
     for assinante in assinantes:
         nome = assinante.get("nome", "?")
@@ -1039,12 +1044,39 @@ def distribuir_artigos(dry_run: bool = False):
         # continua no arquivo — mas como REDE, não como escolha: se ele não aprovou nada, o
         # dia passa sem mensagem e o log diz por quê. Antes disto, a Chave 3 gravava a fila e
         # este programa escolhia sozinho: a decisão dele morria no CSV.
+        # ═══ 17/Ago/2026 — O CRON QUEBROU NO CAMINHO MAIS COMUM, E A CULPA É MINHA ═══
+        #
+        # `UnboundLocalError: cannot access local variable 'selecionados'`
+        #
+        # Em 14/Ago eu removi o bloco do "livro de bordo" com um recorte por ÍNDICE de texto
+        # (t[:i] + t[j:]) e levei junto o `else:` que tratava a FILA VAZIA. O arquivo
+        # compilou, a bateria passou, e o defeito ficou invisível — porque só aparece quando
+        # não há nada agendado, que é o dia comum.
+        #
+        # Resultado medido: 15 e 16/Ago o cron enviou certo; 17/Ago a fila estava vazia às
+        # 07:00 e o processo MORREU com exit code 1. E eu, olhando o banco, disse a ele que
+        # "o robô rodou e foi embora corretamente". Estava errado: ele quebrou. Só apareceu
+        # quando o Dr. Eduardo abriu o log do GitHub Actions e me mostrou.
+        #
+        # ⚠️ DUAS LIÇÕES, E A SEGUNDA É PIOR QUE A PRIMEIRA:
+        #   1. cirurgia de texto por índice remove o que não se vê. Não fazer mais.
+        #   2. eu diagnostiquei pelo BANCO (que mostrava "não enviado") e não pelo LOG DE
+        #      EXECUÇÃO (que mostrava a exceção). Dado ausente não diz a causa da ausência.
+        #
+        # Agora `selecionados` nasce ANTES do `if`, então nem existe o caminho onde ela falta.
+        selecionados = []
+
         aprovados = fila_aprovada(sb)
         if aprovados is None:
             # 14/Ago — "não consegui ler" ≠ "nada aprovado". Sair daqui como se fosse dia
             # vazio faria o log dizer a mensagem certa pelo motivo errado.
             log.error("  Não vou enviar: a agenda no Supabase não respondeu (veja acima).")
             continue
+        if not aprovados:
+            log.info("  ⏸️  Nada aprovado para hoje. Não é falha: é a regra que você definiu")
+            log.info("      em 10/Ago — só sai o que você marcou na Chave 3.")
+            continue
+        houve_fila = True
         if aprovados:
             selecionados = buscar_aprovados(sb, aprovados)
             for s in selecionados:
@@ -1116,6 +1148,9 @@ def distribuir_artigos(dry_run: bool = False):
         log.error("   Os NÃO entregues NÃO foram marcados como enviados: continuam na fila")
         log.error("   e saem na próxima tentativa. Rode `python3 src/testar_zapi.py` para")
         log.error("   saber ONDE a corrente arrebentou (não envia nada, custo zero).")
+    elif total == 0 and not houve_fila:
+        # 17/Ago — dia sem curadoria. NÃO é falha, e não pode gritar como se fosse.
+        log.info("CONCLUÍDO — nada estava marcado para hoje. Nenhuma mensagem enviada.")
     elif total == 0:
         # ═══ 11/Ago — ZERO ENTREGUE NÃO É SUCESSO ═══
         # Saiu "CONCLUÍDO — 0 artigo(s) entregue(s), nenhuma falha" com DOIS artigos aprovados

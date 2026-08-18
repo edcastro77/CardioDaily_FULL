@@ -1,66 +1,93 @@
-O ENVIO PASSOU A RODAR COMO O RADAR — a agenda saiu do disco (14/Ago/2026)
+O TEMA VEM DO MeSH — e o cron parou de morrer no dia vazio (17-18/Ago/2026)
 
-"programei os artigos ontem que deveria receber nos proximos 3 dias, mas nao funcionou."
+═══ 🔴 PRIMEIRO O CONSERTO URGENTE: O CRON MORRIA NO CAMINHO MAIS COMUM ═══
 
-CAUSA: nada rodava sozinho. O cron do artigos-diarios.yml foi removido em 27/Jul por decisao
-dele — "o sistema NAO publica/envia artigo sozinho" — e naquele momento estava CERTO, porque
-a curadoria nao existia e automatico significava a maquina escolhendo. Hoje e o contrario:
-quem escolhe e ele, na Chave 3, e o cron so cumpre o horario.
+    UnboundLocalError: cannot access local variable 'selecionados'
 
-═══ MEU PRIMEIRO CONSERTO FOI RUIM, E ELE VIU NA HORA ═══
-Montei um agendador launchd no macOS — que so funciona com o notebook ligado e acordado as
-07:00. Ele e PLANTONISTA. Aquilo resolvia o meu problema (o caminho curto), nao o dele.
-A pergunta que derrubou: "por que o sistema nao usa o mesmo do radar, que envia todos os dias
-independente de como meu computador estiver ligado ou nao?"
+Em 14/Ago removi o bloco do "livro de bordo" com um recorte por INDICE de texto
+(t[:i] + t[j:]) e levei junto o `else:` que tratava a FILA VAZIA. O arquivo compilou, as
+60 travas passaram, e o defeito ficou invisivel — porque so aparece quando NAO ha nada
+agendado, que e o dia comum.
 
-A RESPOSTA ERA UM ARQUIVO. O Radar roda na nuvem porque nao depende de NADA no Mac dele:
-nasce no Supabase, le no Supabase, manda de la. O envio de artigos era identico — mesma
-Z-API, mesmo distribuidor, mesmo tipo de workflow — com UMA diferenca: a lista do que enviar
-morava em saidas/agenda_envio.csv, no disco dele.
+MEDIDO no GitHub Actions: 15 e 16/Ago o cron enviou certo (2 e 1 artigos, por "nuvem").
+17/Ago a fila estava vazia as 07:00 e o processo MORREU com exit code 1.
 
-  · agenda → tabela `agenda_envio` no Supabase (LEI 5 intacta: nao mexe em `artigos`)
-  · cron de volta: '0 10 * * *' = 07:00 BRT, meia hora antes do Radar
-  · o agendador do macOS foi REMOVIDO no mesmo passo (dois agendadores vivos seria "duas
-    fontes de verdade" outra vez)
-  · Chave 21 muda de papel: era "o jeito de enviar", virou "enviar FORA DE HORA"
+⚠️ E EU DIAGNOSTIQUEI ERRADO. O Dr. Eduardo disse "nao foi enviado"; eu olhei a tabela
+`agenda_envio`, vi enviado_em NULL, e afirmei que "o robo rodou, nao achou nada e foi
+embora corretamente". Ele abriu o log do Actions e me mostrou a excecao.
+**DADO AUSENTE NAO DIZ A CAUSA DA AUSENCIA** — banco vazio e programa morto produzem a
+mesma linha, e eu escolhi a interpretacao confortavel.
 
-═══ A TABELA COMEU O LIVRO DE BORDO, QUE EU TINHA CRIADO UMA HORA ANTES ═══
-Para o agendador do Mac nao repetir mensagem eu criei saidas/enviados.csv. Com a agenda na
-tabela, `enviado_em` responde "ja saiu?" na MESMA LINHA que responde "esta agendado?". Dois
-arquivos locais que podiam discordar viraram uma linha que nao pode. Apagados, nao comentados.
+Consertos: `selecionados = []` nasce antes do `if` · saida explicita para fila vazia ·
+e o resumo parou de gritar "NADA FOI ENTREGUE e HAVIA artigo aprovado" no dia em que nao
+havia nada (alarme que toca no dia normal e alarme que se aprende a ignorar — foi assim
+que 12 e 13/Ago passaram em branco).
 
-O defeito que o modo manual escondia: NAO EXISTIA registro do que ja foi enviado (a agenda
-nao era limpa, e registrar_envio sai na porta para o destinatario do .env — id: None, sem
-linha em whatsapp_users). Com o cron, um clique na Chave 21 as 10h repetiria tudo.
+Trava: `teste_o_envio_sobrevive_ao_dia_vazio` — ela EXECUTA distribuir_artigos com um
+Supabase que devolve lista vazia. Nenhuma leitura de codigo teria pego: o arquivo estava
+sintaticamente perfeito.
 
-═══ O AVISO DIARIO — o conserto que mais importa ═══
-O defeito dos dias 12 e 13 nao foi so a falta do agendador: foi que NADA O AVISOU. O dia
-passou e o silencio era identico a "esta tudo funcionando". Com o envio na nuvem isso
-pioraria — ele nao ve tela nenhuma. Agora sai um WhatsApp cobrindo os 4 estados, NENHUM
-deles silencio: saiu N · agenda vazia · ja tinha saido · FALHOU.
-(Telegram descartado a pedido dele: "ninguem usa, inclusive eu — quando abro tem mais de 100
-mensagens que nao vejo". Aviso que ninguem le e pior que aviso nenhum.)
+═══ O TEMA: QUATRO VOCABULARIOS VIRARAM UM ═══
 
-═══ MIGRACAO ═══
-As 12 linhas do CSV foram para a tabela com o historico correto: 5 marcadas como ja enviadas
-(11 e 14/Ago, que ele confirmou), 7 pendentes. A Chave 3 mostra em VERMELHO, no topo, os
-artigos com data JA PASSADA e nao enviados — os 5 dos dias 12 e 13 estao la, e nao saem
-sozinhos: a data precisa ser refeita.
+O CardioDaily tinha QUATRO listas de tema que nao se falavam (Radar 469 termos ·
+ficha_site 45 · contrato 9 rotulos · user_manager 7 slugs). So 3 de 9 coincidiam.
 
-ERRO DE LEITURA ≠ DIA VAZIO: se o Supabase nao responder, fila_aprovada devolve None (nao [])
-e o envio PARA. [] faria o log dizer "nada aprovado para hoje" — a mensagem certa pelo motivo
-errado, a familia de defeito da semana inteira.
+O CUSTO APARECEU NA TELA: ele digitou "OBSTETRIC" no painel e achou 1 artigo. Pelos
+descritores MeSH o acervo tem 15. Ele procurou certo; o sistema so olhava o titulo.
 
-═══ TRES TRAVAS MINHAS APROVARAM O DEFEITO NA BANCADA, HOJE ═══
-1. `"_avisar_do_dia(total" in fonte` casava com a linha do DEF, nao com a chamada — removi a
-   chamada na sabotagem e a trava continuou ✅;
-2. o `return None` era procurado no arquivo INTEIRO, e outras funcoes tem `return None`;
-3. (11/Ago, mesmo formato) a docstring citando o nome que a trava procurava.
-Procurar texto num arquivo de 1.500 linhas e achar o que se quer, nao o que existe. As tres
-foram reescritas para ler a ARVORE do codigo.
+    *"o tema MeSH diz respeito a minha capacidade de disponibilizar o material correto
+     para quem quer receber mensagens de imagem cardiovascular. Entao isso nao pode
+     esperar."*  — e ele estava certo: tema nao e etiqueta, e a CHAVE DE ENTREGA.
 
-Trava: teste_a_agenda_mora_na_nuvem_e_nao_repete_mensagem, provada contra 5 sabotagens
-(agenda voltando pro arquivo · sem filtro de enviado_em · erro virando dia vazio · o aviso
-deixando de ser chamado · o cron sumindo do workflow).
+A SOLUCAO NAO FOI PALAVRA-CHAVE NEM LLM: e o **MeSH**, vocabulario controlado atribuido
+por indexadores HUMANOS da National Library of Medicine lendo o artigo inteiro. Custo
+zero, deterministico, e e literalmente o que o PubMed usa.
 
-⚠️ NAO E RESOLVIDO (LEI 7): o cron so prova amanha as 07:00.
+POR QUE AS PALAVRAS DO RADAR NAO SERVEM PARA CLASSIFICAR — medido:
+a categoria `cardiobstetrica` tem 19 termos e pegou **1 artigo em 705**, enquanto 44
+falam de gestacao. As frases sao compostas ("preeclampsia cardiovascular") — feitas para
+o PubMed, que expande com MeSH, e inuteis contra texto corrido. Vocabulario de BUSCA quer
+abrangencia; classificacao quer precisao. Sao trabalhos opostos.
+
+ARQUITETURA (determinada por ele em 17/Ago):
+    13 TEMAS      → no sistema: classificacao, banco, busca, Radar
+     6 CATEGORIAS → o que o assinante escolhe
+    *"no sistema tem que ter o processo com os 13 temas"*
+A categoria e DERIVADA do tema em `temas.py`, nunca escrita a mao. Conferencia de sanidade
+no import: tema sem categoria, categoria fantasma ou tema em duas categorias = erro.
+
+REGRA DE DECISAO: peso por ESPECIFICIDADE (inverso da frequencia, ideia do IDF). A intuicao
+dele — "quanto mais keywords, mais forte" — corrigida pelo que a palavra informa:
+`Cardiovascular Diseases` (48 artigos) pesa 0,25; `Cardiomyopathy, Hypertrophic` (4) pesa
+0,62.
+
+TEMA SECUNDARIO (decisao dele, vendo dois casos reais): insuficiencia mitral SECUNDARIA e
+doenca de ventriculo — o MeSH manda para IC, mas quem assinou "Doenca Estrutural" quer
+receber. Efeito medido: tema decidido subiu de 243 (75%) para 314 (96%); os 72 "indecisos"
+ganharam dois temas em vez de nenhum.
+
+PLANO B AUTOMATICO: sem MeSH → LLM barato (cadeia CLASSIFICACAO), gravado com
+`tema_origem='llm'`. Quando a NLM indexar, `--promover` troca o palpite pelo descritor
+humano de graca. E para isso que a coluna de procedencia existe.
+
+RESULTADO: 499 de 520 artigos com tema — 313 pelo MeSH (gratis), 186 pelo LLM (US$ 0,12).
+21 para revisao humana.
+
+═══ ⚠️ TRES DEFEITOS MEUS, DENTRO DO PROPRIO CONSERTO ═══
+
+1. `tema_mesh.py` tinha a lista dos 13 TAMBEM, e normalizava "Valvulopatias" (canonico)
+   para "Valvopatias" (velho). Resultado: o tema Valvulopatias ficou com ZERO artigos
+   enquanto 35 tinham descritor de valva. **Dois arquivos com a mesma lista discordando —
+   literalmente o defeito que este trabalho veio matar.** Agora ele importa de `temas.py`
+   e recusa rotulo que nao esteja la.
+2. Nove descritores de METODO (`Cause of Death`, `Hospital Mortality`, `Machine Learning`,
+   `Propensity Score`…) ganharam tema clinico no preenchimento da planilha e poluiam o
+   placar. Viraram RUIDO.
+3. Na cardio-oncologia eu propus deixar os canceres de orgao de fora; ele preferiu alcance
+   (opcao A). Rodei e mostrei os 8 nomeados: **3 estavam errados** (diabetes/cancer de
+   mama, distribuicao espacial, trombocitopenia por heparina). Ele mudou para B com o dado
+   na mesa. Ficaram 4, os 4 certos.
+
+Colunas novas, NENHUMA sobrescreve `doenca_principal` (decisao dele: "criar uma nova coluna
+para nao ter que apagar e restituir esta atual" — o mesmo principio da troca da chave):
+    mesh_terms (text[]) · tema · tema_secundario · tema_origem (mesh|llm|manual)

@@ -36,6 +36,9 @@ import sys
 import time
 from pathlib import Path
 import requests
+# 14/Ago — este arquivo mora em src/infographics/, um nível abaixo. O `_sys.path.insert` da
+# linha 29 já pôs `src/` no caminho (é assim que ele importa `llm_client` e `modelos`).
+from supabase_chaves import cabecalhos as _cabecalhos_supabase
 import anthropic as _anthropic_module
 
 # Carregar .env do root do projeto
@@ -80,12 +83,12 @@ def upload_visual_abstract_supabase(doc_id: str, png_path: Path) -> str | None:
 
     r = requests.post(
         f"{supabase_url}/storage/v1/object/{BUCKET}/{objeto}",
-        headers={
-            "apikey": svc_key,
-            "Authorization": f"Bearer {svc_key}",
+        # 14/Ago — cabeçalho pelo TIPO da chave (ver src/supabase_chaves.py): legada manda
+        # os dois headers, nova (`sb_secret_…`) manda só o `apikey`.
+        headers=_cabecalhos_supabase(svc_key, {
             "Content-Type": "image/png",
             "x-upsert": "true",
-        },
+        }),
         data=dados,
         timeout=60,
     )

@@ -126,10 +126,11 @@ def url_artigo(doc_id: str, slug: str | None = None) -> str:
 # Supabase fetch
 # -----------------------------------------------------------------------------
 def _sb_headers() -> dict:
-    return {
-        "apikey": SUPABASE_SERVICE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-    }
+    # 14/Ago — o cabeçalho passa por `supabase_chaves.cabecalhos`, que decide pelo TIPO da
+    # chave: legada (JWT) manda os dois headers; nova (`sb_secret_…`) manda só o `apikey`,
+    # como a documentação pede. Assim a troca da chave vazada não exige mexer aqui.
+    from supabase_chaves import cabecalhos
+    return cabecalhos(SUPABASE_SERVICE_KEY)
 
 def _buscar_artigos(
     nota_min: int,

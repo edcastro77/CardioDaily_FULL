@@ -152,6 +152,58 @@ sistema, dentro da prova:**
    `SyntaxError`, e a exceção **matava a bateria inteira** (as outras 60 travas nem rodavam) —
    repetição literal do defeito de 08/Ago. Trava que explode não reprova: some.
 
+### 14/Ago/2026 — 🟡 PARADO NO MEIO: a troca da chave do Supabase (SEG·1)
+
+*"se você não tem segurança absoluta que consegue me orientar quanto à mudança da chave,
+cancele este processo e vamos para a próxima fase."* — e ele estava certo em cobrar.
+
+**MOTIVO DE ORIGEM:** a `SUPABASE_SERVICE_ROLE_KEY` está em texto puro em
+`outputs/site_operacional/pasted_content_2.txt`, o briefing colado num chat externo em julho.
+Conferido: o arquivo **nunca foi commitado** — não vazou para o GitHub.
+
+**⚠️ ESTADO EM QUE FICOU — funcionando, mas dividido ao meio:**
+
+| peça | chave que usa |
+|---|---|
+| Chave 3 (Administrador) | `SUPABASE_SERVICE_ROLE_KEY`, linha **118** → **JWT LEGADA** |
+| distribuidor + os 4 workflows | `SUPABASE_SERVICE_KEY`, linha 37 → **`sb_secret_` NOVA** |
+
+As duas ativas, as duas testadas com HTTP 200. Nada quebra sozinho: a legada não expira.
+
+**🔴 A ÚNICA REGRA ENQUANTO ESTIVER PARADO: NÃO desativar a chave legada no painel do
+Supabase.** Se desativar, a Chave 3 para de abrir — e o motivo está na linha 118, que não
+fica junto das outras duas (mora na seção "CONFIG / TOGGLES", longe do topo do arquivo).
+Foi exatamente por isso que ele disse *"só temos estes dois"*: ele viu as do topo e não tinha
+como saber da terceira.
+
+**O QUE FALTA** (detalhe completo em `docs/TROCA_DA_CHAVE.md` e na tarefa SEG·1):
+3 linhas do `.env` · GitHub Secrets · PESQUISADOR · POCUS · Vercel · desativar a legada.
+
+**JÁ FEITO E COMMITADO:** `src/supabase_chaves.py` (monta o cabeçalho pelo TIPO da chave) ·
+Chave 23 (conferidor que não muda nada) · `docs/TROCA_DA_CHAVE.md`.
+
+**DOIS ACHADOS QUE SOBREVIVEM AO CANCELAMENTO, e valem mais que a troca em si:**
+
+1. **Os nomes das variáveis mentiam.** Decodificando o campo `role` de cada JWT:
+   `SUPABASE_SERVICE_KEY` continha a **`anon`**, não a de serviço. O distribuidor e os 4
+   workflows rodavam com privilégio de leitura achando que tinham o de escrita — funcionava
+   porque `artigos` não tem RLS ligada.
+2. **A linha 41 do `.env` é uma anotação solta** (`SUPABASE_SERVICE_KEY e outra SUPABASE_KEY`)
+   e o `python-dotenv` imprime *"could not parse statement starting at line 41"* em TODA
+   execução. Medido: ele pula a linha e as 21 variáveis seguintes carregam normalmente — nada
+   se perde. Mas aviso que aparece sempre é aviso que se para de ler, e foi assim que os dias
+   12 e 13 passaram em branco.
+
+**⚠️ E UM ERRO MEU, do tipo que ele aprendeu a farejar antes de mim:** avisei que o código
+quebraria com a chave nova, citando a documentação (*"You cannot send a publishable or secret
+key in the Authorization: Bearer header"*). **Fui testar contra o projeto real e os DOIS
+formatos devolveram HTTP 200.** Eu tinha criado urgência a partir de leitura, não de medida.
+Ele percebeu o padrão e cortou: *"isso está me cheirando a erro que depois vc vai pedir
+desculpa — mas o estrago já estará feito"*. O `supabase_chaves.py` continua valendo, mas como
+seguro contra mudança futura, não como conserto de quebra.
+
+---
+
 ### 14/Ago/2026 — O ENVIO PASSOU A RODAR COMO O RADAR (a agenda saiu do disco)
 
 *"programei os artigos ontem que deveria receber nos próximos 3 dias, mas não funcionou"*
