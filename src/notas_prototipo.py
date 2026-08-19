@@ -213,6 +213,40 @@ TETO_MCID = {
     "significativo_mas_abaixo_do_mcid": 6,   # ← o teto que o Dr. Eduardo aprovou
     "nao_relevante": 6,                      # ← MESMO teto: é pelo menos tão ruim quanto o de cima.
     "incerto": 7,                            # efeito de relevância duvidosa não muda a prática amanhã
+
+    # ═══════════════ 18/Ago/2026 — O BURACO DE `nao_avaliavel` ═══════════════
+    #
+    # Ele era a classificação MAIS COMUM do acervo — 468 de 943 pacotes — e NÃO ESTAVA
+    # NESTA TABELA. O código faz `TETO_MCID.get(c, 10)`: o padrão é 10. Ou seja,
+    # **"não dá para avaliar a relevância" era lido como "relevância máxima"**.
+    #
+    # É a terceira vez na mesma semana que a ausência de dado vira o caso favorável:
+    #     11/Ago  `retrospectivo: null` concedia o teto 8 do Framingham
+    #     14/Ago  livro de bordo ilegível devolveria "não enviei nada, pode mandar tudo"
+    #     18/Ago  relevância não avaliável valendo relevância máxima
+    #
+    # O CASO, trazido por ele: «Randomized Feasibility Trial of Routine Versus Selective
+    # Transesophageal Echocardiography During Isolated CABG» — NAC 8/10.
+    #   *"Por que um estudo que testou se é possível randomizar um eco-TE na cirurgia
+    #    cardíaca recebe 8 de nota de aplicabilidade? Não sei como explicar o que é
+    #    aplicabilidade prática."*
+    # O caminho era: desenho 8 (open-label) · externa 10 · rigor 9 · **MCID 10** → 8.
+    # O único freio foi o open-label, por outro motivo. A relevância não freou nada.
+    #
+    # ⚠️ E A PALAVRA COBRIA TRÊS COISAS QUE NÃO MERECEM O MESMO TETO. Por isso virou três,
+    # com os valores definidos por ele:
+    "sem_desfecho_clinico": 5,   # viabilidade/piloto/protocolo — não se propôs a medir benefício.
+                                 # É o degrau 5 da tabela DELE na LEI 0: "gerador de hipóteses,
+                                 # bem conduzido mas não clinicamente acionável". Responde
+                                 # "dá para fazer o estudo?", não "o que faço com o paciente?".
+    "nao_avaliavel": 8,          # tem desfecho clínico, faltou o dado para julgar relevância.
+                                 # Teto 8 (decisão dele): é falha de RELATO, não do estudo —
+                                 # capar em 5 puniria o artigo pelo que a revista não imprimiu.
+    # `nao_se_aplica` NÃO ENTRA NESTA TABELA DE PROPÓSITO — cai no `get(c, 10)` e fica sem
+    # teto. Etiologia, prognóstico e diagnóstico não admitem MCID: não existe "diferença
+    # mínima clinicamente importante" para *qual é a causa*. Quem limita esses estudos é o
+    # DESENHO (LEI 0), que já os capa em 6-8. Pôr teto de relevância aqui seria punir duas
+    # vezes o mesmo estudo pelo mesmo motivo.
     # ═══════════════ 04/Ago/2026 — O BURACO QUE INVERTIA O CARDIODAILY ═══════════════
     #
     # `ausencia_de_efeito_demonstrada` NÃO TEM TETO. Decisão do Dr. Eduardo, 04/Ago.

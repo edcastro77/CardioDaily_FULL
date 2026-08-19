@@ -71,7 +71,35 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
     "efeito_excede_limiar": <true se o efeito PONTUAL excede o MCID/limiar de importância; false; null se não avaliável>,
     "ic_exclui_beneficio_relevante": <true se o IC 95% DESCARTA um benefício clinicamente relevante (o limite mais favorável do IC ainda fica AQUÉM do MCID/limiar); false se o IC ainda comporta benefício relevante; null se não avaliável>,
     "ic_sustenta_relevancia": <true se o IC95% INTEIRO fica além do limiar na direção favorável; false se cruza o limiar ou a nulidade; null se não avaliável>,
-    "classificacao": "<um de: robusto | provavel | incerto | ausencia_de_efeito_demonstrada | significativo_mas_abaixo_do_mcid | nao_relevante | nao_avaliavel>",
+    "classificacao": "<um de: robusto | provavel | incerto | ausencia_de_efeito_demonstrada | significativo_mas_abaixo_do_mcid | nao_relevante | sem_desfecho_clinico | nao_se_aplica | nao_avaliavel>
+       ⚠️ 18/Ago — ANTES DE ESCREVER `nao_avaliavel`, VEJA QUAL DAS TRÊS É. Elas parecem a mesma
+          coisa ("não dá para julgar a relevância") e têm pesos MUITO diferentes na nota.
+
+       · sem_desfecho_clinico → O ESTUDO NÃO SE PROPÔS A MEDIR BENEFÍCIO.
+            ensaio de VIABILIDADE, estudo PILOTO, protocolo, estudo de recrutamento/adesão,
+            validação de método SEM desfecho clínico. O desfecho primário é operacional
+            ("conseguimos randomizar", "adesão foi de 98%", "o exame é factível").
+            Ele responde *"dá para fazer o estudo?"*, não *"o que faço com o paciente?"*.
+            É o degrau 5 da tabela do CardioDaily: gerador de hipóteses.
+            EXEMPLO REAL: «Randomized Feasibility Trial of Routine vs Selective TEE During
+            CABG» — desfecho primário: recrutamento e adesão ao protocolo.
+
+       · nao_se_aplica → A PERGUNTA NÃO ADMITE MCID.
+            etiologia, prognóstico, acurácia diagnóstica, epidemiologia, fisiopatologia.
+            Não existe "diferença mínima clinicamente importante" para *qual é a causa* ou
+            *qual o risco*. O estudo pode ser excelente — quem limita a nota é o DESENHO,
+            não a relevância. NÃO use isto em estudo de INTERVENÇÃO.
+            EXEMPLO REAL: «Sudden Cardiac Death and its Relation to Previously Diagnosed
+            or Occult Coronary Disease» — autópsia, pergunta de etiologia.
+
+       · nao_avaliavel → TEM DESFECHO CLÍNICO, MAS FALTOU O DADO.
+            o estudo mediu benefício de verdade, e você não conseguiu extrair o suficiente
+            para julgar relevância (sem IC, sem valor absoluto, sem limiar declarado).
+            É falha de RELATO, não do desenho.
+
+       Na dúvida entre `nao_se_aplica` e `nao_avaliavel`: olhe o campo `pergunta`. Se for
+       etiologia/prognostico/diagnostico → `nao_se_aplica`. Se for intervencao → decida
+       entre `sem_desfecho_clinico` (não mediu) e `nao_avaliavel` (mediu e faltou dado).>",
     "frase_chave": "<UMA frase objetiva: foi estatisticamente significativo? foi clinicamente importante segundo MCID/limiar? o IC95% sustenta essa relevância?>"
   },
   // ⚠️ ATENÇÃO — 05/Ago/2026: OS CAMPOS ACIMA DEIXARAM DE SER DECORATIVOS.

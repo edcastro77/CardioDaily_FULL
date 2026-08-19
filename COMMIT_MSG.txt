@@ -1,93 +1,82 @@
-O TEMA VEM DO MeSH — e o cron parou de morrer no dia vazio (17-18/Ago/2026)
+"NAO DA PARA AVALIAR A RELEVANCIA" ESTAVA VALENDO "RELEVANCIA MAXIMA" (18/Ago/2026)
 
-═══ 🔴 PRIMEIRO O CONSERTO URGENTE: O CRON MORRIA NO CAMINHO MAIS COMUM ═══
+O Dr. Eduardo, olhando a fila:
 
-    UnboundLocalError: cannot access local variable 'selecionados'
+    «Randomized Feasibility Trial of Routine Versus Selective Transesophageal
+     Echocardiography During Isolated Coronary Artery Bypass Grafting»
+     NAC 8/10 · Rigor 9/10
 
-Em 14/Ago removi o bloco do "livro de bordo" com um recorte por INDICE de texto
-(t[:i] + t[j:]) e levei junto o `else:` que tratava a FILA VAZIA. O arquivo compilou, as
-60 travas passaram, e o defeito ficou invisivel — porque so aparece quando NAO ha nada
-agendado, que e o dia comum.
+    "POR QUE UM ESTUDO QUE TESTOU SE E POSSIVEL RANDOMIZAR UM ECO-TE NA CIRURGIA
+     CARDIACA RECEBE 8 DE NOTA DE APLICABILIDADE? NAO SEI COMO EXPLICAR O QUE E
+     APLICABILIDADE PRATICA."
 
-MEDIDO no GitHub Actions: 15 e 16/Ago o cron enviou certo (2 e 1 artigos, por "nuvem").
-17/Ago a fila estava vazia as 07:00 e o processo MORREU com exit code 1.
+═══ A CAUSA ═══
+O caminho da nota era:  desenho 8 (open-label) · externa 10 · rigor 9 · MCID 10  →  8
 
-⚠️ E EU DIAGNOSTIQUEI ERRADO. O Dr. Eduardo disse "nao foi enviado"; eu olhei a tabela
-`agenda_envio`, vi enviado_em NULL, e afirmei que "o robo rodou, nao achou nada e foi
-embora corretamente". Ele abriu o log do Actions e me mostrou a excecao.
-**DADO AUSENTE NAO DIZ A CAUSA DA AUSENCIA** — banco vazio e programa morto produzem a
-mesma linha, e eu escolhi a interpretacao confortavel.
+O `TETO_MCID` tinha teto para `nao_relevante` (6), `incerto` (7) e
+`significativo_mas_abaixo_do_mcid` (6) — mas NAO tinha para `nao_avaliavel`. E o codigo
+faz `TETO_MCID.get(c, 10)`: o padrao e 10.
 
-Consertos: `selecionados = []` nasce antes do `if` · saida explicita para fila vazia ·
-e o resumo parou de gritar "NADA FOI ENTREGUE e HAVIA artigo aprovado" no dia em que nao
-havia nada (alarme que toca no dia normal e alarme que se aprende a ignorar — foi assim
-que 12 e 13/Ago passaram em branco).
+**"Nao da para avaliar a relevancia" era lido como "relevancia maxima".** O unico freio
+foi o open-label, por outro motivo. A relevancia nao freou nada.
 
-Trava: `teste_o_envio_sobrevive_ao_dia_vazio` — ela EXECUTA distribuir_artigos com um
-Supabase que devolve lista vazia. Nenhuma leitura de codigo teria pego: o arquivo estava
-sintaticamente perfeito.
+⚠️ TERCEIRA VEZ NA MESMA SEMANA QUE A AUSENCIA DE DADO VIRA O CASO FAVORAVEL:
+    11/Ago  `retrospectivo: null` concedia o teto 8 do Framingham
+    14/Ago  livro de bordo ilegivel devolveria "nao mandei nada, pode mandar tudo"
+    18/Ago  relevancia nao avaliavel valendo relevancia maxima
 
-═══ O TEMA: QUATRO VOCABULARIOS VIRARAM UM ═══
+TAMANHO MEDIDO: `nao_avaliavel` era a classificacao MAIS COMUM do acervo — 468 de 943
+pacotes — e nenhum deles tinha teto por relevancia. 32 chegaram a nota ≥8, 156 a ≥7.
+Entre os ≥8 estava o protocolo LEVEL com NOTA 9: um ensaio que ainda nao aconteceu.
 
-O CardioDaily tinha QUATRO listas de tema que nao se falavam (Radar 469 termos ·
-ficha_site 45 · contrato 9 rotulos · user_manager 7 slugs). So 3 de 9 coincidiam.
+═══ A PALAVRA COBRIA TRES COISAS QUE NAO MERECEM O MESMO TETO ═══
+Nao bastava dar um teto ao `nao_avaliavel`: ele estava sendo usado para situacoes opostas.
 
-O CUSTO APARECEU NA TELA: ele digitou "OBSTETRIC" no painel e achou 1 artigo. Pelos
-descritores MeSH o acervo tem 15. Ele procurou certo; o sistema so olhava o titulo.
+  sem_desfecho_clinico → teto 5   viabilidade, piloto, protocolo, validacao sem desfecho.
+                                  O estudo NAO SE PROPOS a medir beneficio. Responde
+                                  "da para fazer o estudo?", nao "o que faco com o
+                                  paciente?". E o degrau 5 da tabela DELE na LEI 0:
+                                  "gerador de hipoteses, nao clinicamente acionavel".
 
-    *"o tema MeSH diz respeito a minha capacidade de disponibilizar o material correto
-     para quem quer receber mensagens de imagem cardiovascular. Entao isso nao pode
-     esperar."*  — e ele estava certo: tema nao e etiqueta, e a CHAVE DE ENTREGA.
+  nao_se_aplica        → SEM TETO etiologia, prognostico, diagnostico. Nao existe
+                                  "diferenca minima clinicamente importante" para *qual e
+                                  a causa*. Quem limita e o DESENHO (LEI 0, que ja capa em
+                                  6-8). Por teto de relevancia seria punir DUAS VEZES o
+                                  mesmo estudo pelo mesmo motivo.
 
-A SOLUCAO NAO FOI PALAVRA-CHAVE NEM LLM: e o **MeSH**, vocabulario controlado atribuido
-por indexadores HUMANOS da National Library of Medicine lendo o artigo inteiro. Custo
-zero, deterministico, e e literalmente o que o PubMed usa.
+  nao_avaliavel        → teto 8   tem desfecho clinico, faltou o dado para julgar
+                                  relevancia. Teto 8 e decisao dele: e falha de RELATO,
+                                  nao do estudo — capar em 5 puniria o artigo pelo que a
+                                  revista nao imprimiu.
 
-POR QUE AS PALAVRAS DO RADAR NAO SERVEM PARA CLASSIFICAR — medido:
-a categoria `cardiobstetrica` tem 19 termos e pegou **1 artigo em 705**, enquanto 44
-falam de gestacao. As frases sao compostas ("preeclampsia cardiovascular") — feitas para
-o PubMed, que expande com MeSH, e inuteis contra texto corrido. Vocabulario de BUSCA quer
-abrangencia; classificacao quer precisao. Sao trabalhos opostos.
+VARREDURA DA LEI 9 — a regra vive em TRES blocos, e mexer em um so deixaria o campo nulo
+para sempre (foi o que aconteceu com as palavras-chave da meta em 05/Ago):
+  · bloco 4a  src/analise.py .......... enum do schema
+  · bloco 4b  src/analise_prompt.md ... quando usar cada uma, com exemplo REAL de cada
+  · bloco 5   src/notas_prototipo.py .. a tabela de teto
 
-ARQUITETURA (determinada por ele em 17/Ago):
-    13 TEMAS      → no sistema: classificacao, banco, busca, Radar
-     6 CATEGORIAS → o que o assinante escolhe
-    *"no sistema tem que ter o processo com os 13 temas"*
-A categoria e DERIVADA do tema em `temas.py`, nunca escrita a mao. Conferencia de sanidade
-no import: tema sem categoria, categoria fantasma ou tema em duas categorias = erro.
+RESULTADO: o eco-TE vai de 8 para 5, com o delator impresso —
+"relevancia clinica 'sem_desfecho_clinico' → teto 5".
 
-REGRA DE DECISAO: peso por ESPECIFICIDADE (inverso da frequencia, ideia do IDF). A intuicao
-dele — "quanto mais keywords, mais forte" — corrigida pelo que a palavra informa:
-`Cardiovascular Diseases` (48 artigos) pesa 0,25; `Cardiomyopathy, Hypertrophic` (4) pesa
-0,62.
+PROVA: os 7 fixtures que ELE julgou continuam batendo (EXCEL 8 · NOBLE 7 · EPCAT III 6 ·
+ISAR-REACT 5 = 7 · US Carvedilol 10 · Framingham 8 · Matharu 5-6). 63 travas passando,
+bateria VERDE — nem a falha antiga dos 3 pacotes meta sobrou.
 
-TEMA SECUNDARIO (decisao dele, vendo dois casos reais): insuficiencia mitral SECUNDARIA e
-doenca de ventriculo — o MeSH manda para IC, mas quem assinou "Doenca Estrutural" quer
-receber. Efeito medido: tema decidido subiu de 243 (75%) para 314 (96%); os 72 "indecisos"
-ganharam dois temas em vez de nenhum.
+═══ ⚠️ E A TERCEIRA TRAVA MINHA QUE GUARDAVA O DEFEITO ═══
+O `teste_mcid` afirmava, com todas as letras: **"MCID 'nao_avaliavel' NAO capa"**. Ela
+chumbava o buraco — e foi ela que REPROVOU o conserto de hoje.
 
-PLANO B AUTOMATICO: sem MeSH → LLM barato (cadeia CLASSIFICACAO), gravado com
-`tema_origem='llm'`. Quando a NLM indexar, `--promover` troca o palpite pelo descritor
-humano de graca. E para isso que a coluna de procedencia existe.
+    11/Ago  "Framingham: aplicabilidade cai para 6"  — chumbava a regua que ele recusou
+    17/Ago  "_TETO_NAO_INTERVENCAO NAO voltou"       — idem
+    18/Ago  "nao_avaliavel NAO capa"                 — esta
 
-RESULTADO: 499 de 520 artigos com tema — 313 pelo MeSH (gratis), 186 pelo LLM (US$ 0,12).
-21 para revisao humana.
+O padrao ficou claro: quando escrevo a trava JUNTO com o codigo, ela documenta o que o
+codigo FAZ em vez de guardar o que a regua DEVERIA SER. Trava com a regua errada nao
+deixa so o defeito passar — **ela impede o conserto**.
+Mudanca de metodo: escrever a trava a partir da DECISAO dele, nao da implementacao.
 
-═══ ⚠️ TRES DEFEITOS MEUS, DENTRO DO PROPRIO CONSERTO ═══
-
-1. `tema_mesh.py` tinha a lista dos 13 TAMBEM, e normalizava "Valvulopatias" (canonico)
-   para "Valvopatias" (velho). Resultado: o tema Valvulopatias ficou com ZERO artigos
-   enquanto 35 tinham descritor de valva. **Dois arquivos com a mesma lista discordando —
-   literalmente o defeito que este trabalho veio matar.** Agora ele importa de `temas.py`
-   e recusa rotulo que nao esteja la.
-2. Nove descritores de METODO (`Cause of Death`, `Hospital Mortality`, `Machine Learning`,
-   `Propensity Score`…) ganharam tema clinico no preenchimento da planilha e poluiam o
-   placar. Viraram RUIDO.
-3. Na cardio-oncologia eu propus deixar os canceres de orgao de fora; ele preferiu alcance
-   (opcao A). Rodei e mostrei os 8 nomeados: **3 estavam errados** (diabetes/cancer de
-   mama, distribuicao espacial, trombocitopenia por heparina). Ele mudou para B com o dado
-   na mesa. Ficaram 4, os 4 certos.
-
-Colunas novas, NENHUMA sobrescreve `doenca_principal` (decisao dele: "criar uma nova coluna
-para nao ter que apagar e restituir esta atual" — o mesmo principio da troca da chave):
-    mesh_terms (text[]) · tema · tema_secundario · tema_origem (mesh|llm|manual)
+⚠️ LIMITE DECLARADO (LEI 7): a regua nova vale para o que for analisado daqui pra frente.
+Os 468 artigos ja extraidos mantem a palavra antiga — a distincao entre as tres nao
+existia quando foram processados. Recalcular com a palavra velha daria teto 8 a todos,
+inclusive aos ensaios de viabilidade. Corrigir de verdade exige reextrair. Os 32 com
+nota ≥8 sao poucos e cabem numa conferencia manual.

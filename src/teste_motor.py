@@ -583,7 +583,22 @@ def teste_mcid():
         r = N.score(a)
         checa(f"MCID '{classe}' capa em {teto}", r["aplic"] <= teto, f"veio {r['aplic']}")
         checa(f"MCID '{classe}' aparece nas flags", any("relevância clínica" in f for f in r["flags"]))
-    for classe in ("robusto", "provavel", "nao_avaliavel"):
+    # ⚠️ 18/Ago — `nao_avaliavel` SAIU DESTA LISTA, e a linha que ele ocupava era o defeito.
+    #
+    # Esta trava afirmava "MCID 'nao_avaliavel' NÃO capa" — ou seja, ela CHUMBAVA o buraco:
+    # "não dá para avaliar a relevância" valendo relevância máxima. Era a classificação mais
+    # comum do acervo (468 de 943) e não tinha teto nenhum.
+    #
+    # É a TERCEIRA trava minha nesta semana que guardava o erro em vez do acerto:
+    #     11/Ago  `Framingham: aplicabilidade cai para 6` — chumbava a régua que ele recusou
+    #     17/Ago  `_TETO_NAO_INTERVENCAO NÃO voltou` — idem
+    #     18/Ago  esta
+    # Trava com a régua errada não deixa só o defeito passar: **ela impede o conserto**,
+    # porque reprova quem tenta arrumar. Foi ela que reprovou o conserto de hoje.
+    #
+    # `nao_se_aplica` entra no lugar: etiologia/prognóstico/diagnóstico não admitem MCID, e
+    # quem limita esses estudos é o DESENHO. Pôr teto de relevância seria punir duas vezes.
+    for classe in ("robusto", "provavel", "nao_se_aplica"):
         a = dict(melhor, relevancia_clinica={"classificacao": classe})
         checa(f"MCID '{classe}' NÃO capa", N.score(a)["aplic"] == 10, f"veio {N.score(a)['aplic']}")
     # o teto do MCID não pode SUBIR nota nenhuma

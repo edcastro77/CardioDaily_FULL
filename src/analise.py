@@ -149,7 +149,28 @@ SCHEMA_FATOS = {
                                            # que exclui benefício relevante = RESPOSTA, não fracasso.
                                            # Foi o que tirou o B do MONABICHA. Vale até 10.
                                            "ausencia_de_efeito_demonstrada",
-                                           "significativo_mas_abaixo_do_mcid", "nao_relevante", "nao_avaliavel"]},
+                                           "significativo_mas_abaixo_do_mcid", "nao_relevante",
+                                           # ═══ 18/Ago/2026 — `nao_avaliavel` VIRA TRÊS ═══
+                                           # Ele era a classificação MAIS COMUM do acervo (468 de
+                                           # 943) e o motor não tinha teto para ela: `TETO_MCID.get(
+                                           # c, 10)` devolvia 10. Ou seja, **"não dá para avaliar a
+                                           # relevância" era lido como "relevância máxima"** — mesma
+                                           # família do `retrospectivo: null`, ausência tratada como
+                                           # o caso favorável.
+                                           #
+                                           # O CASO (Dr. Eduardo, 18/Ago): «Randomized Feasibility
+                                           # Trial of Routine Versus Selective TEE During CABG»
+                                           # tirou NAC 8. *"Por que um estudo que testou se é
+                                           # possível randomizar um eco-TE na cirurgia cardíaca
+                                           # recebe 8 de aplicabilidade?"* — e ele tem razão: um
+                                           # ensaio de viabilidade responde "dá para fazer o
+                                           # estudo?", não "o que faço com o próximo paciente?".
+                                           #
+                                           # Mas a palavra cobria TRÊS coisas que não merecem o
+                                           # mesmo teto, e por isso virou três:
+                                           "sem_desfecho_clinico",  # viabilidade/piloto/protocolo
+                                           "nao_se_aplica",         # etiologia/prognóstico/diagnóstico
+                                           "nao_avaliavel"]},       # tem desfecho, faltou o dado
                 "frase_chave": _S,
             },
             "required": ["desfecho_primario", "efeito_observado", "classificacao", "frase_chave"],
