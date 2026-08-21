@@ -1,0 +1,242 @@
+{
+ "10.1161/ATVBAHA.125.324200": {
+  "tema": "Aorta/Congênitas/Genética",
+  "secundario": "Cardiometabólica",
+  "origem": "mesh",
+  "titulo": "Active Brown Adipose Tissue Is Associated With Reduced Arterial Inflammation and Less Atherogenic Circulating Factors in Individuals With Obesity"
+ },
+ "10.1161/HHF.0000000000000088": {
+  "tema": "Intervenção/Hemodinâmica",
+  "secundario": "Insuficiência Cardíaca",
+  "origem": "mesh",
+  "titulo": "Standardization of Baseline and Provocative Invasive Hemodynamic Protocols for the Evaluation of Heart Failure and Pulmonary Hypertension: A Scientific Statement From the American Heart Association"
+ },
+ "10.1016/j.jacadv.2026.102890": {
+  "tema": "Intervenção/Hemodinâmica",
+  "secundario": null,
+  "origem": "llm",
+  "titulo": "Impact of IVUS Guidance on Clinical and Procedural Outcomes in Intracoronary Brachytherapy"
+ },
+ "10.1161/HYPERTENSIONAHA.125.25552": {
+  "tema": "Cardio-Obstetrícia",
+  "secundario": null,
+  "origem": "mesh",
+  "titulo": "Obstetric History Versus Biomarkers: Hypertension Risk Up to 15 Years Postpartum"
+ },
+ "10.1016/j.ccl.2026.04.003": {
+  "tema": "Insuficiência Cardíaca",
+  "secundario": "UTI Cardiológica",
+  "origem": "mesh",
+  "titulo": "Escalation Strategies in Cardiogenic Shock: From Early Recognition to Advanced Support"
+ },
+ "10.1161/JAHA.126.050501": {
+  "tema": "Hipertensão/HAS",
+  "secundario": null,
+  "origem": "mesh",
+  "titulo": "Clinical Validation of Photoplethysmography-Based Finger Cuffless Blood Pressure Monitoring Following European Society of Hypertension Recommendations"
+ },
+ "10.1016/j.jacadv.2026.102942": {
+  "tema": "Cardio-Oncologia",
+  "secundario": "Imagem Cardiovascular",
+  "origem": "llm",
+  "titulo": "Radiomics for the Detection and Prediction of Cancer Therapy-Related Cardiotoxicity"
+ },
+ "10.1016/j.jacadv.2026.103041": {
+  "tema": "UTI Cardiológica",
+  "secundario": "Intervenção/Hemodinâmica",
+  "origem": "llm",
+  "titulo": "Risk, Management, and Outcomes in PCI-Treated Acute Coronary Syndrome With Cardiogenic Shock"
+ },
+ "10.36660/abc.20250640": {
+  "tema": "Cardiometabólica",
+  "secundario": "Coronária/DAC",
+  "origem": "llm",
+  "titulo": "Diretriz Brasileira de Dislipidemias e Prevenção da Aterosclerose – 2025"
+ },
+ "10.1016/j.jacadv.2026.103042": {
+  "tema": "Insuficiência Cardíaca",
+  "secundario": "Aorta/Congênitas/Genética",
+  "origem": "llm",
+  "titulo": "Heart Failure With Improved Ejection Fraction in ACHD With Biventricular Physiology and Systemic Left Ventricle"
+ },
+ "10.1161/CIRCULATIONAHA.125.078816": {
+  "tema": "Imagem Cardiovascular",
+  "secundario": "Intervenção/Hemodinâmica",
+  "origem": "mesh",
+  "titulo": "Incremental Prognostic Value of Subendocardial Myocardial Flow Reserve in Patients With Normal Perfusion"
+ },
+ "10.1161/CIRCULATIONAHA.125.079009": {
+  "tema": "Cardiometabólica",
+  "secundario": "Imagem Cardiovascular",
+  "origem": "mesh",
+  "titulo": "Lifestyle-Induced Visceral Fat Loss as a Key Target for Durable Cardiometabolic Health: MRI-Assessed 5- and 10-Year Follow-Up After 2 Clinical Trials"
+ },
+ "10.1161/CIRCINTERVENTIONS.125.015770": {
+  "tema": "Valvulopatias",
+  "secundario": "Insuficiência Cardíaca",
+  "origem": "mesh",
+  "titulo": "Clinical Impact of Myocardium at Risk in Transcatheter Aortic Valve Implantation"
+ },
+ "10.2174": {
+  "tema": "Hipertensão/HAS",
+  "secundario": null,
+  "origem": "llm",
+  "titulo": "An Overview of Hypertension: Pathophysiology, Risk Factors, and Modern Management"
+ },
+ "10.1016/j.jacadv.2026.102962": {
+  "tema": "Cardio-Obstetrícia",
+  "secundario": "Cardiometabólica",
+  "origem": "llm",
+  "titulo": "Antenatal Care as a Strategic Window for Long-Term Cardiovascular Risk Assessment"
+ },
+ "10.1093/ehjvshd/xwag044": {
+  "tema": "Valvulopatias",
+  "secundario": null,
+  "origem": "llm",
+  "titulo": "Evolution of echocardiographic changes in aortic stenosis and the association with rapid valvular progression"
+ },
+ "10.1016/j.jacc.2026.06.004": {
+  "tema": "Cardio-Obstetrícia",
+  "secundario": "Miocardiopatias",
+  "origem": "llm",
+  "titulo": "Clinical Considerations in Management of Hypertrophic Cardiomyopathy in Pregnancy: JACC State-of-the-Art Review"
+ },
+ "10.1016/j.jacc.2026.07.005": {
+  "tema": "Coronária/DAC",
+  "secundario": "Intervenção/Hemodinâmica",
+  "origem": "llm",
+  "titulo": "Intravenous Nicorandil in Patients With ST-Segment Elevation Myocardial Infarction Undergoing Primary PCI: The CLEAN Randomized Clinical Trial"
+ },
+ "10.1016/j.hfc.2026.02.008": {
+  "tema": "Intervenção/Hemodinâmica",
+  "secundario": "Insuficiência Cardíaca",
+  "origem": "mesh",
+  "titulo": "Portopulmonary Hypertension: Current Perspectives"
+ },
+ "10.1093/ehjvshd/xwag039": {
+  "tema": "Valvulopatias",
+  "secundario": null,
+  "origem": "llm",
+  "titulo": "Comprehensive and contemporary pre-clinical evaluation of novel transcatheter aortic valves: a scientific statement of the European Association of Percutaneous Cardiovascular Interventions of the European Society of Cardiology, the European Society of Cardiology Working Group on Cellular Biology of the Heart, and the European Society of Cardiology Working Group on Cardiovascular Surgery"
+ },
+ "10.1161/JAHA.125.047468": {
+  "tema": "Valvulopatias",
+  "secundario": "Cardiometabólica",
+  "origem": "mesh",
+  "titulo": "Platelet Activation and Autoimmunity: Mechanisms Linking Hemostasis and Cardiovascular Risk in Rheumatologic Disease"
+ },
+ "10.1161/CIRCHEARTFAILURE.126.014249": {
+  "tema": "Insuficiência Cardíaca",
+  "secundario": "Valvulopatias",
+  "origem": "llm",
+  "titulo": "Aortic Stenosis and Heart Failure With Preserved Ejection Fraction: A Cautionary Tale of Common Partners"
+ },
+ "10.1016/j.jacc.2025.09.006": {
+  "tema": "Aorta/Congênitas/Genética",
+  "secundario": null,
+  "origem": "llm",
+  "titulo": "2025 ACC/AHA/HRS/ISACHD/SCAI Guideline for the Management of Adults With Congenital Heart Disease"
+ },
+ "10.1016/j.jacadv.2026.102860": {
+  "tema": "Cardio-Oncologia",
+  "secundario": null,
+  "origem": "llm",
+  "titulo": "The Burden of Cardiovascular Disease in Lymphoma Survivors: A Population-Based Matched Cohort Study"
+ },
+ "10.1161/CIRCIMAGING.126.019755": {
+  "tema": "Imagem Cardiovascular",
+  "secundario": "Aorta/Congênitas/Genética",
+  "origem": "llm",
+  "titulo": "Standardized Acquisition of Fetal Cardiac Cine MRI: A Practical Guide"
+ },
+ "10.1016/j.iccl.2026.03.014": {
+  "tema": "UTI Cardiológica",
+  "secundario": null,
+  "origem": "mesh",
+  "titulo": "Prevention and Management of Acute Limb Ischemia when Using Temporary Mechanical Circulatory Support Devices"
+ },
+ "10.1161/STROKEAHA.125.054251": {
+  "tema": "Imagem Cardiovascular",
+  "secundario": "Insuficiência Cardíaca",
+  "origem": "mesh",
+  "titulo": "Association of Air Pollution With Brain Health: A Cross-Sectional Analysis of Adults Living in Canada"
+ },
+ "10.1001/jamanetworkopen.2026.28586": {
+  "tema": "Aorta/Congênitas/Genética",
+  "secundario": null,
+  "origem": "llm",
+  "titulo": "Fertility Treatments and the Risk of Kawasaki Disease Among Offspring"
+ },
+ "10.1161/CIRCOUTCOMES.125.013166": {
+  "tema": "UTI Cardiológica",
+  "secundario": "Arritmias/Anticoagulantes",
+  "origem": "mesh",
+  "titulo": "Time to Bystander Cardiopulmonary Resuscitation and Survival Outcomes in Pediatric Out-of-Hospital Cardiac Arrests in the United States"
+ },
+ "10.1161/CIR.0000000000001417": {
+  "tema": "Cardio-Oncologia",
+  "secundario": null,
+  "origem": "mesh",
+  "titulo": "Defining Cardiovascular Endpoints in Oncology Trials: Challenges and Opportunities: A Scientific Statement From the American Heart Association"
+ },
+ "10.1161/HYPERTENSIONAHA.125.25982": {
+  "tema": "Hipertensão/HAS",
+  "secundario": null,
+  "origem": "mesh",
+  "titulo": "From Progress to Plateau: 50-Year Trends in Hypertension Prevalence and Salt Intake in the Finnish Population"
+ },
+ "10.1056/NEJMra2502459": {
+  "tema": "Arritmias/Anticoagulantes",
+  "secundario": null,
+  "origem": "mesh",
+  "titulo": "Platelet-Activating Anti–Platelet Factor 4 Disorders"
+ },
+ "10.1001/jamacardio.2025.5586": {
+  "tema": "Cardio-Oncologia",
+  "secundario": "Coronária/DAC",
+  "origem": "mesh",
+  "titulo": "Coronary Plaque Progression After Androgen Deprivation Therapy in Men With Prostate Cancer: A Randomized Clinical Trial"
+ },
+ "10.1161/STROKEAHA.126.055632": {
+  "tema": "Hipertensão/HAS",
+  "secundario": null,
+  "origem": "llm",
+  "titulo": "Intensive Versus Conventional Blood Pressure Lowering After Successful Endovascular Thrombectomy: OPTIMAL-BP 1-Year Outcomes"
+ },
+ "10.1016/j.jchf.2026.103283": {
+  "tema": "Miocardiopatias",
+  "secundario": "Aorta/Congênitas/Genética",
+  "origem": "llm",
+  "titulo": "The Yield of Clinical Screening in Pediatric Relatives of Hypertrophic Cardiomyopathy With Negative Genetic Testing"
+ },
+ "10.1016/j.jacc.2026.05.028": {
+  "tema": "Arritmias/Anticoagulantes",
+  "secundario": null,
+  "origem": "mesh",
+  "titulo": "Timing, Translation, and Preparedness Lessons Learned From COVID-19 Anticoagulation in Noncritically Ill Hospitalized Patients"
+ },
+ "10.1016/j.jacadv.2026.103049": {
+  "tema": "UTI Cardiológica",
+  "secundario": null,
+  "origem": "llm",
+  "titulo": "Pragmatic Assessment of VA-ECMO Decannulation Readiness After Extracorporeal Cardiopulmonary Resuscitation for Out-of-Hospital Cardiac Arrest"
+ },
+ "10.1056/NEJMoa0706482": {
+  "tema": "Coronária/DAC",
+  "secundario": "Intervenção/Hemodinâmica",
+  "origem": "mesh",
+  "titulo": "Prasugrel versus Clopidogrel in Patients with Acute Coronary Syndromes"
+ },
+ "10.31661/gmj.v15i.4274": {
+  "tema": "Intervenção/Hemodinâmica",
+  "secundario": "Imagem Cardiovascular",
+  "origem": "llm",
+  "titulo": "Intravascular Imaging–Guided Percutaneous Coronary Intervention: A Critical Appraisal of Evidence and Clinical Practice"
+ },
+ "10.1016/j.ijcard.2026.134670": {
+  "tema": "Miocardiopatias",
+  "secundario": "Imagem Cardiovascular",
+  "origem": "mesh",
+  "titulo": "Septal thickness to QRS voltage ratio in Lead I/aVR: A simple tool for estimating cardiac amyloid burden"
+ }
+}

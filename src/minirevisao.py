@@ -38,7 +38,21 @@ def _carregar_env():
 
 def _texto_pdf(pdf, limite=48000):
     import fitz
-    return "".join(p.get_text() for p in fitz.open(pdf))[:limite]
+    doc = fitz.open(pdf)
+    bruto = "".join(p.get_text() for p in doc)
+    doc.close()
+    # 19/Ago — se o PDF for imagem (ou só carimbo de download), o OCR entra. Ver ocr_pdf.py.
+    try:
+        import ocr_pdf as _OCR
+        texto, origem, aviso = _OCR.extrair(pdf, texto_ja_extraido=bruto)
+        if origem == "ocr":
+            print(f"       🔍 {aviso}")
+            bruto = texto
+        elif origem == "pdf_ruim":
+            print(f"       ⚠️  texto do PDF é fraco: {aviso}")
+    except Exception:
+        pass
+    return bruto[:limite]
 
 
 # ─────────────────────────── BASELINE (o que já se sabe) ───────────────────────────

@@ -1789,3 +1789,391 @@ Um visual abstract enviado ao grupo expôs dois erros do pipeline VELHO que moti
 **Onde a LEI 0 vive hoje:** `src/notas_prototipo.py` (determinístico, 7 fixtures de gabarito). O
 `article_analyzer.py` citado na PARTE 2 foi **aposentado** (Lei 4 — corrente modular). Os modelos também
 convergiram: um cliente unificado (`src/llm_client.py`, cadeia cross-provider, Claude 5 na frente).
+
+---
+
+## PARTE 17 — OCR: O PDF QUE PARECIA LEGÍVEL E NÃO ERA (19/Ago/2026, 13h)
+
+**Módulo alterado:** classificador · analisador · extrator de FATOS · minirrevisão (os 5 pontos
+que abrem PDF). **Arquivo novo:** `src/ocr_pdf.py`.
+
+### O caso
+O Dr. Eduardo baixou os **100 artigos originais que mudaram a história da IC**. Cinco pararam em
+REVISÃO HUMANA. Um deles era o **V-HeFT I** (Cohn, NEJM 1986) — scan do arquivo histórico da
+revista, sem camada de texto.
+
+⚠️ **E o PDF não vinha vazio — vinha PIOR.** Trazia **257 caracteres por página, idênticos nas 6**:
+
+```
+The New England Journal of Medicine — Downloaded from nejm.org at BOSTON UNIVERSITY
+on September 6, 2013. For personal use only… Copyright 1986 Massachusetts Medical Society.
+```
+
+É o carimbo de download. A checagem da corrente era `if texto.strip()` — e 257 caracteres
+**passam** nela. A cascata inteira decidia em cima de um carimbo, e nenhum waypoint acusava,
+porque do ponto de vista do código deu tudo certo. É a família de defeito de sempre: **a ausência
+do dado lida como o caso favorável**, aqui com um valor plausível por cima para disfarçar.
+
+### O que foi feito
+`src/ocr_pdf.py` responde duas perguntas antes de deixar o texto seguir:
+
+| pergunta | régua | o que pega |
+|---|---|---|
+| **densidade** | < 400 caracteres/página | página de artigo tem 2.000–4.000 |
+| **repetição** | < 35 % de linhas longas distintas | carimbo, moldura, cabeçalho |
+
+Se o texto não serve, roda o **Tesseract a 300 dpi**. Custo: **zero** (software livre, na máquina).
+
+### A varredura (LEI 9) — os 5 pontos vivos que abrem PDF
+
+| # | bloco | por que importa | ligado |
+|---|---|---|---|
+| 1 | `classificador_ouro.py` | a cascata: título, DOI, descarte | ✅ |
+| 2 | `classificador_prompt.py` · `paginas_1a3()` | **o texto que o LLM lê** | ✅ |
+| 3 | `analisador.py` | o texto que vai para a perícia | ✅ |
+| 4 | `analise.py` | o extrator de FATOS — **de onde sai a NOTA** | ✅ |
+| 5 | `minirevisao.py` | a trilha da minirrevisão | ✅ |
+
+**Fora da corrente, NÃO ligados de propósito:** `classificador_prompt_v5.py` e `prova_v4_v5.py`
+(experimento), `gabarito.py`/`prova_lote.py` (medição — têm de ver o PDF como ele é), e
+`classificador_pubmed.classificar_pasta` (entrada antiga, ninguém chama).
+
+### Medido (não suposto)
+- **V-HeFT · `paginas_1a3()`:** 257 → **20.514 caracteres**, 12,4 s. Título, autores, desenho e
+  resumo legíveis: *"we randomly assigned 642 men with impaired cardiac function"*.
+- **V-HeFT · artigo inteiro (6 páginas):** 37.370 caracteres, 21,8 s.
+- **CONTROLE — 6 PDFs normais do acervo:** 34.000–56.000 caracteres, **0,02–0,06 s, nenhum entrou
+  no OCR**. É o número que importa: se artigo bom caísse no OCR, cada rodada de 800 ganharia ~5 h.
+- Qualidade: nomes próprios saem com erro ("Coun" por Cohn); resumo, desenho e números, limpos.
+  Não afeta classificação nem extração.
+
+### Travas
+- `teste_carimbo_nao_e_texto_do_artigo` — carimbo do NEJM recusado · PDF vazio recusado ·
+  **artigo de verdade APROVADO** (o controle, que impede a trava de virar "recusa tudo").
+- `teste_ocr_esta_nos_cinco_pontos_que_leem_pdf` — por `ast`, confere import + chamada nos 5.
+
+### 🔴 O QUE ACHEI DE QUEBRA — A BATERIA ESTAVA ABORTANDO
+Ao rodar as travas, `teste_quem_grava_e_quem_le_apontam_para_o_mesmo_arquivo` levantou
+**`AttributeError: module 'administrador' has no attribute 'AGENDA'`**. Em 17/Ago a agenda saiu do
+CSV e foi para a tabela `agenda_envio` do Supabase; a trava continuou procurando o caminho do
+arquivo. E o efeito **não foi "uma trava reprova"**: o runner **morria ali**, e as ~20 travas
+seguintes — entre elas as do envio, do MCID e do OCR — **nunca rodavam**.
+
+É o `teste_independencia_nao_cruza_o_nove` de 06/Ago outra vez (trava escrita e nunca chamada),
+com um agravante: esta derrubava as outras junto.
+
+**Regra que fica:** *trava que fala de coisa que pode ser aposentada CHECA a existência antes de
+tocar. Recusar é o trabalho dela; explodir não.* A trava foi reescrita para guardar a MESMA regra
+no endereço novo — quem grava e quem lê apontam para a mesma **tabela** — e agora aceita as duas
+formas de falar com o Supabase (REST no Administrador, cliente no distribuidor).
+
+**Estado da bateria:** 70 travas, 70 rodam, **70 passam**. Antes: parava em ~50 sem dizer.
+
+### Pré-requisito na máquina dele
+```
+brew install tesseract
+pip install pytesseract Pillow
+```
+Sem o binário, `ocr_pdf` **diz isso em voz alta** e o artigo segue para revisão humana com o
+motivo escrito — em vez de devolver string vazia em silêncio, que seria trocar um buraco mudo
+por outro.
+
+### 19/Ago, 12h30 — ADENDO: TEXTO ILEGÍVEL NÃO CHEGA NO LLM
+
+Primeira rodada com o OCR ligado, e o `pytesseract` estava no Python do sistema em vez do
+`.venv` que as chaves usam (erro meu na instrução). Resultado na tela:
+
+```
+🔴 FATOS: … OCR falhou: Mo
+analisado  1992_SAVE_TRIAL_NEJM   nota 0
+```
+
+**Dois defeitos numa linha:**
+
+1. **A mensagem foi cortada onde estava a causa.** `[:110]` decapitou o `ModuleNotFoundError`
+   e sobrou `Mo`. Truncar o aviso é truncar o diagnóstico — os dois cortes foram removidos.
+2. **O artigo foi ANALISADO assim mesmo.** Extração + motor + veredito + perícia sobre 1.557
+   caracteres de carimbo. Pagou LLM para sair `nota 0`.
+
+O 2 não era decisão a tomar — **eu perguntei ao Dr. Eduardo o que já estava decidido**, e ele
+apontou: é o 🔴 BUG que o próprio `CLAUDE.md` já nomeia (*"Editorial/Comment entra na fila e
+vira perícia — QUEIMA DINHEIRO"*), sob a LEI 10. Perguntar o que a lei já responde gasta o
+tempo dele.
+
+**Agora:** `ocr_pdf.TextoIlegivel` é levantada nos **dois pontos que pagam** — o extrator de
+FATOS (`analise.py`, antes do `llm_client`) e a perícia (`analisador.py`, antes do
+`conferir_veredito`). O artigo fica na pasta, não é movido, não custa nada, e o lote termina
+com a lista dos ilegíveis e o que fazer.
+
+**Provado com os 5 PDFs reais, com o Tesseract desligado à força:** os 5 param, zero chamadas.
+Trava: `teste_texto_ilegivel_nao_chega_no_llm` — confere por `ast` que o `raise` vem ANTES do
+ponto caro em cada arquivo. Bateria: **71 travas, 71 passam.**
+
+---
+
+## PARTE 18 — O LOTE DOS 100 MARCOS DA IC REPROVOU 27, E A CULPA ERA DA RÉGUA (19/Ago/2026)
+
+**Módulo alterado:** `notas_prototipo.py` (motor) · `analise.py` + `analise_prompt.md` +
+`analise_meta_prompt.md` (extração) · `teste_motor.py` (travas).
+
+### O caso
+Ele baixou os 100 artigos originais que mudaram a história da insuficiência cardíaca e rodou.
+**FIM · 65 publicados · 29 recusados.** Palavras dele: *"o meu sistema negou 29 dos artigos mais
+importantes da história da cardiologia."*
+
+### Medido antes de tocar em qualquer coisa (27 com carimbo do dia)
+
+| causa | quantos |
+|---|---|
+| desconto de indústria −1,0 derrubou de 6 para **5** | **15** |
+| teto do MCID a partir do rótulo `incerto` | 18 (sobrepõe) |
+| FALHA FATAL F8 "desfecho trocado" → nota 3 | 7 |
+| recusado pelo **PORTÃO**, não pela nota | 2 |
+| análises pagas em duplicata (mesmo PDF 2× e 3×) | 5 pagas / 2 artigos |
+
+⚠️ **A palavra "recusado" cobria duas coisas.** 25 caíram pela régua; 2 pelo portão — entre eles
+o **VICTORIA (vericiguat), com nota 9**, barrado por trocar a sigla ICFEP/ICFER no texto. A linha
+final da Chave 2 somava os dois e fazia parecer que o sistema reprovou a história da cardiologia.
+
+### DEFEITO 1 — eu consertei UMA fronteira em 06/Ago e deixei a outra (LEI 9)
+Quinze estavam **exatamente em 5**, todos com `independência editorial −1.0`. Em 06/Ago ficou
+decidido que o desconto **não cruza o 9**, porque *"financiamento é ressalva declarada, não
+rebaixamento de categoria"*. O mesmo argumento vale no **6** e vale MAIS: no 9 o desconto troca a
+frase que acompanha o artigo; no 6 decide se o artigo EXISTE. E a premissa já estava escrita no
+próprio arquivo: **quase todo ensaio de fase 3 em cardiologia é patrocinado.**
+→ `PISO_PUBLICACAO = 6`. Entre as fronteiras o desconto continua integral (trava com controle).
+
+### DEFEITO 2 — QUATRO circularidades puniam o ensaio pelo próprio achado (o caso DINAMIT)
+
+O Dr. Eduardo leu o DINAMIT inteiro em voz alta para me explicar a régua:
+
+> *"O estudo apresentou nitidamente qual seria o tamanho da amostra necessária, randomizou e
+> ALCANÇOU o tamanho da amostra pra responder a pergunta. Não adianta colocar CDI profilático em
+> paciente pós-infarto na fase aguda. O fato de não mostrar benefício não significa que não
+> impacta a prática clínica — por isso que é nota para APLICABILIDADE clínica. Me interessa saber
+> se eu tenho que prescrever, se tenho que brigar com a operadora, ou se eu posso falar pro
+> paciente: 'cara, desencana, tão te colocando na cabeça que isso vai te ajudar e não vai'."*
+
+**A regra: quem autoriza o crédito do nulo não é a largura do IC — é o ensaio ter sido desenhado
+com poder para a pergunta e ter ENTREGUE o que planejou.** Mudar para "não faça" é mudar conduta.
+
+Os quatro degraus que derrubavam o DINAMIT de 9 para 5, cada um punindo o achado:
+
+| delator | por que era circular |
+|---|---|
+| `taxa observada <70% da esperada` | a mortalidade veio MENOR e os autores recalcularam 525→674 **e entregaram**. O motor tinha `poder_ok: true` e `eventos_nao_alcancados: false` no MESMO JSON e ouviu `taxa_obs`. Mérito lido como falha. |
+| `open-label → teto desenho 8` | não se cega implante de CDI, e o desfecho é morte por todas as causas com adjudicação. *"Quantificar a presença ou não de morte é relativamente fácil — o endpoint é muito franco e muito pouco plausível de ser distorcido."* |
+| `MCID → teto 6: o efeito NÃO excede o limiar` | é o ACHADO. Pedir que o ensaio negativo prove benefício para ter direito de dizer que não há benefício. |
+| `o benefício NÃO supera o risco → teto 8` | idem: é a notícia, não o defeito. |
+
+E, por baixo, um quinto: **`teto_mcid` promoveu para 10 e `mcid_conferido` continuou devolvendo 6**
+— duas funções decidindo o mesmo fato e discordando, a família de sempre.
+
+### DEFEITO 3 — duas categorias não existiam
+- **`dano_demonstrado`** (APPRAISE-2: eficácia nula + sangramento HR 2,59 · 1,50–4,46, interrompido
+  por dano). Dano demonstrado é resposta conclusiva — o ensaio tirou a droga da prática.
+- **`nao_inferioridade_demonstrada`** (VALIANT). Provou o que propôs e o motor não tinha a palavra.
+
+Ambas sem teto, gêmeas da `ausencia_de_efeito_demonstrada` de 04/Ago. Mesmo denominador: **o
+ensaio respondeu à pergunta que fez.**
+
+### DEFEITO 4 — F8 punia a transparência
+A F8 zerou 7 artigos para nota 3, entre eles SOLOIST-WHF e SCORED, onde a troca do desfecho foi
+**declarada e justificada** (o patrocinador cortou a verba). A fraude que a F8 persegue é o
+*outcome switching silencioso*. → campo `troca_desfecho_declarada`; declarada desconta rigor, não
+zera.
+
+### 🔴 A BATERIA ME PEGOU NO MEIO, E ESTAVA CERTA
+Minha primeira versão da rota metodológica esqueceu de exigir que o resultado FOSSE nulo. A trava
+`MCID: conta boa NÃO promove rótulo 'incerto'` (05/Ago) reprovou na hora, com um fixture de efeito
+que EXCEDE o limiar — ou seja, eu ia promover qualquer `incerto`, inclusive resultado POSITIVO em
+dúvida, desfazendo a cautela que ele mandou preservar. Uma linha (`efeito_excede_limiar is False`)
+separa a régua nova de uma peneira.
+
+E a trava `MCID '<classe>' aparece nas flags` reprovou de novo: as três conclusivas saíam **mudas**
+— nota alta num estudo negativo e nenhuma frase explicando. Agora dizem `→ SEM teto: o estudo
+DEMONSTROU que não há benefício`.
+
+### MEDIDO DEPOIS (todo o acervo já extraído, custo ZERO — os FATOS estavam em disco)
+
+| | |
+|---|---|
+| pacotes reavaliados | **279** |
+| mudaram de nota | 26 |
+| **passam a publicar** (<6 → ≥6) | **20** |
+| **deixam de publicar** (≥6 → <6) | **0** |
+
+Nos 27 do lote: **14 passam a publicar.** DINAMIT **9/10 · MUDA CONDUTA: SIM** · I-PRESERVE 9 ·
+VALIANT 9 · OPTIMAAL 9 · COMMANDER-HF 9. Bateria: **75 travas, 75 passam.**
+
+⚠️ **A LEI 10 não foi afrouxada.** Nenhum artigo perdeu a porta, e o desconto de indústria continua
+integral entre as fronteiras. O que mudou é que **resultado negativo conclusivo deixou de ser
+tratado como fracasso** — que é, nas palavras dele, metade da cardiologia que ele ensina.
+
+### O que AINDA precisa de re-extração (campo novo, o disco não tem)
+APPRAISE-2 (→ `dano_demonstrado`), SOLOIST-WHF e SCORED (→ `troca_desfecho_declarada`),
+COMPANION e RESHAPE. Cinco artigos, uma rodada da Chave 2.
+
+### 19/Ago, 20h50 — A CHAVE 24 LEU "sim" COMO CANCELAR, E NÃO DISSE
+
+Ele rodou a Chave 24, digitou o que digita em toda chave do projeto (`s`/`sim`), e a chave
+saiu sem tocar em nada. Depois rodou a Chave 2 e encontrou **fila vazia** — sem nenhuma pista
+de que o passo anterior não tinha acontecido. Eu tinha escrito:
+
+```bash
+read -p "Executar de verdade? Digite SIM ..." R
+if [ "$R" != "SIM" ]; then   # maiúsculo, comparação exata
+```
+
+**Todas as outras chaves perguntam `[s/N]`.** Eu inventei um dialeto só para esta e não avisei
+em nenhum lugar. É a Chave 2 de 06/Ago outra vez — a contagem numa ordem e o menu em outra —
+e a culpa é de quem desenhou a tela, não de quem digitou.
+
+**Dois consertos, e o segundo importa mais que o primeiro:**
+1. aceita `s · si · sim · y · yes · ok`, em qualquer caixa, com espaços;
+2. quando cancela, **DIZ que cancelou, o que foi digitado, e que nada foi tocado**. O silêncio
+   é o que fez ele perder a rodada seguinte: um "não fiz nada" mudo é indistinguível de um
+   "fiz e não deu em nada".
+
+Provado com 13 entradas (`s S sim SIM Sim " sim " y yes ok` executam · `n N nao ""` cancelam).
+
+### 19/Ago, 21h — MUDAR A RÉGUA CUSTAVA UMA RODADA COMPLETA DE EXTRAÇÃO. À TOA.
+
+**Módulo alterado:** `analisador.py` — a TERRA ARRASADA.
+
+Hoje a régua mudou quatro vezes. Cada mudança altera o hash do `notas_prototipo.py`, e a terra
+arrasada apagava o pacote INTEIRO — **incluindo o `_fatos.json`**. Na tela dele, 20 vezes:
+
+```
+🔥 TERRA ARRASADA — 1 prompt(s) mudaram; apagando o pacote inteiro:
+   · motor: notas_prototipo.py@eed35fef0a54 → notas_prototipo.py@22944c660a5e
+```
+
+Com 279 pacotes em disco, isso é **uma rodada completa de extração paga a cada ajuste de regra**.
+E ele já disse, com todas as letras: *"eu não tenho dinheiro para você ficar rasgando por conta
+de erros infantis."*
+
+**Por que era à toa:** os FATOS não dependem do motor. O extrator lê o PDF e escreve o que o
+artigo diz; o motor pega esses fatos e recalcula a nota do zero, deterministicamente, toda vez.
+Mudar o motor não torna um fato falso — torna a NOTA diferente. Quem envelhece é a perícia, o
+ACRI e o áudio, que **citam a nota em prosa**.
+
+⚠️ **A ordem de 04/Ago continua INTACTA onde foi dada.** Ele disse *"se não tem certeza que foi
+com ESTE prompt, apaga TUDO"* falando do **prompt de extração** — e ali continua apagando tudo,
+porque ali o próprio fato pode ter mudado de significado. O erro foi meu, por aplicar a mesma
+pena a um carimbo que não toca em fato nenhum.
+
+| carimbo mudou | o que vai embora |
+|---|---|
+| `extracao` · `extrator` · `extrator_meta` | **tudo**, inclusive os fatos (04/Ago, intacta) |
+| **`motor`** | só o que CITA a nota (perícia · ACRI · PDF · visual · áudio · canônico · `_OK`). **Fatos ficam.** |
+| `redator` · `acri` · `audio` · `gancho` | a peça correspondente (já era assim, no `_peca`) |
+| **sem carimbo nenhum** | **tudo** — origem desconhecida, regra de 04/Ago |
+
+**Provado com pacote de mentira, nos dois sentidos:**
+- carimbo `motor` velho → `♻️ limpeza branda` → sobrou `_fatos.json` ✅
+- carimbo `extrator` velho → `🔥 TERRA ARRASADA` → sobrou nada ✅
+
+Trava: `teste_mudar_a_regua_nao_manda_re_extrair` — confere por `ast` as DUAS metades. Só a
+primeira faria "nunca arrasa", que é pior que o defeito original: seria exatamente o
+reaproveitamento que preserva o erro, contra o qual a terra arrasada foi criada.
+
+**O que ficou pago à toa:** os 20 desta rodada re-extraíram. ~US$ 6. Da próxima vez, zero.
+
+---
+
+## PARTE 19 — O TEMA ENTRA NO PORTÃO (20/Ago/2026)
+
+**Módulos alterados:** `ficha_site.py` · `contrato.py` · `publicador.py` · `tema_llm.py` ·
+`teste_motor.py` · `scripts/marcar_temas.py` (aposentado) · novos: `scripts/backfill_tema.py`,
+`scripts/gerar_freq_mesh.py`, `src/dados/mesh_freq.json`.
+
+### O caso
+Ele abriu o Supabase: *"e aí todos os nossos portões e nossas regras — mais uma vez indo para o
+espaço. Por que diachos o Supabase está cheio de buraco?"*
+
+**Medido antes de responder qualquer coisa:** 616 linhas, **117 sem tema**.
+
+| dia | linhas | sem tema |
+|---|---|---|
+| até 17/Ago | 507 | 21 |
+| 18/Ago | 26 | 18 |
+| **19/Ago** | **83** | **78** |
+
+### 🔴 A CAUSA, E ELA É MINHA: EU CONSTRUÍ UM SEGUNDO PORTÃO
+O portão não falhou. **Ele nunca soube que estas colunas existiam.** Em 17/Ago construí a máquina
+de temas, rodei UMA vez pelo `scripts/marcar_temas.py` — que dá `PATCH` direto em `artigos` — e
+declarei resolvido. A LEI 5 diz: *"É PROIBIDO qualquer outro programa dar INSERT/UPSERT/DELETE em
+`artigos`. Dois portões alimentando o mesmo Supabase foi a causa raiz dos buracos."* E ele já me
+tinha dito, com todas as letras: *"não pode ter dois portões."*
+
+O estrago tem a assinatura clássica: **enquanto o script de fora rodava, o banco parecia certo.**
+Parou de rodar, o portão de verdade seguiu publicando, e a coluna nasceu vazia.
+
+### As decisões dele (checklist completo em `docs/CHECKLIST_DECISOES.md`)
+- **LEI 11** nasceu aqui: *"você precisa criar um checklist... buraco não pode existir"* — a lista
+  vem antes do código, e **NULL não é resposta; "Não se aplica" é.**
+- *"Sem tema não sobe"* — vira porta no contrato.
+- *"Não tem cabimento uma diretriz subir sem tema"* — corrigiu uma proposta minha que invocava a
+  LEI 10. Aquela exceção é sobre a **nota**, não sobre o tema. **Uma regra para os quatro tipos.**
+- *"Inadmissível não ter tema — então não é cardiologia e medicina, estamos falando do cosmo."*
+  Não existe `nao_classificavel`: quem decide é o **TRIPÉ**, e quando ele não fecha é
+  `fora_do_escopo`.
+
+### O TRIPÉ — a arquitetura de decisão, ditada por ele
+> *"o sistema deve ler com um tripé na sua arquitetura de decisão — a ordem aqui não importa, o
+> que interessa é se eles conseguem COMBINAR DE FORMA PLAUSÍVEL: onde aplico este conhecimento
+> (ambulatório, UTI, sala de hemodinâmica?) · este conhecimento diz respeito a mecanismos de
+> doença, métodos de avaliação, implicações prognósticas ou a uma intervenção? · e por último e
+> não menos importante — quem vai ler?"*
+
+Os três eixos são **campos obrigatórios do schema**, preenchidos ANTES do tema: o modelo se
+compromete e só então escolhe. Mesma ideia do VEREDITO ABERTO de 02/Ago — obrigar a mostrar a
+conta impede a resposta bonita e vazia — e dá auditoria quando o tema sai errado.
+
+**A regra-mãe que emergiu: O TEMA É QUEM LÊ.** Eu tinha proposto "o tema é a DOENÇA, não o
+método", apoiado num exemplo que li invertido. Quebra em 6 dos casos que ele comentou.
+
+### MEDIDO — gabarito cego de 40 artigos marcados a mão por ele
+
+| régua | MeSH (antes) | TRIPÉ (agora) |
+|---|---|---|
+| 1º tema idêntico | 70 % | 77 % |
+| **★ chega ao leitor certo** | **80 %** | **92 %** (37/40) |
+
+Meta declarada ANTES de mexer: **90 %**. Bateu. Custo: **US$ 0,0008/artigo**.
+
+⚠️ **A métrica certa é dele.** Eu apresentei 62 % ("1º tema idêntico"); ele olhou um caso e disse
+*"cabem as duas coisas — isso não é um erro"*. Um artigo carrega DOIS temas: se o tema dele está
+em qualquer das duas posições, o assinante daquela categoria **recebe**. A ordem só decide o que
+aparece primeiro no card.
+
+⚠️ **E a ressalva estatística anda junto do número:** 37/40 tem IC95% de ~79 % a 98 %. É "37 de 40
+nesta amostra", não "o sistema acerta 92 %" — a mesma confusão de 17/Ago, quando chamei COBERTURA
+("499 de 520 com tema") de ACERTO. Cobertura é quantos foram marcados; acerto é quantos foram
+marcados CERTO. A precisão só foi medida três dias depois, e era 50 % no MeSH.
+
+### A regra que nasceu do caso COVID — o gabarito tem de ser alcançável pelo artigo
+Ele tinha marcado `Miocardiopatias` para o artigo de anticoagulação na COVID, por uma cadeia real
+(anticoagulação → previne TEP → HP → falência de VD). Abriu o PubMed, viu os descritores — nenhum
+de miocárdio, pericárdio ou HP — e **desfez o próprio gabarito**:
+> *"estou usando um conhecimento muito amplo que adquiri durante a pandemia... para mim é quase
+> medular, mas não vejo indícios fáceis de definir como miocardiopatia."*
+
+**Se para chegar ao tema é preciso conhecimento que o TEXTO não carrega, o sistema não pode chegar
+lá e não deve** — senão o gabarito mede a distância entre o modelo e a cabeça dele, não entre o
+modelo e o artigo.
+
+### 🔴 DOIS DEFEITOS MEUS, PEGOS ANTES DE RODAR
+1. **Três nomes de função inventados** (`mesh_de_doi`, `carregar_mapa`, `carregar_freq`) dentro de
+   um `except Exception: pass`. Compilava. Em produção, `mesh_terms` ficaria vazio PARA SEMPRE,
+   sem uma linha de aviso. Nome inventado + exceção surda = coluna morta que ninguém descobre.
+2. **A bateria travou**: ao ligar o tema, `ficha_site.montar()` passou a chamar PubMed e LLM, e
+   uma trava chama `montar()`. Trava que depende de rede não é trava. → `CARDIODAILY_SEM_REDE=1`.
+
+### Estado
+- Bateria: **77 travas, 77 passam** (nova: `teste_sem_tema_nao_sobe_e_ninguem_mais_escreve`)
+- `marcar_temas.gravar()` **aposentado** com guarda que levanta — e a trava confere por `ast`
+- Backfill: `scripts/backfill_tema.py` — **100 dos 117** têm pacote e o portão refaz; **17** foram
+  arquivados e precisam do PDF de volta na fila (decisão dele)
+- **Ponto de revisão marcado: aos 800 artigos** (hoje 616), com 6 itens a medir

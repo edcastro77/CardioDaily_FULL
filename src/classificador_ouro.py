@@ -325,14 +325,38 @@ def classificar(pasta, dry_run=True, max_n=0):
         # corrido bem. O CSV grava o destino; não grava que o PDF era ilegível.
         try:
             texto = ext.extract_text(caminho)
-            if texto.strip():
-                VOO.marcar("C1_TEXTO", artigo=nome, n_chars=len(texto))
+
+            # ═══ 19/Ago/2026 — O TESTE `if texto.strip()` NÃO PEGAVA O CASO REAL ═══
+            #
+            # O Dr. Eduardo baixou os 100 artigos que mudaram a história da IC; cinco foram
+            # para revisão humana. Um deles, o V-HeFT I (Cohn, NEJM 1986), é um SCAN do
+            # arquivo histórico do NEJM — e NÃO vinha vazio. Vinha com 257 caracteres por
+            # página, idênticos em todas as seis:
+            #     "The New England Journal of Medicine — Downloaded from nejm.org at BOSTON
+            #      UNIVERSITY on September 6, 2013… From the NEJM Archive."
+            # É o carimbo de download. E 257 caracteres PASSAM no `if texto.strip()`.
+            #
+            # Ou seja: o PDF parecia legível e não era. A cascata inteira decidia em cima de
+            # um carimbo e o waypoint registrava SUCESSO. O detector antigo pegava só o PDF
+            # 100 % vazio — o caso fácil, não o que acontece na prática.
+            #
+            # Agora o `ocr_pdf` olha DENSIDADE (caracteres por página) e REPETIÇÃO (carimbo
+            # se repete idêntico; conteúdo não) e, se não servir, roda o OCR.
+            # MEDIDO no V-HeFT: 1.542 → 20.517 caracteres · 4,7 s/página · custo ZERO.
+            import ocr_pdf as _OCR
+            texto, _origem, _aviso = _OCR.extrair(caminho, texto_ja_extraido=texto,
+                                                  max_paginas=6)
+            if _origem == "ocr":
+                VOO.marcar("C1_TEXTO", artigo=nome, n_chars=len(texto), origem="ocr")
+                print(f"        🔍 {nome[:46]}: PDF era imagem — OCR ({len(texto)} chars)")
+            elif _origem == "pdf_ruim":
+                # Diferente de "PDF vazio": aqui o arquivo TEM letra, mas não serve. A
+                # cascata precisa saber, senão classifica carimbo com cara de artigo.
+                VOO.marcar("C1_TEXTO", ok=False, artigo=nome, n_chars=len(texto or ""),
+                           erro=f"texto inútil, OCR não resolveu: {_aviso}")
+                print(f"        ⚠️ {nome[:46]}: {_aviso[:88]}")
             else:
-                # PDF que abre mas não tem camada de texto — o caso do escaneado, e é MUDO:
-                # não levanta exceção, devolve string vazia.
-                VOO.marcar("C1_TEXTO", ok=False, artigo=nome, n_chars=0,
-                           erro="PDF abriu mas veio SEM TEXTO (provável imagem escaneada)")
-                print(f"        ⚠️ {nome[:52]}: PDF sem camada de texto — a cascata vai decidir às cegas")
+                VOO.marcar("C1_TEXTO", artigo=nome, n_chars=len(texto))
         except Exception as e:
             texto = ""
             VOO.marcar("C1_TEXTO", ok=False, artigo=nome, erro=f"{type(e).__name__}: {e}")

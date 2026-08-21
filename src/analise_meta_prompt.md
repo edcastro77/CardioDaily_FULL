@@ -426,6 +426,16 @@ SEPARE OS TRÊS CASOS, e preencha os campos que provam qual é:
       composto · seguimento 3,6 anos. O IC é estreito e o limite mais favorável (0,87) já é modesto:
       não cabe ali um benefício que mude conduta. Isto é `ausencia_de_efeito_demonstrada`.
 
+  `dano_demonstrado`   (19/Ago — a gêmea de cima, pelo outro lado)
+      O desfecho de SEGURANÇA foi significativo CONTRA a intervenção: o IC do dano exclui a nulidade.
+      Com ou sem eficácia. O estudo RESPONDEU, e a resposta é NÃO FAÇA — vale tanto quanto o benefício.
+      EXEMPLO REAL: APPRAISE-2 — eficácia HR 0,95 (0,80–1,11) e sangramento maior HR 2,59 (1,50–4,46),
+      p=0,001; o ensaio foi interrompido por dano. Isto NÃO é `incerto`.
+
+  `nao_inferioridade_demonstrada`
+      A margem de não-inferioridade foi PRÉ-ESPECIFICADA e o IC 95% ficou inteiro dentro dela.
+      Provou o que se propôs a provar. Se a margem não estiver declarada no artigo, use `incerto`.
+
   `incerto`
       Não achou efeito, MAS o poder era insuficiente OU o IC ainda comporta benefício relevante.
       → `ic_exclui_beneficio_relevante = false`

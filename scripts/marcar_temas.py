@@ -62,6 +62,27 @@ def _get(p):
 
 
 def gravar(doc_id, tema, sec, origem):
+    """⛔ APOSENTADO em 20/Ago/2026 — SEGUNDO PORTÃO, violação da LEI 5.
+
+    Este PATCH direto em `artigos` é a causa-raiz do buraco de 117 linhas sem tema. A LEI 5 diz,
+    com todas as letras: *"É PROIBIDO qualquer outro programa dar INSERT/UPSERT/DELETE em
+    `artigos`. Dois portões alimentando o mesmo Supabase foi a causa raiz dos buracos."* E o
+    Dr. Eduardo já tinha me dito, antes: *"não pode ter dois portões."* Eu fiz um mesmo assim.
+
+    O estrago tem a assinatura clássica de dois portões: **enquanto este script rodava, o banco
+    parecia certo.** Parei de rodar em 17/Ago, o portão de verdade (`publicador.py`) continuou
+    publicando sem saber que estas colunas existiam, e a coluna nasceu vazia — 78 das 83 linhas
+    do dia 19. Não houve falha; houve ausência da máquina no caminho.
+
+    ONDE O TEMA VIVE AGORA: `src/ficha_site.py::_decidir_tema`, dentro do portão único, junto
+    com todas as outras colunas. Para reprocessar tema de artigo já publicado, rode a Chave 2.
+    O BACKFILL dos 117 antigos é feito por `scripts/backfill_tema.py`, que também não escreve:
+    ele lista o que falta e manda pelo portão.
+    """
+    raise RuntimeError(
+        "marcar_temas.gravar() APOSENTADO (20/Ago/2026, LEI 5): este PATCH em `artigos` é um "
+        "SEGUNDO PORTÃO e foi o que abriu o buraco de 117 linhas sem tema. Quem preenche tema "
+        "agora é o publicador, via ficha_site._decidir_tema. Rode a Chave 2.")
     corpo = json.dumps({"tema": tema, "tema_secundario": sec,
                         "tema_origem": origem}).encode()
     r = urllib.request.Request(

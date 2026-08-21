@@ -52,7 +52,10 @@ SCHEMA_NHLBI = {
         "avaliadores_desfecho_cegados": _B3, "grupos_similares_basal": _B3,
         "dropout_total_pct": _NUM, "dropout_diferencial_pp": _NUM,
         "adesao_alta": _B3, "cointervencoes_similares": _B3, "poder_80_declarado": _B3,
-        "desfechos_prespecificados": _B3, "itt_verdadeiro": _B3,
+        "desfechos_prespecificados": _B3,
+        # 19/Ago — a troca DECLARADA e justificada (SOLOIST/SCORED: patrocinador cortou a
+        # verba e o ensaio encerrou cedo, dito no artigo) não é a fraude que a F8 persegue.
+        "troca_desfecho_declarada": _B3, "itt_verdadeiro": _B3,
         # META — NHLBI Systematic Review (8)
         "pergunta_focada": _B3, "elegibilidade_predefinida": _B3, "busca_sistematica_abrangente": _B3,
         "revisao_em_duplicata": _B3, "qualidade_estudos_avaliada": _B3,
@@ -149,6 +152,14 @@ SCHEMA_FATOS = {
                                            # que exclui benefício relevante = RESPOSTA, não fracasso.
                                            # Foi o que tirou o B do MONABICHA. Vale até 10.
                                            "ausencia_de_efeito_demonstrada",
+                                           # ═══ 19/Ago — AS DUAS GÊMEAS (Dr. Eduardo) ═══
+                                           # `dano_demonstrado`: o IC do DANO exclui a nulidade
+                                           #   (APPRAISE-2: sangramento HR 2,59 · 1,50–4,46).
+                                           #   O ensaio respondeu: NÃO FAÇA. Vale até 10.
+                                           # `nao_inferioridade_demonstrada`: margem
+                                           #   pré-especificada e IC dentro dela (VALIANT).
+                                           #   Provou o que se propôs. Vale até 10.
+                                           "dano_demonstrado", "nao_inferioridade_demonstrada",
                                            "significativo_mas_abaixo_do_mcid", "nao_relevante",
                                            # ═══ 18/Ago/2026 — `nao_avaliavel` VIRA TRÊS ═══
                                            # Ele era a classificação MAIS COMUM do acervo (468 de
@@ -350,6 +361,14 @@ SCHEMA_FATOS_META = {
                 "classificacao": {"type": "string",
                                   "enum": ["robusto", "provavel", "incerto",
                                            "ausencia_de_efeito_demonstrada",
+                                           # ═══ 19/Ago — AS DUAS GÊMEAS (Dr. Eduardo) ═══
+                                           # `dano_demonstrado`: o IC do DANO exclui a nulidade
+                                           #   (APPRAISE-2: sangramento HR 2,59 · 1,50–4,46).
+                                           #   O ensaio respondeu: NÃO FAÇA. Vale até 10.
+                                           # `nao_inferioridade_demonstrada`: margem
+                                           #   pré-especificada e IC dentro dela (VALIANT).
+                                           #   Provou o que se propôs. Vale até 10.
+                                           "dano_demonstrado", "nao_inferioridade_demonstrada",
                                            "significativo_mas_abaixo_do_mcid", "nao_relevante",
                                            "nao_avaliavel"]},
                 "frase_chave": _S,
@@ -517,7 +536,29 @@ def extrair_fatos(pdf_path, tipo=None, cadeia=None):
     # 01/Ago/2026 — CORTE DE 48.000 REVISTO. Era o mesmo entulho do analisador: numa diretriz de
     # 183 páginas (452.404 chars) os FATOS eram extraídos de 10% do documento, e os critérios NHLBI
     # (que vivem em Métodos, no meio) simplesmente não eram vistos. Teto novo com AVISO, nunca calado.
-    texto = "".join(p.get_text() for p in fitz.open(pdf_path))
+    # ═══ 19/Ago — TERCEIRA E ÚLTIMA PORTA DE LEITURA DO PDF (varredura da LEI 9) ═══
+    # A regra "PDF que é imagem precisa de OCR" mora em TRÊS blocos, e este é o mais grave:
+    #   1. classificador_ouro.py  → decide a CAIXA
+    #   2. analisador.py          → o texto da PERÍCIA
+    #   3. AQUI                   → os FATOS, de onde sai a NOTA
+    # Consertar só os dois primeiros deixaria o extrator produzindo `desenho`, `pergunta` e
+    # `relevancia_clinica` a partir do carimbo "Downloaded from nejm.org" — e o motor,
+    # sendo determinístico, calcularia uma nota perfeitamente coerente com o nada.
+    import ocr_pdf as _OCR
+    texto, _org, _avs = _OCR.extrair(pdf_path)
+    if _org == "ocr":
+        print(f"       🔍 FATOS: PDF era imagem — OCR aplicado ({len(texto):,} chars)")
+    elif _org == "pdf_ruim":
+        # ⚠️ 19/Ago — aqui havia `[:110]`, e o corte caía EXATAMENTE em cima da causa:
+        # saiu "OCR falhou: Mo" — o `ModuleNotFoundError` decapitado. Truncar o aviso é
+        # truncar o diagnóstico; o motivo é curto e é a única coisa útil da linha.
+        #
+        # ═══ E AQUI A EXTRAÇÃO PARA — ANTES DE PAGAR ═══
+        # O SAVE Trial saiu `nota 0` depois de extração + motor + perícia sobre 1.557
+        # caracteres de carimbo. Não é caso a decidir: a LEI 10 já mandou reprovar mais, e
+        # gastar LLM em texto ilegível é o 🔴 BUG do 'Editorial vira perícia' com outra roupa.
+        # O artigo NÃO é movido, NÃO é analisado, e o motivo fica escrito na tela.
+        raise _OCR.TextoIlegivel(_avs)
     TETO = 600_000
     if len(texto) > TETO:
         print(f"       ⚠️ extração truncada: {len(texto):,} chars → {TETO:,} "

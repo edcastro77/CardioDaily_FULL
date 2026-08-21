@@ -193,6 +193,127 @@ def _doi_ou_sintetico(doi, doc_id):
     return f"Sintetico_{doc_id}" if doc_id else None
 
 
+_MESH_FREQ = None      # frequência dos descritores no acervo — o peso IDF do desempate
+
+
+def _mesh_do_doi(doi):
+    """Descritores MeSH do PubMed. [] = procurei e não achou (≠ NULL = não procurei).
+
+    ⚠️ Eu tinha escrito `puxar_mesh.mesh_de_doi(doi)` — função que NÃO EXISTE. O arquivo tem
+    `doi_para_pmid(dois)` e `mesh_de(pmids)`, e ele mora em `scripts/`, não em `src/`. Com o
+    `except: pass` que eu havia posto, o ImportError seria engolido e `mesh_terms` ficaria
+    vazio PARA SEMPRE, sem uma linha de aviso. Nome inventado + exceção surda = coluna morta
+    que ninguém descobre. É o defeito de 06/Ago (prompt calado) na forma mais barata de todas.
+    """
+    if not doi or doi == "n/a":
+        return []
+    import sys as _s
+    _sc = os.path.join(os.path.dirname(_HERE), "scripts") if "_HERE" in globals() \
+        else os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+    if _sc not in _s.path:
+        _s.path.insert(0, _sc)
+    try:
+        import puxar_mesh as _PM
+        pmid = _PM.doi_para_pmid([doi]).get(doi.lower())
+        return _PM.mesh_de([pmid]).get(pmid, []) if pmid else []
+    except Exception as e:
+        print(f"       ⚠️  MeSH indisponível ({type(e).__name__}: {e}) — segue só com o LLM")
+        return []
+
+
+def _tema_por_mesh(mesh):
+    """(principal, secundario) pelo mapa de descritores. (None, None) se não decidir."""
+    global _MESH_FREQ
+    try:
+        import collections
+        import tema_mesh as _TM
+        mapa = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                           "dados", "mesh_para_tema.json"), encoding="utf-8"))
+        if _MESH_FREQ is None:
+            # o peso do desempate é IDF: descritor raro vale mais que descritor comum. A tabela
+            # de frequência vem do acervo e é gerada por `scripts/gerar_freq_mesh.py`. Se não
+            # existir, todos os descritores pesam igual — pior, mas não quebra.
+            f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados", "mesh_freq.json")
+            _MESH_FREQ = collections.Counter(json.load(open(f, encoding="utf-8"))) \
+                if os.path.exists(f) else collections.Counter()
+        p, s, _margem, _det = _TM.decidir(mesh, mapa, _MESH_FREQ)
+        return p, s
+    except Exception as e:
+        print(f"       ⚠️  mapa MeSH falhou: {type(e).__name__}: {e}")
+        return None, None
+
+
+def _decidir_tema(titulo, revista, texto, doi):
+    """(tema, tema_secundario, tema_origem, mesh_terms) — nenhum deles NULL. Nunca.
+
+    ═══ A ORDEM, e por que ela é esta (decisão do Dr. Eduardo, 20/Ago) ═══
+    Medido num gabarito cego de 40 artigos que ELE marcou a mão, contando "o tema que ele daria
+    está no par que o sistema gravou" (que é o que decide se o assinante RECEBE):
+
+        MeSH sozinho ....... 80 %
+        LLM com o TRIPÉ .... 92 %   (meta declarada antes de mexer: 90 %)
+
+    Por isso: **o LLM decide, o MeSH entra como 2º tema e desempate.** Até 20/Ago era o
+    contrário — o MeSH decidia e o LLM só entrava na ausência de descritor. A arquitetura
+    estava invertida em relação ao que os números mostram, e ninguém tinha medido: em 17/Ago
+    eu apresentei COBERTURA ("499 de 520 com tema") como se fosse ACERTO.
+
+    ⚠️ O MeSH continua valendo, e não é consolo: ele é humano (indexador da NLM) e
+    determinístico, enquanto o LLM varia entre rodadas. Como 2º tema ele faz o que faz bem —
+    ampliar o alcance — sem decidir sozinho.
+
+    ═══ OS QUATRO VALORES DE `tema_origem`, e o que cada um significa ═══
+      llm .................... o tripé fechou e decidiu
+      mesh ................... o LLM falhou e o descritor humano salvou
+      fora_do_escopo ......... o tripé NÃO fechou: não há leitor cardiológico
+      falha_do_classificador . nem o LLM nem o MeSH responderam (rede, JSON, enum)
+    Os dois últimos são `Sem tema`, e o contrato RETÉM a linha. **É de propósito que sejam
+    palavras diferentes:** "não é cardiologia" e "o programa quebrou" são coisas opostas, e
+    tratá-las como a mesma foi o defeito de 18/Ago com o `nao_avaliavel`.
+    """
+    import temas as _T
+    # ═══ MODO OFFLINE — para a BATERIA, não para produção ═══
+    # Ao ligar o tema aqui, `montar()` passou a chamar o PubMed e o LLM. A bateria chama
+    # `montar()` (teste_ficha_sem_contradicao) e TRAVOU: 3.600 travas viraram reféns da rede.
+    # Trava que depende de rede não é trava — ela falha por motivo errado, demora, e ensina a
+    # ignorar o vermelho. Com `CARDIODAILY_SEM_REDE=1` a decisão vira determinística e o resto
+    # da ficha continua sendo conferido.
+    if os.getenv("CARDIODAILY_SEM_REDE"):
+        return "Coronária/DAC", NAO_SE_APLICA, "offline_para_teste", []
+    mesh = _mesh_do_doi(doi)
+
+    tema = sec = None
+    origem = "falha_do_classificador"
+    try:
+        import tema_llm as _TL
+        tema, sec, _porque = _TL.classificar(titulo, texto, revista)
+        if tema == "fora_do_escopo":
+            return _T.SEM_TEMA, NAO_SE_APLICA, "fora_do_escopo", mesh
+        if tema:
+            origem = "llm"
+    except Exception as e:
+        # ⚠️ NUNCA em silêncio. Um `except: pass` aqui transformaria "o classificador quebrou"
+        # em "o artigo não tem tema" — que é a confusão que a LEI 11 existe para impedir.
+        print(f"       ⚠️  tema (LLM) falhou: {type(e).__name__}: {e}")
+        tema = None
+
+    # ── o MeSH: rede quando o LLM não respondeu, e 2º TEMA quando respondeu sem secundário ──
+    # O 2º tema vale muito: o assinante de QUALQUER das duas categorias recebe o artigo. Medido
+    # nos 40 — contar o PAR em vez de só o 1º tema levou o acerto de 77 % para 92 %.
+    if mesh and (not tema or not sec):
+        p, s = _tema_por_mesh(mesh)
+        if not tema and p:
+            tema, sec, origem = p, (sec or s), "mesh"
+        elif tema and not sec:
+            sec = next((c for c in (p, s) if c and c != tema), None)
+
+    if not tema:
+        return _T.SEM_TEMA, NAO_SE_APLICA, origem, mesh
+    # `Não se aplica` e não vazio: a MAIORIA dos artigos tem um tema só, e isso é o normal,
+    # não uma falha. Vazio aqui seria indistinguível de "o programa não chegou a olhar".
+    return tema, (sec or NAO_SE_APLICA), origem, mesh
+
+
 def montar(pasta):
     """Lê uma pasta do STAGING e devolve a ficha (dict com os 16 campos)."""
     base = os.path.basename(pasta.rstrip("/"))
@@ -425,6 +546,19 @@ def montar(pasta):
             return valor if valor else [f"ausente: {de_onde}"]
         return valor if (valor and str(valor).strip()) else f"ausente: {de_onde}"
 
+    # ═══════════ 20/Ago/2026 — O TEMA ENTRA NO PORTÃO (LEI 5) ═══════════
+    # O que aconteceu: em 17/Ago eu construí a máquina de temas (MeSH + 13 temas + LLM), rodei UMA
+    # vez pelo `scripts/marcar_temas.py` e dei por resolvido. Só que aquele script dá PATCH direto
+    # em `artigos` — ou seja, era um SEGUNDO PORTÃO, exatamente o que a LEI 5 proíbe e o que ele já
+    # tinha me dito ("não pode ter dois portões"). Enquanto ele rodava, o banco parecia certo.
+    # Parou de rodar, o portão de verdade continuou publicando, e a coluna nasceu vazia:
+    #     até 17/Ago ..... 21 sem tema em 507
+    #     18/Ago ......... 18 em 26
+    #     19/Ago ......... 78 em 83     ← o buraco não é falha, é ausência da máquina no caminho
+    # Agora quem preenche é AQUI, dentro do portão único, junto com todas as outras colunas.
+    tema, tema_secundario, tema_origem, mesh_terms = _decidir_tema(
+        titulo, revista, " ".join(str(x) for x in (a_bloco, aplic, resumo) if x), doi)
+
     _doc_id = doi if doi and doi != "n/a" else slugify(titulo)
     return {                                    # nomes = colunas REAIS da tabela artigos (Supabase)
         "doc_id": _doc_id,
@@ -449,6 +583,11 @@ def montar(pasta):
         "caminho_pdf": pdf,
         "caminho_audio": audio,
         "caminho_visual_abstract": visual,
+        # ─── TEMA: as 4 colunas, e NENHUMA sai NULL (LEI 11) ───
+        "tema": tema,                           # um dos 13, ou 'Sem tema' (que o contrato RETÉM)
+        "tema_secundario": tema_secundario,     # 2º tema, ou 'Não se aplica' — nunca vazio
+        "tema_origem": tema_origem,             # llm | mesh | fora_do_escopo | falha_do_classificador
+        "mesh_terms": mesh_terms,               # [] = procurei e não achou ≠ NULL = não procurei
         "motor": motor,                         # ORIGINAL | META | DIRETRIZ | REVISAO — a régua usada
         "tipo_documento": tipo_documento,
         "veredito_dominios": veredito_dominios,  # jsonb: os domínios medidos que produziram a nota

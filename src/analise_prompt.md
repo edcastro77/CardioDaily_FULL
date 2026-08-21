@@ -71,7 +71,7 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
     "efeito_excede_limiar": <true se o efeito PONTUAL excede o MCID/limiar de importância; false; null se não avaliável>,
     "ic_exclui_beneficio_relevante": <true se o IC 95% DESCARTA um benefício clinicamente relevante (o limite mais favorável do IC ainda fica AQUÉM do MCID/limiar); false se o IC ainda comporta benefício relevante; null se não avaliável>,
     "ic_sustenta_relevancia": <true se o IC95% INTEIRO fica além do limiar na direção favorável; false se cruza o limiar ou a nulidade; null se não avaliável>,
-    "classificacao": "<um de: robusto | provavel | incerto | ausencia_de_efeito_demonstrada | significativo_mas_abaixo_do_mcid | nao_relevante | sem_desfecho_clinico | nao_se_aplica | nao_avaliavel>
+    "classificacao": "<um de: robusto | provavel | incerto | ausencia_de_efeito_demonstrada | dano_demonstrado | nao_inferioridade_demonstrada | significativo_mas_abaixo_do_mcid | nao_relevante | sem_desfecho_clinico | nao_se_aplica | nao_avaliavel>
        ⚠️ 18/Ago — ANTES DE ESCREVER `nao_avaliavel`, VEJA QUAL DAS TRÊS É. Elas parecem a mesma
           coisa ("não dá para julgar a relevância") e têm pesos MUITO diferentes na nota.
 
@@ -138,6 +138,11 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
     "cointervencoes_similares": "<true/false/null>",
     "poder_80_declarado": "<true se o artigo declara poder ≥80% para o desfecho primário>",
     "desfechos_prespecificados": "<true/false/null. false se o desfecho primário mudou depois do início>",
+    "troca_desfecho_declarada": "<true/false/null. SÓ importa se o de cima for false. true = os autores
+       DECLARARAM a mudança e a justificaram no artigo (ex.: SOLOIST-WHF e SCORED — o patrocinador cortou
+       o financiamento e o ensaio encerrou cedo, dito com todas as letras). false = mudou e não explicou.
+       A falha fatal F8 persegue o outcome switching SILENCIOSO; troca declarada é transparência e desconta
+       rigor, não zera o artigo.>",
     "itt_verdadeiro": "<true se analisou todos no grupo original>",
 
     "// ── META-ANÁLISE — NHLBI Systematic Review (8 itens)": "",
@@ -255,8 +260,20 @@ Separe os três casos, e não os confunda:
   · `significativo_mas_abaixo_do_mcid` / `nao_relevante` — ACHOU efeito, e ele é pequeno demais
     para mudar a vida de alguém.
 
-Na dúvida entre `ausencia_de_efeito_demonstrada` e `incerto`, escolha `incerto`: o motor exige as duas
-provas (IC exclui benefício + poder declarado) e rebaixa sozinho se elas não estiverem lá.
+  · `dano_demonstrado` — o desfecho de SEGURANÇA foi significativo CONTRA a intervenção (o IC do dano
+    exclui a nulidade), com ou sem eficácia. O ensaio respondeu, e a resposta é NÃO FAÇA.
+    Exemplo: APPRAISE-2 — eficácia HR 0,95 (0,80–1,11) e sangramento maior HR 2,59 (1,50–4,46), p=0,001,
+    ensaio interrompido por dano. Isto NÃO é `incerto`: é conclusão forte, e pode valer nota máxima.
+
+  · `nao_inferioridade_demonstrada` — a margem de não-inferioridade foi PRÉ-ESPECIFICADA e o IC 95%
+    ficou inteiramente dentro dela. O ensaio provou o que se propôs a provar.
+    Exemplo: VALIANT — valsartana não inferior a captopril pós-IAM.
+    Só use se a margem estiver declarada. Margem inventada depois é `incerto`.
+
+Na dúvida entre `ausencia_de_efeito_demonstrada` e `incerto`, escolha `incerto`: o motor confere as provas
+e decide sozinho — ele REBAIXA se elas não estiverem lá, e PROMOVE se o método as sustentar (19/Ago: o
+ensaio que calculou a amostra, randomizou o N calculado e mediu desfecho duro responde a pergunta, mesmo
+que o IC não exclua benefício — foi o caso do DINAMIT).
 
 RELEVÂNCIA CLÍNICA (MCID/MID/N-SID — o filtro de tradução clínica): NÃO confunda p<0,05 com importância clínica.
 p-valor diz se o efeito é compatível com acaso; o MCID diz se o efeito provavelmente IMPORTA para o paciente/decisão.

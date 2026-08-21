@@ -263,8 +263,26 @@ def paginas_1a3(caminho):
     impresso da seção ('ORIGINAL INVESTIGATION', 'STATE-OF-THE-ART REVIEW'), que é a REGRA 1 deste
     prompt, muitas vezes está na página 2 ou 3. Foi o que levou o acerto de 54 % para 87 %."""
     doc = fitz.open(caminho)
-    _PAGINAS_CACHE[caminho] = len(doc)          # aproveita a abertura: a R4 precisa do total
-    return _CTRL.sub("", "".join(doc[i].get_text() for i in range(min(3, len(doc)))))
+    n = len(doc)
+    _PAGINAS_CACHE[caminho] = n                 # aproveita a abertura: a R4 precisa do total
+    bruto = "".join(doc[i].get_text() for i in range(min(3, n)))
+    doc.close()
+
+    # ═══ 19/Ago — ESTE É O TEXTO QUE O LLM LÊ. Se ele for carimbo, a decisão é sobre carimbo.
+    # O V-HeFT I (NEJM 1986, scan do arquivo histórico) entregava 257 caracteres por página —
+    # só o "Downloaded from nejm.org…" — e o prompt mandava, corretamente, responder
+    # `incerto`. O artigo ia para revisão humana sem ninguém saber POR QUÊ.
+    # Agora, se o texto não servir, roda o OCR antes de o LLM ver. Custo zero.
+    try:
+        import ocr_pdf as _OCR
+        texto, origem, _ = _OCR.extrair(caminho, texto_ja_extraido=bruto, max_paginas=3)
+        if origem == "ocr":
+            bruto = texto
+    except Exception:
+        # OCR é MELHORIA, não requisito: se falhar, segue com o texto do PDF e a cascata
+        # decide como decidia antes. Nunca deixar o OCR derrubar a classificação.
+        pass
+    return _CTRL.sub("", bruto)
 
 
 def montar(texto, paginas=0):

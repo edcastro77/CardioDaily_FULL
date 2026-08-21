@@ -12,6 +12,10 @@ import os, re
 CAMPOS = [
     "doc_id", "doi", "titulo", "revista", "data_publicacao", "tipo_estudo",
     "doenca_principal", "nota_aplicabilidade", "nota_trabalho_estatistico", "muda_conduta",
+    # 20/Ago — as 4 do TEMA. Estavam FORA desta lista, e por isso o portão não sabia que
+    # existiam: 117 de 616 linhas subiram com `tema` NULL sem nenhum aviso. Quem preenchia era
+    # o `scripts/marcar_temas.py`, um segundo portão por fora (LEI 5 violada por mim em 17/Ago).
+    "tema", "tema_secundario", "tema_origem", "mesh_terms",
     "keywords", "contexto_tema", "aplicabilidade_pratica", "impacto_conduta",
     "bullets_praticos", "gancho_lista", "mcid_avaliacao", "resumo_markdown",
     "caminho_pdf", "caminho_audio", "caminho_visual_abstract",
@@ -143,6 +147,36 @@ def validar(ficha, checar_arquivos=True):
                  f"inteiro e diz que o desenho é {_DESENHO_DE_OUTRO_TIPO[_de]} "
                  f"(desenho={_de!r}). Motor e prompt errados → nota errada (LEI 8). "
                  f"Reclassifique antes de publicar.")
+
+    # ═══════════ 4b) O TEMA — 20/Ago/2026, decisão do Dr. Eduardo ═══════════
+    # *"sem tema não sobe"* — e ele estendeu a regra à DIRETRIZ, corrigindo uma proposta minha:
+    # *"não tem cabimento uma diretriz subir sem tema."* Eu tinha invocado a LEI 10 para
+    # deixá-la passar, misturando duas coisas: a exceção de 05/Ago é sobre a NOTA (não existe
+    # "outra diretriz de fibrilação atrial"), não sobre o tema. Uma diretriz é POR DEFINIÇÃO
+    # sobre um assunto — se o sistema não achou o dela, é o classificador falhando no caso
+    # mais fácil que existe. Logo: **uma regra só, para os quatro tipos.**
+    #
+    # E o valor é lido, não adivinhado: `Sem tema` chega aqui como TEXTO (LEI 11), nunca NULL,
+    # com a `tema_origem` dizendo se foi "não é cardiologia" (fora_do_escopo) ou "o programa
+    # quebrou" (falha_do_classificador) — que são coisas opostas e precisam de conserto oposto.
+    import temas as _T
+    _tema = _txt(ficha.get("tema"))
+    _orig = _txt(ficha.get("tema_origem"))
+    if not _tema:
+        v.append("tema: coluna AUSENTE da ficha — o portão não preencheu (não é 'sem tema')")
+    elif _tema == _T.SEM_TEMA:
+        _porque = {"fora_do_escopo": "o tripé não fechou: nenhum leitor cardiológico plausível "
+                                     "— provavelmente o artigo não pertence ao acervo",
+                   "falha_do_classificador": "o classificador NÃO respondeu (rede/JSON/enum) — "
+                                             "isto é defeito de programa, não do artigo"}.get(
+            _orig, f"origem desconhecida ({_orig!r})")
+        v.append(f"tema: '{_T.SEM_TEMA}' → {_porque}")
+    elif _tema not in _T.TEMAS:
+        v.append(f"tema fantasma {_tema!r} — não é um dos 13; ninguém receberia este artigo")
+    if not _txt(ficha.get("tema_secundario")):
+        v.append("tema_secundario vazio — deveria ser um tema ou 'Não se aplica' (LEI 11)")
+    if ficha.get("mesh_terms") is None:
+        v.append("mesh_terms NULL — [] significa 'procurei e não achou'; NULL não diz nada")
 
     # 5) keywords
     kw = ficha.get("keywords")

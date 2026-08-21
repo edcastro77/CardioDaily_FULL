@@ -127,13 +127,30 @@ def teto_desenho(a):
     d = a.get("desenho")
 
     if q == "intervencao":
+
         if d == "rct":
             # Nível B (teto 8): sem cegamento, OU poder limítrofe — MAS parada precoce por
             # benefício não conta como "poder ruim" (o benefício foi esmagador). US Carvedilol.
-            if a.get("open_label") or (not a.get("poder_ok", True)
-                                       and not a.get("parado_cedo_por_beneficio")):
+            # ═══ 19/Ago — O CEGAMENTO EXISTE PARA PROTEGER O DESFECHO, NÃO POR SI ═══
+            # O DINAMIT é open-label por FÍSICA: não dá para cegar o implante de um CDI. E o
+            # desfecho primário é MORTE POR TODAS AS CAUSAS, com comitê de adjudicação externo.
+            # Palavras do Dr. Eduardo, lendo o artigo em 19/Ago:
+            #   *"quantificar ou avaliar a presença ou não presença de morte é relativamente
+            #    fácil, é morte por todas as causas — então o endpoint do estudo é muito franco
+            #    e muito pouco plausível de ser distorcido."*
+            # Capar em 8 aqui é punir o ensaio por uma limitação que não pode tocar no seu
+            # resultado. O mesmo NÃO vale para desfecho subjetivo ou julgado (sintoma, escala,
+            # "piora clínica", internação a critério do médico): ali o cegamento protege de
+            # verdade e o teto 8 continua.
+            _cego_nao_muda = (a.get("desfecho_duro") is True
+                              and _mortalidade_total(a)
+                              and (a.get("qualidade_nhlbi") or {}).get(
+                                  "avaliadores_desfecho_cegados") is not False)
+            if a.get("open_label") and not _cego_nao_muda:
                 return 8
-            return 10               # Nível A: RCT duro, cegado, poder ok
+            if not a.get("poder_ok", True) and not a.get("parado_cedo_por_beneficio"):
+                return 8
+            return 10               # Nível A: RCT duro, cegado (ou cegamento irrelevante), poder ok
         return _TETO_INTERVENCAO.get(d, 6)
 
     # etiologia / prognóstico / diagnóstico
@@ -154,6 +171,31 @@ def teto_desenho(a):
             teto = 7
 
     return teto
+
+
+def _mortalidade_total(a):
+    """O desfecho primário é MORTE POR TODAS AS CAUSAS?
+
+    Serve a UMA coisa só: decidir se a falta de cegamento pode ter distorcido o resultado.
+    Por isso a régua é ESTREITA de propósito — óbito por qualquer causa é um fato de cartório,
+    e um investigador que sabe o braço não consegue mudá-lo. Qualquer coisa menos objetiva
+    (morte CARDIOVASCULAR, que exige atribuir causa; internação, que é decisão médica;
+    compostos que misturam morte com desfechos julgados) NÃO entra: ali o cegamento importa.
+
+    ⚠️ Foi escrita para dizer NÃO na dúvida. Se um dia ela ficar generosa, o teto 8 do
+    open-label vira letra morta e volta o problema que a LEI 0 existe para impedir.
+    """
+    rc = a.get("relevancia_clinica") or {}
+    d = (rc.get("desfecho_primario") or "").strip().lower()
+    if not d:
+        return False
+    # composto ou causa específica → o cegamento volta a importar
+    if any(x in d for x in (" ou ", "composto", "combinado", "cardiovascular",
+                            "hospitaliza", "internaç", "reinfarto", "avc", "acidente vascular")):
+        return False
+    return any(x in d for x in ("mortalidade por todas as causas", "morte por todas as causas",
+                                "morte por qualquer causa", "mortalidade total",
+                                "mortalidade global", "all-cause mortality"))
 
 
 # ─────────────────────────── FALHAS FATAIS (F1–F8) ───────────────────────────
@@ -200,7 +242,17 @@ def falhas_fatais(a):
         achadas.append("F6")
     if n.get("casos_consecutivos") is False:
         achadas.append("F7")
-    if n.get("desfechos_prespecificados") is False:
+    # ═══ 19/Ago — F8 SÓ É FATAL SE A TROCA FOI SILENCIOSA (decisão do Dr. Eduardo) ═══
+    # A F8 zerou 7 dos 100 marcos da IC para nota 3 — entre eles SOLOIST-WHF e SCORED, onde a
+    # troca do desfecho foi ANUNCIADA pelos autores, com justificativa: o patrocinador cortou o
+    # financiamento e os ensaios tiveram de encerrar cedo. Está escrito no próprio artigo.
+    #
+    # A fraude que a F8 existe para pegar é o **outcome switching silencioso** — trocar o
+    # desfecho depois de olhar os dados e não contar. Troca DECLARADA e justificada é o
+    # contrário disso: é transparência, e transparência não pode custar nota 3.
+    # Quando declarada, continua descontando o RIGOR (o ensaio de fato mudou de pergunta no
+    # meio), mas não é mais falha fatal.
+    if n.get("desfechos_prespecificados") is False and not n.get("troca_desfecho_declarada"):
         achadas.append("F8")
     return sorted(set(achadas))
 
@@ -274,6 +326,30 @@ TETO_MCID = {
     #   · INCONCLUSIVO → poder fraco ou IC largo: ainda cabe benefício  → teto 7
     #   · AUSÊNCIA DEMONSTRADA → poder ok + IC exclui benefício relevante → SEM TETO (até 10)
     "ausencia_de_efeito_demonstrada": 10,
+
+    # ═══════════ 19/Ago/2026 — AS DUAS GÊMEAS QUE FALTAVAM (decisão do Dr. Eduardo) ═══════════
+    #
+    # O lote dos 100 marcos da IC reprovou 27, e dois deles reprovaram por FALTA DE PALAVRA:
+    #
+    # · APPRAISE-2 (NEJM 2011) — apixabana + dupla antiagregação pós-SCA. Eficácia nula
+    #   (HR 0,95; 0,80–1,11) e sangramento maior **HR 2,59 (1,50–4,46), p=0,001**. O ensaio
+    #   foi INTERROMPIDO por dano. O motor chamou de `incerto` (teto 7 → 6) porque olhou só o
+    #   desfecho de eficácia e registrou o dano como teto lateral ("benefício NÃO supera o
+    #   risco → 8"). Mas **dano demonstrado é resposta conclusiva**, não incerteza: o ensaio
+    #   respondeu, e a resposta é "não faça". Nota final: 5. Um ensaio que tirou uma droga da
+    #   prática saía do CardioDaily pela porta dos fundos.
+    #
+    # · VALIANT (NEJM 2003) — valsartana atingiu NÃO-INFERIORIDADE vs captopril pós-IAM.
+    #   Provou o que se propôs a provar, e o motor não tinha a palavra: caiu em `incerto` → 5.
+    #
+    # As duas são gêmeas da `ausencia_de_efeito_demonstrada` de 04/Ago: o denominador comum é
+    # **o ensaio respondeu à pergunta que fez**. A régua do Dr. Eduardo, dita hoje sobre o
+    # DINAMIT, vale para as três: *"o fato de não mostrar benefício não significa que não
+    # impacta a prática clínica — por isso que é nota para APLICABILIDADE clínica. Me
+    # interessa saber se eu tenho que prescrever, ou se eu posso falar pro paciente
+    # 'desencana, tão colocando na sua cabeça que isso te ajuda e não vai'."*
+    "dano_demonstrado": 10,
+    "nao_inferioridade_demonstrada": 10,
 }
 
 # O que o extrator precisa PROVAR para merecer o crédito do nulo (decisão do Dr. Eduardo, 04/Ago):
@@ -282,7 +358,60 @@ TETO_MCID = {
 # não funciona", é "não conseguimos mostrar". Quem decide isso é o CÓDIGO, não a palavra do modelo:
 # é a mesma razão de a LEI 0 ser determinística.
 def _nulo_esta_demonstrado(rc, a):
-    return bool(rc.get("ic_exclui_beneficio_relevante")) and bool(a.get("poder_ok"))
+    """DUAS ROTAS, e a segunda é a régua que o Dr. Eduardo ditou em 19/Ago sobre o DINAMIT.
+
+    ═══ ROTA 1 · ESTATÍSTICA (04/Ago) ═══
+    O IC 95% exclui benefício relevante E o poder foi declarado. "Mesmo no melhor cenário
+    compatível com os dados, o benefício é pequeno demais para importar."
+
+    ═══ ROTA 2 · METODOLÓGICA (19/Ago) — O CASO DINAMIT ═══
+    O DINAMIT saiu com nota 5. HR 1,08 (IC95% 0,76–1,55): a Rota 1 não o alcança nem de longe,
+    e `incerto` estava tecnicamente correto. Só que a pergunta que a nota de APLICABILIDADE faz
+    não é "o IC exclui benefício?" — é **"isto muda o que eu faço na segunda-feira?"**.
+
+    Palavras dele, sobre este artigo:
+      *"O estudo apresentou nitidamente qual seria o tamanho da amostra necessária, randomizou
+       e ALCANÇOU o tamanho da amostra pra responder a pergunta. Não adianta colocar CDI
+       profilático em paciente pós-infarto na fase aguda. O fato de não mostrar benefício não
+       significa que não impacta a prática clínica — por isso que é nota para aplicabilidade.
+       Me interessa saber se eu tenho que prescrever, se tenho que brigar com a operadora, ou
+       se eu posso falar pro paciente 'desencana'. Essa pergunta foi feita, foi testada, e
+       nitidamente mostrou que não há benefício nenhum."*
+
+    Ou seja: **quem autoriza o crédito do nulo não é a largura do IC, é o ensaio ter sido
+    desenhado com poder para a pergunta e ter ENTREGUE o que planejou.** Se ele fez a conta,
+    randomizou o N da conta e mediu desfecho duro, a resposta vale — e "não faça" é tão
+    acionável quanto "faça". É o mesmo argumento do betabloqueador pós-IAM em 04/Ago, um
+    degrau mais fundo: lá foi o resultado, aqui é o método que o sustenta.
+
+    ⚠️ NÃO afrouxa para o inconclusivo de verdade: se o poder NÃO estava ok, ou os eventos
+    previstos não vieram, ou o desfecho é substituto, a Rota 2 não abre. `incerto` continua
+    existindo, com teto 7, para o ensaio que ficou pelo caminho.
+    """
+    poder = a.get("poder_ok") is True
+
+    # ROTA 1 — estatística (04/Ago, inalterada)
+    if bool(rc.get("ic_exclui_beneficio_relevante")) and poder:
+        return True
+
+    # ROTA 2 — metodológica (19/Ago). As três condições são do enunciado dele.
+    #
+    # ⚠️ E A QUARTA, QUE A BATERIA ME COBROU NO MESMO DIA. Minha primeira versão desta função
+    # esqueceu de exigir que o resultado FOSSE nulo — e a trava `MCID: conta boa NÃO promove
+    # rótulo 'incerto'` (05/Ago) reprovou na hora, com um fixture de efeito que EXCEDE o
+    # limiar. Sem esta linha, "poder ok + desfecho duro" promoveria qualquer `incerto`,
+    # inclusive um resultado POSITIVO sobre o qual o extrator ficou em dúvida — que é
+    # exatamente a cautela que o Dr. Eduardo mandou preservar em 05/Ago
+    # (*"se diz incerto e a conta é boa, continua incerto — cautela não se desfaz por número"*).
+    #
+    # A rota 2 não afrouxa aquela regra: ela responde a OUTRA pergunta. Lá é "o efeito positivo
+    # é grande o bastante?"; aqui é "o NADA que o estudo achou é resposta ou é fracasso?".
+    # Por isso a porta só abre quando não há efeito a promover.
+    nulo = rc.get("efeito_excede_limiar") is False
+    entregou = poder and not a.get("eventos_nao_alcancados")
+    duro = bool(a.get("desfecho_duro"))
+    limpo = not a.get("itt_falso") and not a.get("falhas_fatais")
+    return nulo and entregou and duro and limpo
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
@@ -310,6 +439,10 @@ def _nulo_esta_demonstrado(rc, a):
 # um ensaio que se provou por método num ensaio que "não muda conduta" — isso é afirmação clínica
 # falsa, e foi o que aconteceu com PLATO, TRITON e DAPA-HF na primeira rodada real.
 PISO_INDEPENDENCIA = 9
+# 19/Ago — a SEGUNDA fronteira que o desconto de indústria não pode cruzar: a da publicação.
+# Tem de ser o MESMO número que o portão usa para deixar o artigo subir (LEI 10, nota ≥6).
+# Se um dia o portão mudar, este número muda junto — a trava `teste_independencia_...` confere.
+PISO_PUBLICACAO = 6
 
 DESCONTO_INDEPENDENCIA = {
     "industria envolvida": 1.0,        # o financiador desenhou, analisou ou escreveu
@@ -462,6 +595,25 @@ def mcid_conferido(a):
     c = (rc.get("classificacao") or "").strip().lower()
     teto, motivos = 10, []
 
+    # ═══ 19/Ago — A CONTA NÃO PODE PUNIR O NULO POR SER NULO (circularidade) ═══
+    # O DINAMIT expôs isto: `teto_mcid` (o rótulo) tinha promovido para 10 pela rota
+    # metodológica, e AQUI a conta continuava devolvendo 6, com o motivo *"o efeito NÃO excede
+    # o limiar clinicamente importante"*. **Duas funções decidindo o mesmo fato e discordando**
+    # — a família de defeito que este arquivo persegue desde 11/Ago, agora dentro do MCID.
+    #
+    # E o mérito da discordância é da conta: "o efeito não excede o limiar" é EXATAMENTE o
+    # achado do estudo, não um defeito dele. Punir por isso é pedir que o ensaio negativo
+    # prove um benefício para ter direito a dizer que não há benefício.
+    #
+    # Mesma forma da exceção `parado_cedo_por_beneficio` da REGRA 2: quando o "defeito" é
+    # consequência do resultado, ele não é defeito. Vale para as três conclusivas.
+    _CONCLUSIVAS = ("ausencia_de_efeito_demonstrada", "dano_demonstrado",
+                    "nao_inferioridade_demonstrada")
+    if c in _CONCLUSIVAS or (c == "incerto" and _nulo_esta_demonstrado(rc, a)):
+        motivos.append("o estudo RESPONDEU a pergunta que fez — o limiar não se aplica ao nulo "
+                       "demonstrado (seria pedir benefício para ter direito de dizer que não há)")
+        return 10, motivos
+
     # ═══ 05/Ago — O ARTIGO CALOU? O CARDIODAILY RESPONDE (opção B) ═══
     # Só preenche o que estava em `null`: se o extrator conseguiu julgar contra o limiar DO ARTIGO,
     # aquilo vale — o autor sabe do desfecho dele. O limiar da casa entra no SILÊNCIO, não por cima.
@@ -518,6 +670,23 @@ def teto_mcid(a):
     c = (rc.get("classificacao") or "").strip().lower()
     if c == "ausencia_de_efeito_demonstrada" and not _nulo_esta_demonstrado(rc, a):
         return TETO_MCID["incerto"]          # o modelo disse; o motor não aceitou sem prova
+
+    # ═══ 19/Ago — A PORTA TAMBÉM ABRE PARA O OUTRO LADO ═══
+    # Até hoje o motor só REBAIXAVA o rótulo do modelo (quando ele exagerava). O prompt diz,
+    # com todas as letras: *"na dúvida entre `ausencia_de_efeito_demonstrada` e `incerto`,
+    # escolha `incerto` — o motor rebaixa sozinho se as provas não estiverem lá"*. Ou seja:
+    # o extrator foi INSTRUÍDO a ser conservador, e o motor não tinha como desfazer.
+    #
+    # Foi o que aconteceu com o DINAMIT: o extrator escreveu `incerto` (correto pela régua
+    # antiga — IC 0,76–1,55 não exclui nada) e entregou, no MESMO JSON, as provas da régua
+    # NOVA: poder_ok true, eventos alcançados, desfecho duro, ITT, zero falha fatal.
+    # A prova estava no arquivo e ninguém perguntou.
+    #
+    # Agora é simétrico, e continua valendo o princípio de sempre: **quem decide é o CÓDIGO,
+    # não a palavra do modelo.** Se o método prova, o motor promove — e o delator diz que
+    # promoveu, para o redator poder explicar.
+    if c == "incerto" and _nulo_esta_demonstrado(rc, a):
+        return TETO_MCID["ausencia_de_efeito_demonstrada"]
     return TETO_MCID.get(c, 10)
 
 
@@ -1634,8 +1803,22 @@ def nota_estatistica(a):
             s = min(s, 6); fl.append(f"<30 eventos/grupo (={ev})")
         if a.get("eventos_nao_alcancados"):
             s = min(s, 7); fl.append("não alcançou os eventos previstos")
-        if a.get("taxa_obs") and a.get("taxa_esp") and a["taxa_obs"] < 0.7 * a["taxa_esp"]:
-            s = min(s, 7); fl.append("taxa observada <70% da esperada")
+        # ═══ 19/Ago — O DELATOR QUE PUNIA O ENSAIO POR TER FEITO A COISA CERTA ═══
+        # O DINAMIT (NEJM 2004) levava "taxa observada <70% da esperada" e caía para rigor 7.
+        # Mas os investigadores VIRAM a mortalidade vir menor que a esperada, RECALCULARAM a
+        # amostra de 525 para 674 e ENTREGARAM os 674. Fizeram exatamente o que se deve fazer.
+        #
+        # ⚠️ E o motor tinha a resposta na mão, no MESMO JSON, e ouviu o campo errado:
+        #       poder_ok               true    ← o poder ESTAVA ok
+        #       eventos_nao_alcancados false   ← os eventos FORAM alcançados
+        #       taxa_obs 0.069 / taxa_esp 0.30 ← e foi ISTO que virou o demérito
+        # Dois fatos discordando dentro do mesmo arquivo, e o código escutando o mais burro.
+        # `taxa_obs` baixa não é falha — é a PREMISSA que envelheceu. Vira falha só quando o
+        # ensaio NÃO compensou; se compensou, é mérito, e mérito não desconta.
+        _compensou = a.get("poder_ok") is True and not a.get("eventos_nao_alcancados")
+        if (a.get("taxa_obs") and a.get("taxa_esp")
+                and a["taxa_obs"] < 0.7 * a["taxa_esp"] and not _compensou):
+            s = min(s, 7); fl.append("taxa observada <70% da esperada e o poder NÃO foi recomposto")
     if a.get("margem_ni") and a.get("taxa_basal") and a["margem_ni"] > 2 * a["taxa_basal"]:
         s = min(s, 7); fl.append("margem NI > 2× basal")
     # RCT — validade interna
@@ -1657,8 +1840,15 @@ def nota_estatistica(a):
         if a.get("dicotomizou_continuo"):
             s = min(s, 7); fl.append("dicotomizou variável contínua")
     # flags informativas
+    # ⚠️ 19/Ago — esta linha dizia "→ teto desenho 8" SEMPRE que o ensaio era open-label, mesmo
+    # depois de a exceção de mortalidade total ter deixado o teto em 10. O DINAMIT saía com
+    # `teto_desenho: 10` e o delator afirmando 8 — o delator MENTINDO sobre a conta que o
+    # redator recebe. É o defeito de 06/Ago (a conta impressa que não fechava) de novo, e a
+    # forma dele é sempre a mesma: um texto fixo descrevendo um cálculo que virou condicional.
     if a.get("open_label"):
-        fl.append("open-label → teto desenho 8")
+        fl.append("open-label → teto desenho 8" if teto_desenho(a) == 8 else
+                  "open-label, MAS o desfecho é mortalidade por todas as causas com adjudicação "
+                  "— o cegamento não teria como mudar o resultado, então não capa o desenho")
     return s, fl
 
 
@@ -1792,9 +1982,21 @@ def score(a):
 
     # PASSO 3 — relevância clínica (MCID): significância estatística não basta.
     tm = teto_mcid(a)
+    rc = (a.get("relevancia_clinica") or {}).get("classificacao")
     if tm < 10:
-        rc = (a.get("relevancia_clinica") or {}).get("classificacao")
         fl.append(f"relevância clínica '{rc}' → teto {tm}")
+    elif rc in ("ausencia_de_efeito_demonstrada", "dano_demonstrado",
+                "nao_inferioridade_demonstrada"):
+        # ⚠️ 19/Ago — o delator SÓ falava quando havia teto, e por isso as três conclusivas
+        # saíam MUDAS: o redator recebia nota alta num estudo negativo e nenhuma frase que
+        # explicasse por quê. A trava `MCID '<classe>' aparece nas flags` reprovou — e ela
+        # tinha razão: o VEREDITO ABERTO existe para o redator explicar a nota a partir dos
+        # domínios, e "não houve teto" é um domínio como qualquer outro. Silêncio aqui é o
+        # mesmo defeito do número nu de 02/Ago, só que pelo lado bom da nota.
+        _porque = {"ausencia_de_efeito_demonstrada": "o estudo DEMONSTROU que não há benefício",
+                   "dano_demonstrado": "o estudo DEMONSTROU dano — a conduta que muda é NÃO fazer",
+                   "nao_inferioridade_demonstrada": "o estudo PROVOU a não-inferioridade que propôs"}[rc]
+        fl.append(f"relevância clínica '{rc}' → SEM teto: {_porque}")
 
     # ═══ 04/Ago — NA META, A SOMATÓRIA É A NOTA ═══
     # A ordem do Dr. Eduardo foi cumprida pela METADE em 03/Ago: eu tirei o teto de DESENHO e deixei
@@ -1861,13 +2063,42 @@ def score(a):
         # até 9 — e o delator diz, na perícia, quanto TERIA sido descontado. O leitor vê as duas
         # coisas: que o ensaio é bom, e quem pagou por ele.
         # Abaixo de 9 o desconto continua valendo integral, como ele definiu em 05/Ago.
+        #
+        # ═══ 19/Ago — EU CONSERTEI UMA FRONTEIRA E DEIXEI A OUTRA. LEI 9. ═══
+        #
+        # O lote dos 100 marcos da insuficiência cardíaca reprovou 27 artigos. **QUINZE deles
+        # estavam exatamente em 5**, e os quinze tinham o mesmo delator final:
+        #     independência editorial −1.0 (financiamento: indústria envolvida)
+        # Sem ele, seriam 6 — e 6 publica. CARE-HF, MIRACLE, I-PRESERVE, COMMANDER-HF,
+        # APPRAISE-2, STEP-HFpEF, OPTIMAAL, DINAMIT, CAT: derrubados por um degrau.
+        #
+        # O argumento de 06/Ago — *"financiamento é ressalva declarada, não rebaixamento de
+        # categoria"* — vale IGUAL aqui, e vale MAIS: no 9 o desconto trocava a palavra que
+        # acompanha o artigo; no 6 ele decide se o artigo EXISTE para o assinante. E a premissa
+        # é a mesma que está escrita três parágrafos acima: **quase todo ensaio de fase 3 em
+        # cardiologia é patrocinado.** Um desconto que quase todos levam não separa ninguém —
+        # só encolhe o acervo.
+        #
+        # Eu escrevi a regra em 06/Ago olhando UMA borda e não perguntei quais outras existiam.
+        # É exatamente a LEI 9: a regra morava em duas fronteiras e eu varri uma.
+        #
+        # A REGRA (mesma de 06/Ago, agora nas DUAS fronteiras): o desconto de independência
+        # NUNCA cruza uma fronteira que muda a CATEGORIA do artigo. São duas:
+        #     · 9  — a fronteira do "muda conduta" (06/Ago)
+        #     · 6  — a fronteira da PUBLICAÇÃO (19/Ago)
+        # Se a nota, provada por método, estava do lado de cima, o desconto para na fronteira
+        # e o delator DIZ quanto teria sido descontado. Entre as fronteiras vale integral.
         _antes = aplic
         aplic = max(0, int(round(aplic - _desc)))
-        if _antes >= PISO_INDEPENDENCIA and aplic < PISO_INDEPENDENCIA:
-            aplic = PISO_INDEPENDENCIA
+        _piso = next((p for p in (PISO_INDEPENDENCIA, PISO_PUBLICACAO)
+                      if _antes >= p > aplic), None)
+        if _piso is not None:
+            aplic = _piso
+            _fronteira = ("muda conduta" if _piso == PISO_INDEPENDENCIA else "publicação")
             fl.append(f"independência editorial: {_mot_ind} — desconto de {_desc:.1f} NÃO aplicado "
                       f"por inteiro; a nota tinha se provado por método ({_antes}) e o financiamento "
-                      f"vira ressalva declarada, não rebaixamento (piso {PISO_INDEPENDENCIA})")
+                      f"vira ressalva declarada, não rebaixamento de categoria "
+                      f"(piso {_piso}: fronteira da {_fronteira})")
         else:
             fl.append(f"independência editorial −{_desc:.1f} ({_mot_ind})")
 
@@ -1889,9 +2120,29 @@ def score(a):
     #   `extrapolavel`  → já é o teto_externa       ·  relevância clínica → já é o teto_mcid
     # Manter os dois era julgar o mesmo defeito duas vezes por caminhos que discordavam.
     # Sobraram DUAS perguntas que só ele fazia — e elas viram TETO, no lugar certo:
-    if a.get("beneficio_supera_risco") is False:
+    # ═══ 19/Ago — A TERCEIRA CIRCULARIDADE, E A MAIS CARA ═══
+    # "o benefício NÃO supera o risco" foi escrita para o ensaio que PROPÕE uma intervenção:
+    # se o remédio dele machuca mais do que ajuda, não se muda conduta para piorar. Correta.
+    #
+    # Mas no ensaio CONCLUSIVAMENTE NEGATIVO essa frase é o ACHADO. O DINAMIT existe para
+    # dizer "não implante CDI na fase aguda pós-IAM"; o benefício não superar o risco é
+    # exatamente a notícia que ele traz. Capar em 8 por isso é o mesmo que descontar o
+    # tocilizumabe por ele não ter funcionado.
+    #
+    # E aqui a conta dele fecha nas duas pontas: essa é a MESMA conduta que muda. Palavras do
+    # Dr. Eduardo: *"me interessa saber se eu tenho que prescrever, se tenho que brigar com a
+    # operadora, ou se eu posso falar pro paciente 'desencana, tão colocando na sua cabeça que
+    # isso te ajuda e não vai'."* Mudar conduta para NÃO fazer é mudar conduta.
+    _rc_cls = ((a.get("relevancia_clinica") or {}).get("classificacao") or "").strip().lower()
+    _conclusivo_negativo = (_rc_cls in ("ausencia_de_efeito_demonstrada", "dano_demonstrado")
+                            or (_rc_cls == "incerto"
+                                and _nulo_esta_demonstrado(a.get("relevancia_clinica") or {}, a)))
+    if a.get("beneficio_supera_risco") is False and not _conclusivo_negativo:
         aplic = min(aplic, 8)
         fl.append("o benefício NÃO supera o risco → teto 8 (não se muda conduta para piorar)")
+    elif a.get("beneficio_supera_risco") is False:
+        fl.append("o benefício NÃO supera o risco — e é ISTO que o estudo veio dizer: "
+                  "a conduta que muda é NÃO fazer (não capa)")
     if a.get("sem_evidencia_conflitante_melhor") is False:
         aplic = min(aplic, 8)
         fl.append("existe evidência conflitante MELHOR → teto 8 (não é a palavra final)")

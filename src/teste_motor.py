@@ -1643,6 +1643,9 @@ def teste_ficha_sem_contradicao():
     # está certo estava adulterando a prova de onde os artigos param.
     import voo as _V
     _V.silenciar(True)
+    # 20/Ago — a ficha passou a decidir TEMA, e isso chama PubMed + LLM. A bateria não
+    # pode depender de rede: trava lenta e instável é trava que se aprende a ignorar.
+    os.environ['CARDIODAILY_SEM_REDE'] = '1'
     import ficha_site as F
 
     raiz = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -1783,7 +1786,24 @@ def teste_quem_grava_e_quem_le_apontam_para_o_mesmo_arquivo():
     Dr. Eduardo num "eu aprovei e não chegou".
 
     Esta trava confere, por CÁLCULO e não por leitura, que quem grava e quem lê a agenda
-    apontam para o mesmo arquivo — e que ele fica DENTRO do projeto.
+    apontam para o mesmo lugar.
+
+    ═══ 19/Ago — A AGENDA MUDOU DE CASA, E ESTA TRAVA VIROU UMA BOMBA ═══
+    Em 17/Ago a agenda saiu do CSV e foi para a tabela `agenda_envio` do Supabase — porque o
+    robô que envia roda na NUVEM e nunca veria um arquivo do Mac dele. Certo. O que ficou
+    errado foi ISTO AQUI: a trava continuou procurando `AD.AGENDA`, que deixou de existir.
+
+    E o efeito não foi "uma trava reprova". Foi **`AttributeError` no meio da bateria** — o
+    runner morria ali, e as ~20 travas seguintes (entre elas as do envio, do MCID e do OCR)
+    **nunca rodavam**. Do lado de fora isso não parece falha de prova: parece bateria quebrada.
+    É a mesma família do `teste_independencia_nao_cruza_o_nove` de 06/Ago (trava escrita e
+    nunca chamada), com um agravante: aqui ela derrubava as outras junto.
+
+    Regra que fica: **trava que fala de coisa que pode ser aposentada CHECA a existência
+    antes de tocar.** Recusar é o trabalho dela; explodir não.
+
+    A REGRA que esta trava guarda não mudou — só mudou o endereço. Continua sendo: quem
+    GRAVA e quem LÊ a agenda têm de apontar para o MESMO lugar. Hoje esse lugar é uma tabela.
     """
     import os
     import re
@@ -1791,35 +1811,45 @@ def teste_quem_grava_e_quem_le_apontam_para_o_mesmo_arquivo():
     src = os.path.dirname(os.path.abspath(__file__))
     raiz = os.path.dirname(src)
 
-    # 1) o que o administrador usa de verdade (importado, não lido)
+    # ── 1) O CSV é HISTÓRIA. Se ele voltar, é porque alguém reabriu a porta local. ──
     import administrador as AD
-    esperado = os.path.join(raiz, "saidas", "agenda_envio.csv")
-    checa("o Administrador grava a agenda DENTRO do projeto",
-          os.path.abspath(AD.AGENDA) == os.path.abspath(esperado),
-          f"grava em {AD.AGENDA} · esperado {esperado}")
+    checa("a agenda NÃO voltou para o CSV local (o robô da nuvem não enxerga o Mac)",
+          not hasattr(AD, "AGENDA"),
+          "o administrador voltou a ter AD.AGENDA — a fila some para quem envia")
 
-    # 2) o que o distribuidor procura
+    # ── 2) quem GRAVA e quem LÊ falam da MESMA tabela ──
+    # ⚠️ Olhar só `sb.table("…")` NÃO serve: o Administrador fala com o Supabase por REST
+    # (`{url}/rest/v1/agenda_envio`) e o distribuidor pelo cliente (`sb.table("agenda_envio")`).
+    # Duas formas de dizer a mesma coisa — a trava tem de aceitar as duas, ou reprova o certo.
+    def _cita_a_tabela(caminho):
+        t = open(caminho, encoding="utf-8").read()
+        return ('/rest/v1/agenda_envio' in t) or re.search(r'table\(\s*["\']agenda_envio["\']', t)
+
+    checa("o Administrador grava na tabela agenda_envio", bool(_cita_a_tabela(AD.__file__)),
+          "o painel aprova e não escreve na fila que o robô lê")
+
     dist = os.path.join(raiz, "distribuidor.py")
     if os.path.exists(dist):
-        t = open(dist, encoding="utf-8").read()
-        m = re.search(r"AGENDA_CSV\s*=\s*(.+)", t)
-        checa("o distribuidor tem um AGENDA_CSV", bool(m), "sumiu — o envio não sabe onde olhar")
-        if m:
-            ns = {"os": os, "__file__": dist}
-            try:
-                exec(f"AGENDA_CSV = {m.group(1)}", ns)
-                checa("quem GRAVA e quem LÊ a agenda apontam para o MESMO arquivo",
-                      os.path.abspath(ns["AGENDA_CSV"]) == os.path.abspath(AD.AGENDA),
-                      f"administrador={AD.AGENDA}  ·  distribuidor={ns['AGENDA_CSV']}")
-            except Exception as e:
-                checa("o AGENDA_CSV do distribuidor é calculável", False, f"{type(e).__name__}: {e}")
+        checa("o distribuidor LÊ a mesma tabela agenda_envio", bool(_cita_a_tabela(dist)),
+              "o envio procura a fila em outro lugar — aprovado no painel, nada no WhatsApp")
 
-    # 3) a Chave 21 procura no mesmo lugar
-    ch = os.path.join(raiz, "chaves", "21_Enviar.command")
-    if os.path.exists(ch):
-        checa("a Chave 21 usa $CD_FULL/saidas/agenda_envio.csv",
-              'AGENDA="$CD_FULL/saidas/agenda_envio.csv"' in open(ch, encoding="utf-8").read(),
-              "a chave aponta para outro lugar — ela diria 'a agenda não existe' para sempre")
+        # ⚠️ O CSV pode (e deve) aparecer nos COMENTÁRIOS — é o registro histórico de 09 a
+        # 14/Ago, e apagá-lo custaria a memória de por que a agenda mudou de casa. O que não
+        # pode é o CSV voltar a ser CÓDIGO. Por isso a busca é no ast, ignorando docstring.
+        import ast as _ast
+        arvore = _ast.parse(open(dist, encoding="utf-8").read())
+        docs = set()
+        for n in _ast.walk(arvore):
+            if isinstance(n, (_ast.Module, _ast.FunctionDef, _ast.ClassDef)) and n.body \
+                    and _ast.get_docstring(n, clean=False) is not None:
+                docs.add(id(n.body[0].value))
+        vivo = [n.value for n in _ast.walk(arvore)
+                if isinstance(n, _ast.Constant) and isinstance(n.value, str)
+                and id(n) not in docs and "agenda_envio.csv" in n.value]
+        nomes = [t.id for n in _ast.walk(arvore) if isinstance(n, _ast.Assign)
+                 for t in n.targets if isinstance(t, _ast.Name) and t.id == "AGENDA_CSV"]
+        checa("e o CSV não voltou a ser CÓDIGO no envio", not vivo and not nomes,
+              f"strings vivas={vivo} · variáveis={nomes} — duas fontes de verdade para a mesma fila")
 
 
 def teste_uma_tabela_de_teto_e_o_protocolo_nao_pontua():
@@ -3607,6 +3637,450 @@ def teste_mcid_cardiodaily():
           not any("limiar CardioDaily" in m for m in mot), mot)
     return "limiares da casa: ARR ≥1%/ano + 20 substitutos · entram só no silêncio do artigo"
 
+def teste_o_nulo_conclusivo_vale_como_resposta():
+    """19/Ago — O DINAMIT tirou 5, e o Dr. Eduardo leu o artigo inteiro para me explicar por quê.
+
+    ═══ O QUE ELE DISSE (a régua, nas palavras dele) ═══
+      *"O estudo apresentou nitidamente qual seria o tamanho da amostra necessária, randomizou
+       e ALCANÇOU o tamanho da amostra pra responder a pergunta. Não adianta colocar CDI
+       profilático em paciente pós-infarto na fase aguda. O fato de não mostrar benefício não
+       significa que não impacta a prática clínica — por isso que é nota para APLICABILIDADE
+       clínica. Me interessa saber se eu tenho que prescrever, se tenho que brigar com a
+       operadora de saúde, ou se eu posso falar pro paciente: 'cara, desencana, tão te
+       colocando na cabeça que isso vai te ajudar e não vai'."*
+
+    Ou seja: **quem autoriza o crédito do nulo não é a largura do IC — é o ensaio ter sido
+    desenhado com poder para a pergunta e ter ENTREGUE o que planejou.** "Não faça" é uma
+    conduta, e mudar para "não faça" é mudar conduta.
+
+    ═══ QUATRO CIRCULARIDADES DERRUBAVAM O MESMO ARTIGO ═══
+    O DINAMIT levava 5, e cada degrau era o motor punindo o estudo pelo próprio achado:
+      1. `taxa observada <70% da esperada` — a mortalidade veio MENOR que a prevista, e os
+         investigadores recalcularam a amostra de 525 para 674 e entregaram os 674. O motor
+         tinha `poder_ok: true` e `eventos_nao_alcancados: false` no MESMO JSON e ouviu
+         `taxa_obs`. Mérito lido como falha.
+      2. `open-label → teto desenho 8` — não se cega implante de CDI, e o desfecho é MORTE POR
+         TODAS AS CAUSAS com adjudicação externa. Nas palavras dele: *"quantificar a presença
+         ou não de morte é relativamente fácil — o endpoint é muito franco e muito pouco
+         plausível de ser distorcido."*
+      3. `MCID conferido → teto 6: o efeito NÃO excede o limiar` — é o ACHADO. Pedir que o
+         ensaio negativo prove um benefício para ter direito de dizer que não há benefício.
+      4. `o benefício NÃO supera o risco → teto 8` — idem: é a notícia, não o defeito.
+
+    Esta trava confere a régua DELE ponta a ponta, no DINAMIT real (fatos de 19/Ago).
+    """
+    dinamit = _bom(pergunta="intervencao", desenho="rct",
+                   open_label=True, poder_ok=True, desfecho_duro=True, extrapolavel=True,
+                   eventos_nao_alcancados=False, eventos_min_grupo=58,
+                   taxa_obs=0.069, taxa_esp=0.30,          # ← a premissa que envelheceu
+                   beneficio_supera_risco=False,           # ← o CDI não ajudou: é o achado
+                   itt_falso=False, falhas_fatais=[],
+                   financiamento_papel="indústria envolvida",
+                   qualidade_nhlbi={"instrumento": "controlled_intervention",
+                                    "avaliadores_desfecho_cegados": True},
+                   relevancia_clinica={"classificacao": "incerto",
+                                       "desfecho_primario": "Mortalidade por todas as causas",
+                                       "tipo_desfecho": "tempo_ate_evento",
+                                       "efeito_excede_limiar": False,
+                                       "ic_sustenta_relevancia": False,
+                                       "ic_exclui_beneficio_relevante": False})
+    r = N.score(dinamit)
+    checa("DINAMIT: o nulo conclusivo vale 9 ou 10", r["aplic"] >= 9, f"veio {r['aplic']}")
+    checa("DINAMIT: e a bicondicional acompanha — MUDA CONDUTA",
+          r["muda_conduta"] == "SIM", f"veio {r['muda_conduta']}")
+    checa("DINAMIT: o poder recomposto NÃO é demérito",
+          not any("taxa observada" in f for f in r["flags"]), " | ".join(r["flags"]))
+    checa("DINAMIT: open-label não capa quando o desfecho é morte por todas as causas",
+          r["teto_desenho"] == 10, f"teto_desenho {r['teto_desenho']}")
+    checa("DINAMIT: o nulo não é punido pelo limiar que ele mesmo não cruzou",
+          r["teto_mcid"] == 10, f"teto_mcid {r['teto_mcid']}")
+
+    # ── O CONTROLE, e ele é o que impede a régua de virar peneira ──
+    # Ensaio que NÃO entregou o que planejou continua sendo inconclusivo, e continua em 7.
+    fraco = dict(dinamit); fraco["poder_ok"] = False
+    checa("mas o ensaio SEM poder continua inconclusivo (teto 7)",
+          N.score(fraco)["aplic"] <= 7, f"veio {N.score(fraco)['aplic']}")
+    sem_eventos = dict(dinamit); sem_eventos["eventos_nao_alcancados"] = True
+    checa("e o que NÃO alcançou os eventos também", N.score(sem_eventos)["aplic"] <= 7,
+          f"veio {N.score(sem_eventos)['aplic']}")
+    mole = dict(dinamit)
+    mole["relevancia_clinica"] = dict(dinamit["relevancia_clinica"],
+                                      desfecho_primario="Morte cardiovascular ou hospitalização por IC")
+    checa("open-label VOLTA a capar quando o desfecho é composto/julgado",
+          N.score(mole)["teto_desenho"] == 8, f"teto {N.score(mole)['teto_desenho']}")
+    return "nulo com poder e N entregues = resposta · sem eles, continua inconclusivo"
+
+
+def teste_as_duas_gemeas_dano_e_nao_inferioridade():
+    """19/Ago — APPRAISE-2 e VALIANT reprovaram por FALTA DE PALAVRA, não por régua.
+
+    · APPRAISE-2: eficácia nula E sangramento maior HR 2,59 (1,50–4,46), p=0,001 — ensaio
+      INTERROMPIDO por dano. O motor chamou de `incerto` e deu 5. Dano demonstrado é resposta
+      conclusiva: o ensaio tirou a droga da prática.
+    · VALIANT: atingiu NÃO-INFERIORIDADE vs captopril. Provou o que propôs, e o motor não
+      tinha a palavra.
+
+    As duas são gêmeas da `ausencia_de_efeito_demonstrada` de 04/Ago — mesmo denominador:
+    **o ensaio respondeu à pergunta que fez.**
+    """
+    for classe in ("dano_demonstrado", "nao_inferioridade_demonstrada"):
+        checa(f"'{classe}' existe no motor", classe in N.TETO_MCID, "categoria não criada")
+        checa(f"'{classe}' não tem teto de relevância", N.TETO_MCID.get(classe) == 10,
+              f"veio {N.TETO_MCID.get(classe)}")
+        r = N.score(_bom(pergunta="intervencao", desenho="rct", efeito_grande=True,
+                         relevancia_clinica={"classificacao": classe,
+                                             "desfecho_primario": "mortalidade por todas as causas"}))
+        checa(f"'{classe}' chega a 9/10", r["aplic"] >= 9, f"veio {r['aplic']}")
+        checa(f"'{classe}' DIZ o porquê de não ter teto (o redator precisa da frase)",
+              any("SEM teto" in f for f in r["flags"]), " | ".join(r["flags"]))
+
+    # a palavra tem de existir nos DOIS extratores, senão o motor espera algo que nunca chega
+    import os as _os
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    for arq in ("analise.py", "analise_prompt.md", "analise_meta_prompt.md"):
+        t = open(_os.path.join(aqui, arq), encoding="utf-8").read()
+        for classe in ("dano_demonstrado", "nao_inferioridade_demonstrada"):
+            checa(f"{arq} conhece '{classe}'", classe in t,
+                  "o motor tem a categoria e o extrator não pode escrevê-la")
+    return "dano e não-inferioridade demonstrados valem como resposta, e o extrator sabe dizê-los"
+
+
+def teste_independencia_nao_cruza_o_portao_da_publicacao():
+    """19/Ago — Eu consertei UMA fronteira em 06/Ago e deixei a outra. LEI 9.
+
+    Dos 27 marcos da IC reprovados, **QUINZE estavam exatamente em 5**, com o mesmo delator
+    final: `independência editorial −1.0`. Sem ele, 6 — e 6 publica. CARE-HF, MIRACLE,
+    I-PRESERVE, COMMANDER-HF, OPTIMAAL, DINAMIT, CAT, STEP-HFpEF.
+
+    O argumento de 06/Ago — *"financiamento é ressalva declarada, não rebaixamento de
+    categoria"* — vale igual aqui e vale MAIS: no 9 o desconto trocava a frase que acompanha o
+    artigo; no 6 ele decide se o artigo EXISTE para o assinante. E a premissa é a mesma que já
+    estava escrita: **quase todo ensaio de fase 3 em cardiologia é patrocinado.** Um desconto
+    que quase todos levam não separa ninguém — só encolhe o acervo.
+    """
+    checa("o piso da publicação é o MESMO número do portão (LEI 10, nota ≥6)",
+          N.PISO_PUBLICACAO == 6, f"veio {N.PISO_PUBLICACAO}")
+
+    base = dict(pergunta="intervencao", desenho="rct", open_label=False, poder_ok=True,
+                desfecho_duro=True, extrapolavel=True, efeito_grande=False,
+                financiamento_papel="indústria envolvida")
+
+    # ── EM CIMA DA FRONTEIRA: teto 6, desconto levaria a 5 → tem de parar em 6 ──
+    # É o caso dos quinze. `significativo_mas_abaixo_do_mcid` capa em 6 pela tabela do MCID.
+    na_fronteira = dict(base, relevancia_clinica={
+        "classificacao": "significativo_mas_abaixo_do_mcid",
+        "desfecho_primario": "desfecho composto"})
+    r = N.score(na_fronteira)
+    checa("indústria NÃO derruba um 6 para 5 (fronteira da publicação)",
+          r["aplic"] >= N.PISO_PUBLICACAO, f"veio {r['aplic']}")
+    checa("e o delator DIZ que o desconto foi contido, e em qual fronteira",
+          any("piso" in f and "publicação" in f for f in r["flags"]), " | ".join(r["flags"]))
+
+    # ── O CONTROLE: ENTRE as fronteiras o desconto continua valendo INTEIRO ──
+    # Sem isto a regra vira "indústria não desconta nunca", que é o oposto do que ele pediu em
+    # 05/Ago. `nao_avaliavel` capa em 8: o desconto tem de levar a 7, sem piso nenhum no meio.
+    entre = dict(base, relevancia_clinica={"classificacao": "nao_avaliavel",
+                                           "desfecho_primario": "desfecho composto"})
+    r2 = N.score(entre)
+    checa("entre as fronteiras (8→7) o desconto vale integral",
+          r2["aplic"] == 7, f"veio {r2['aplic']} — o desconto sumiu, virou 'indústria não pesa'")
+    return "o desconto de indústria não cruza 9 nem 6 — e entre eles vale inteiro"
+
+
+def teste_f8_so_e_fatal_se_a_troca_foi_silenciosa():
+    """19/Ago — decisão do Dr. Eduardo. A F8 zerou 7 dos 100 marcos da IC para nota 3.
+
+    Entre eles SOLOIST-WHF e SCORED, onde a troca do desfecho foi ANUNCIADA pelos autores com
+    justificativa: o patrocinador cortou o financiamento e os ensaios encerraram cedo. Está
+    escrito no artigo. A fraude que a F8 existe para pegar é o outcome switching SILENCIOSO —
+    trocar depois de olhar os dados e não contar. Transparência não pode custar nota 3.
+    """
+    silencioso = _bom(pergunta="intervencao", desenho="rct", efeito_grande=True,
+                      qualidade_nhlbi={"instrumento": "controlled_intervention",
+                                       "desfechos_prespecificados": False})
+    checa("troca SILENCIOSA continua sendo falha fatal",
+          "F8" in N.falhas_fatais(silencioso), str(N.falhas_fatais(silencioso)))
+    checa("e derruba a nota para ≤4", N.score(silencioso)["aplic"] <= 4,
+          f"veio {N.score(silencioso)['aplic']}")
+
+    declarado = _bom(pergunta="intervencao", desenho="rct", efeito_grande=True,
+                     qualidade_nhlbi={"instrumento": "controlled_intervention",
+                                      "desfechos_prespecificados": False,
+                                      "troca_desfecho_declarada": True})
+    checa("troca DECLARADA e justificada não é falha fatal",
+          "F8" not in N.falhas_fatais(declarado), str(N.falhas_fatais(declarado)))
+
+    # o extrator precisa poder responder — motor com a regra e prompt calado = campo null p/ sempre
+    import os as _os
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    for arq in ("analise.py", "analise_prompt.md"):
+        checa(f"{arq} pergunta se a troca foi declarada",
+              "troca_desfecho_declarada" in open(_os.path.join(aqui, arq), encoding="utf-8").read(),
+              "o motor lê um campo que ninguém preenche — vale como 'não declarou' para sempre")
+    return "F8 pega o switching silencioso, não a transparência"
+
+
+def teste_sem_tema_nao_sobe_e_ninguem_mais_escreve():
+    """20/Ago — 117 de 616 linhas com `tema` NULL, e o portão não sabia que a coluna existia.
+
+    ═══ O QUE ACONTECEU ═══
+    Ele abriu o Supabase e viu a coluna vazia: *"e aí todos os nossos portões e nossas regras —
+    mais uma vez indo para o espaço. Por que diachos o Supabase está cheio de buraco?"*
+
+    Medido antes de responder qualquer coisa:
+        até 17/Ago .... 21 sem tema em 507
+        18/Ago ........ 18 em 26
+        19/Ago ........ 78 em 83
+    O buraco começa no dia seguinte ao que eu rodei o `marcar_temas.py` — e a causa não é o
+    portão falhando: **é a máquina de temas nunca ter estado no caminho dele.** Eu construí o
+    classificador em 17/Ago, rodei UMA vez por um script que dá PATCH direto em `artigos`
+    (segundo portão, LEI 5 violada por mim) e dei por resolvido.
+
+    ═══ AS DECISÕES DELE QUE ESTA TRAVA GUARDA ═══
+    · *"sem tema não sobe"* — vira porta no contrato.
+    · *"não tem cabimento uma diretriz subir sem tema"* — UMA regra para os quatro tipos. Eu
+      tinha proposto exceção para diretriz invocando a LEI 10, e misturei duas coisas: aquela
+      exceção é sobre a NOTA, não sobre o tema.
+    · *"inadmissível não ter tema — então não é cardiologia e medicina, estamos falando do
+      cosmo"* — por isso `nao_classificavel` NÃO existe; quem decide é o tripé, e quando ele
+      não fecha a resposta é `fora_do_escopo`.
+    · NULL nunca (LEI 11): `Sem tema` e `Não se aplica` são TEXTO que se lê e se entende.
+    """
+    import ast
+    import os as _os
+    import temas as _T
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+
+    # ── 1) o portão CONHECE as 4 colunas (era isto que faltava: coluna fora da lista = coluna cega)
+    contrato = open(_os.path.join(aqui, "contrato.py"), encoding="utf-8").read()
+    publicador = open(_os.path.join(aqui, "publicador.py"), encoding="utf-8").read()
+    for col in ("tema", "tema_secundario", "tema_origem", "mesh_terms"):
+        checa(f"contrato conhece a coluna {col}", f'"{col}"' in contrato, "coluna cega")
+        checa(f"publicador conhece a coluna {col}", f'"{col}"' in publicador, "coluna cega")
+
+    # ── 2) SEM TEMA NÃO SOBE, e a diretriz não é exceção ──
+    import contrato as C
+    base = {"doc_id": "x", "doi": "10.1/x", "titulo": "T", "revista": "R",
+            "tema_secundario": "Não se aplica", "mesh_terms": []}
+    for tipo in ("original", "meta", "diretriz", "revisao_narrativa"):
+        f = dict(base, tipo_documento=tipo, tema=_T.SEM_TEMA, tema_origem="fora_do_escopo")
+        v = C.validar(f, checar_arquivos=False)
+        checa(f"'{_T.SEM_TEMA}' RETÉM a linha ({tipo})",
+              any("tema" in str(x) for x in v), f"passou: {v}")
+    f = dict(base, tipo_documento="diretriz", tema="Arritmias/Anticoagulantes", tema_origem="llm")
+    v = C.validar(f, checar_arquivos=False)
+    checa("mas a diretriz COM tema não é barrada pelo tema",
+          not any("tema:" in str(x) for x in v), str(v))
+
+    # ── 3) o vazio tem nome (LEI 11): as duas origens NÃO podem virar a mesma palavra ──
+    checa("'fora_do_escopo' e 'falha_do_classificador' são distinguíveis",
+          "fora_do_escopo" in contrato and "falha_do_classificador" in contrato,
+          "'não é cardiologia' e 'o programa quebrou' pedem consertos opostos")
+
+    # ── 4) NINGUÉM MAIS ESCREVE (LEI 5) ──
+    mt = _os.path.join(_os.path.dirname(aqui), "scripts", "marcar_temas.py")
+    if _os.path.exists(mt):
+        arv = ast.parse(open(mt, encoding="utf-8").read())
+        gravar = next((n for n in ast.walk(arv)
+                       if isinstance(n, ast.FunctionDef) and n.name == "gravar"), None)
+        checa("marcar_temas.gravar existe para poder ser recusada", gravar is not None, "")
+        if gravar:
+            corpo = gravar.body
+            i0 = 1 if (corpo and isinstance(corpo[0], ast.Expr)
+                       and isinstance(corpo[0].value, ast.Constant)) else 0
+            checa("marcar_temas.gravar RECUSA antes de qualquer PATCH (segundo portão fechado)",
+                  bool(corpo[i0:]) and isinstance(corpo[i0], ast.Raise),
+                  "o PATCH direto em `artigos` voltou — é a LEI 5 outra vez")
+    return "sem tema não sobe (nem diretriz) · e só o publicador escreve"
+
+
+def teste_mudar_a_regua_nao_manda_re_extrair():
+    """19/Ago — ajustar a régua custava uma rodada COMPLETA de extração. À toa.
+
+    Hoje a régua mudou quatro vezes. Cada mudança altera o hash do `notas_prototipo.py`, e a
+    TERRA ARRASADA apagava o pacote inteiro **incluindo os FATOS**. Na tela dele, 20 vezes:
+
+        🔥 TERRA ARRASADA — 1 prompt(s) mudaram
+           · motor: notas_prototipo.py@eed35fef → @22944c66
+
+    Com 279 pacotes em disco, isso é **uma rodada completa paga a cada ajuste de regra** — e ele
+    já disse, com todas as letras: *"eu não tenho dinheiro para você ficar rasgando por conta de
+    erros infantis."*
+
+    **Os FATOS não dependem do motor.** O extrator lê o PDF e escreve o que o artigo diz; o motor
+    recalcula a nota do zero, deterministicamente, toda vez. Mudar o motor não torna um fato
+    falso — torna a NOTA diferente. Quem envelhece é a perícia, o ACRI e o áudio, que citam a
+    nota em prosa.
+
+    A ordem de 04/Ago (*"apaga TUDO"*) continua INTACTA onde foi dada: no prompt de EXTRAÇÃO.
+    O erro era aplicar a mesma pena a um carimbo que não toca em fato nenhum.
+
+    ⚠️ Esta trava confere as DUAS metades. Só a primeira faria "nunca arrasa", que é pior que o
+    defeito original — seria o reaproveitamento que preserva o erro, contra o qual a terra
+    arrasada foi criada.
+    """
+    import ast
+    import os as _os
+    fonte = open(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "analisador.py"),
+                 encoding="utf-8").read()
+    arvore = ast.parse(fonte)
+
+    # 1) existe a lista dos carimbos que AINDA arrasam, e o motor NÃO está nela
+    carimbos = None
+    for n in ast.walk(arvore):
+        if isinstance(n, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "_CARIMBOS_DE_EXTRACAO" for t in n.targets):
+            carimbos = {e.value for e in n.value.elts if isinstance(e, ast.Constant)}
+    checa("existe a lista dos carimbos que arrasam", carimbos is not None, "sumiu")
+    if carimbos:
+        checa("o EXTRATOR continua arrasando o pacote (ordem de 04/Ago, intacta)",
+              "extrator" in carimbos and "extracao" in carimbos, str(sorted(carimbos)))
+        checa("o MOTOR não arrasa — mudar a régua não re-extrai",
+              "motor" not in carimbos, "o motor voltou para a lista: cada ajuste de régua "
+                                       "vira uma rodada de extração paga")
+
+    # 2) a metade que impede virar peneira: sem carimbo nenhum, arrasa igual
+    checa("staging SEM carimbo continua sendo arrasado (origem desconhecida)",
+          "(not _vold)" in fonte,
+          "pacote anterior a 04/Ago passaria a ser reaproveitado às cegas")
+
+    # 3) e o caminho brando não pode deixar para trás justamente o que cita a nota
+    so_nota = None
+    for n in ast.walk(arvore):
+        if isinstance(n, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "_SO_A_NOTA" for t in n.targets):
+            so_nota = {e.value for e in n.value.elts if isinstance(e, ast.Constant)}
+    checa("a limpeza branda existe", so_nota is not None, "sumiu")
+    if so_nota:
+        for peca in ("_ACRI.txt", "_analise.md", "_analise.pdf", "_CANONICO.md",
+                     "_audio.mp3", "_visual.png"):
+            checa(f"a limpeza branda apaga {peca} (ele CITA a nota em prosa)",
+                  peca in so_nota, str(sorted(so_nota)))
+        checa("e NÃO apaga os fatos — é o que esta regra existe para preservar",
+              not any("fatos" in x for x in so_nota), str(sorted(so_nota)))
+    return "régua nova refaz a perícia; extração só se o extrator mudar"
+
+
+def teste_carimbo_nao_e_texto_do_artigo():
+    """19/Ago — O V-HEFT: o PDF que PARECIA legível e não era.
+
+    Ele baixou os 100 originais que mudaram a história da IC. Cinco eram scan. Um deles, o
+    V-HeFT I (Cohn, NEJM 1986), não vinha vazio — vinha com **257 caracteres por página**,
+    idênticos nas 6: o carimbo "Downloaded from nejm.org…". A checagem da corrente era
+    `if texto.strip()` — e 257 caracteres passam nela. A cascata inteira decidia em cima de
+    um carimbo, e nenhum waypoint acusava, porque do ponto de vista do código deu tudo certo.
+
+    É a família de defeito que este arquivo já persegue: **a ausência do dado lida como o
+    caso favorável.** Aqui a ausência tinha até um valor plausível por cima.
+
+    Esta trava vem da decisão DELE (*"caso o programa não consiga ler estes arquivos, qual
+    opção existe"*), não da minha implementação: carimbo não é texto de artigo, e PDF bom
+    não paga o preço do OCR.
+    """
+    import ocr_pdf as O
+
+    carimbo = ("The New England Journal of Medicine\nDownloaded from nejm.org at BOSTON "
+               "UNIVERSITY on September 6, 2013. For personal use only. No other uses "
+               "without permission.\nCopyright 1986 Massachusetts Medical Society. "
+               "All rights reserved.\n") * 6
+    serve, motivo = O.texto_e_util(carimbo, n_paginas=6)
+    checa("OCR: o carimbo do NEJM NÃO é texto do artigo", not serve, motivo)
+    checa("OCR: e o motivo DIZ o porquê (o programa explica, não só recusa)",
+          "carimbo" in motivo or "caracteres por página" in motivo, motivo)
+
+    serve, motivo = O.texto_e_util("", n_paginas=3)
+    checa("OCR: PDF sem camada de texto continua sendo recusado", not serve, motivo)
+
+    # ⚠️ O CONTROLE — é ele que impede a trava de virar "recusa tudo e passa".
+    # Medido em 6 PDFs reais do acervo (Elsevier): 34.000–56.000 caracteres, 0,02–0,06 s.
+    # Se o artigo bom cair no OCR, cada rodada de 800 artigos ganha ~5 horas de espera.
+    artigo = "\n".join(f"Linha {i} do texto do artigo, com conteudo distinto em cada uma "
+                       f"delas e comprimento acima de quarenta caracteres." for i in range(300))
+    serve, motivo = O.texto_e_util(artigo, n_paginas=6)
+    checa("OCR: artigo de verdade NÃO entra no OCR (senão a rodada quadruplica)", serve, motivo)
+
+    # E o caso que o teste antigo já pegava tem de continuar pego: página curta demais.
+    serve, _ = O.texto_e_util("Título do artigo\nAutores\n" * 3, n_paginas=6)
+    checa("OCR: densidade baixa reprova mesmo com linhas distintas", not serve, "")
+    return "carimbo ≠ artigo · e o artigo bom não paga o preço do OCR"
+
+
+def teste_texto_ilegivel_nao_chega_no_llm():
+    """19/Ago — O SAVE Trial saiu `nota 0` DEPOIS de gastar.
+
+    ```
+    🔴 FATOS: só 172 caracteres por página … OCR falhou
+    analisado  1992_SAVE_TRIAL_NEJM   nota 0
+    ```
+    Extração, motor, veredito e perícia rodaram em cima de 1.557 caracteres de carimbo de
+    download. **Pagou LLM para não produzir nada.** É o 🔴 BUG que o CLAUDE.md já nomeia —
+    *"Editorial/Comment entra na fila e vira perícia — QUEIMA DINHEIRO"* — com outra roupa.
+
+    Não era decisão a tomar: a LEI 10 manda reprovar mais, e ele já disse *"não tenho
+    dinheiro para você ficar rasgando por conta de erros infantis"*. Eu perguntei mesmo assim,
+    e perguntar o que já está decidido é gastar o tempo dele.
+
+    A trava confere que a parada acontece **ANTES** da chamada de LLM, nos dois pontos que
+    pagam: o extrator de FATOS e a perícia.
+    """
+    import ast
+    import os as _os
+    import ocr_pdf as O
+
+    checa("existe uma exceção própria para texto ilegível",
+          issubclass(O.TextoIlegivel, Exception), "")
+
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    for arq, marco in (("analise.py", "llm_client"), ("analisador.py", "conferir_veredito")):
+        txt = open(_os.path.join(aqui, arq), encoding="utf-8").read()
+        arvore = ast.parse(txt)
+        linhas_raise = [n.lineno for n in ast.walk(arvore) if isinstance(n, ast.Raise)
+                        and ast.dump(n).count("TextoIlegivel")]
+        checa(f"{arq} levanta TextoIlegivel", bool(linhas_raise), "não levanta — volta a pagar")
+        if linhas_raise:
+            # o marco é a primeira coisa CARA do arquivo; a parada tem de vir antes dela
+            linhas_marco = [i for i, l in enumerate(txt.splitlines(), 1)
+                            if marco in l and not l.strip().startswith("#")]
+            if linhas_marco:
+                checa(f"{arq}: a parada vem ANTES de gastar ({marco})",
+                      min(linhas_raise) < max(linhas_marco),
+                      f"raise na linha {min(linhas_raise)} · {marco} na {max(linhas_marco)}")
+    return "PDF ilegível para antes do LLM — nos dois pontos que pagam"
+
+
+def teste_ocr_esta_nos_cinco_pontos_que_leem_pdf():
+    """LEI 9 aplicada ao OCR: esta regra mora em CINCO blocos, não em um.
+
+    Consertar só o classificador seria o erro de 02/Ago outra vez — o bloco que sobra roda
+    **em silêncio**. Os cinco pontos vivos que abrem PDF na corrente:
+
+      1. classificador_ouro.py   — a cascata (título, DOI, descarte)
+      2. classificador_prompt.py — `paginas_1a3()`, **o texto que o LLM lê**
+      3. analisador.py           — o texto que vai para a perícia
+      4. analise.py              — o extrator de FATOS, de onde sai a NOTA
+      5. minirevisao.py          — a trilha da minirrevisão
+
+    Fora da corrente e propositalmente NÃO ligados: `classificador_prompt_v5.py` e
+    `prova_v4_v5.py` (experimento), `gabarito.py`/`prova_lote.py` (medição), e
+    `classificador_pubmed.classificar_pasta` (entrada antiga, ninguém chama).
+    """
+    import ast
+    import os as _os
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    for arq in ("classificador_ouro.py", "classificador_prompt.py", "analisador.py",
+                "analise.py", "minirevisao.py"):
+        arvore = ast.parse(open(_os.path.join(aqui, arq), encoding="utf-8").read())
+        importa = any(
+            (isinstance(n, ast.Import) and any(a.name == "ocr_pdf" for a in n.names)) or
+            (isinstance(n, ast.ImportFrom) and n.module == "ocr_pdf")
+            for n in ast.walk(arvore))
+        chama = any(isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                    and n.func.attr == "extrair" for n in ast.walk(arvore))
+        checa(f"OCR ligado em {arq}", importa and chama,
+              f"importa={importa} chama_extrair={chama}")
+    return "os 5 pontos que abrem PDF passam pelo detector de carimbo"
+
+
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,
               teste_tetos_da_lei_0, teste_teto_estatistico, teste_rigor_conhece_o_desenho,
@@ -3631,7 +4105,9 @@ if __name__ == "__main__":
               teste_ficha_sem_contradicao, teste_contrato_espelha_a_tabela,
               teste_independencia_editorial, teste_mcid_confere_a_conta,
               teste_revisao_valoriza_tabela, teste_mcid_so_onde_faz_sentido,
-              teste_mcid_cardiodaily]
+              teste_mcid_cardiodaily,
+              teste_carimbo_nao_e_texto_do_artigo,
+              teste_ocr_esta_nos_cinco_pontos_que_leem_pdf]
 
     # ═══ 06/Ago — A LISTA FIXA DEIXAVA TRAVA ESCRITA E NUNCA CHAMADA ═══
     # Escrevi `teste_independencia_nao_cruza_o_nove`, rodei a bateria, saiu APROVADO — e a trava

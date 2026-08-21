@@ -72,7 +72,11 @@ def buscar():
         r = requests.get(f"{url}/rest/v1/artigos",
                          params={"select": "doc_id,doi,titulo,revista,data_publicacao,tipo_estudo,doenca_principal,"
                                            "nota_aplicabilidade,nota_trabalho_estatistico,mcid_avaliacao,"
-                                           "caminho_pdf,caminho_audio,caminho_visual_abstract,publicar_no_site",
+                                           "caminho_pdf,caminho_audio,caminho_visual_abstract,publicar_no_site,"
+                                           # 20/Ago — as 4 do tema. Sem elas o painel não tinha como
+                                           # filtrar pelo vocabulário de verdade (ver o comentário
+                                           # do filtro "Tema", logo abaixo).
+                                           "tema,tema_secundario,tema_origem,keywords,mesh_terms",
                                  "order": "nota_aplicabilidade.desc"},
                          headers=cabecalhos(key), timeout=40)
         r.raise_for_status()
@@ -174,11 +178,39 @@ sb.header("Filtros")
 nmin, nmax = sb.slider("NAC (nota)", 1, 10, (8, 10))          # padrão: os que você pede (>8)
 tipos = sorted({a.get("tipo_estudo", "") for a in artigos if a.get("tipo_estudo")})
 revistas = sorted({a.get("revista", "") for a in artigos if a.get("revista")})
-temas = sorted({a.get("doenca_principal", "") for a in artigos if a.get("doenca_principal")})
+
+# ═══ 20/Ago/2026 — O FILTRO "TEMA" LIA O VOCABULÁRIO ERRADO ═══
+#
+# Ele digitou "OBSTETRIC" na busca e voltou ZERO de 520: *"o administrador é inútil como ele
+# está funcionando hoje — ele não programa nada, não acha nada. A lista de temas está podre."*
+#
+# A causa, medida: este filtro lia `doenca_principal`, que é OUTRA lista — 8 rótulos criados
+# por regex de palavra-chave lá no `ficha_site._tema()`:
+#     Insuficiência Cardíaca 213 · Cardiologia Preventiva 149 · Coronária/DAC 106 ·
+#     Valvopatias 54 · Arritmias 50 · Outros 29 · Imagem Cardíaca 9 · Hipertensão 6
+# Não existe Cardio-Obstetrícia ali. Nem Miocardiopatias, nem Cardio-Oncologia, nem UTI.
+# **Duas listas de temas no mesmo sistema** — a LEI 9 na forma mais cara: a máquina de temas
+# de 17/Ago (13 temas, MeSH, tripé) nunca chegou à tela onde ele decide o que enviar.
+#
+# `doenca_principal` continua existindo porque o SITE usa (cardiodaily.ts → TEMAS) e mudá-lo
+# quebraria a vitrine. Mas quem manda na curadoria agora é `tema`.
+temas = sorted({t for a in artigos for t in (a.get("tema"), a.get("tema_secundario"))
+                if t and t != "Não se aplica"})
 f_tipo = sb.multiselect("Tipo", tipos)
 f_rev = sb.multiselect("Revista", revistas)
-f_tema = sb.multiselect("Tema", temas)
-busca = sb.text_input("Busca no nome")
+f_tema = sb.multiselect("Tema", temas,
+                        help="Casa com o tema PRINCIPAL ou o SECUNDÁRIO — um artigo pertence "
+                             "legitimamente a dois, e o assinante de qualquer um dos dois recebe.")
+busca = sb.text_input("Busca (título · tema · palavras-chave · MeSH)",
+                      help="Procura em tudo, não só no título. É o que faz 'obstetric' e "
+                           "'amiloidose' acharem o que o título não diz.")
+
+# ── a fila do que ficou SEM TEMA: visível, não silenciosa (LEI 11) ──
+_sem = [a for a in artigos if not a.get("tema") or a.get("tema") == "Sem tema"]
+if _sem:
+    sb.divider()
+    sb.caption(f"⚠️ {len(_sem)} artigo(s) sem tema")
+    _SO_SEM_TEMA = sb.checkbox("Ver só os SEM TEMA", key="so_sem_tema")
 
 # ═══ 11/Ago/2026 — FILTRO DE DATA DE PUBLICAÇÃO ═══
 #
@@ -244,7 +276,7 @@ if _d_ini and _d_fim and _d_fim < _d_ini:
              f"nenhuma publicação cabe nessa janela.")
 
 
-def passa(a):
+def passa(a, so_sem_tema=False):
     n = a.get("nota_aplicabilidade") or 0
     if not (nmin <= n <= nmax):
         return False
@@ -252,10 +284,34 @@ def passa(a):
         return False
     if f_rev and a.get("revista") not in f_rev:
         return False
-    if f_tema and a.get("doenca_principal") not in f_tema:
+    # ── TEMA: casa com o PRINCIPAL ou o SECUNDÁRIO ──
+    # Um artigo pertence legitimamente a dois temas, e o assinante de QUALQUER um dos dois
+    # recebe. Foi ele quem apontou isso, olhando o septo/QRS na amiloidose: *"mas no caso 40
+    # cabe as duas coisas — isso não é um erro."* Filtrar só pelo principal esconderia do
+    # curador metade do que o assinante vai receber.
+    if f_tema and not ({a.get("tema"), a.get("tema_secundario")} & set(f_tema)):
         return False
-    if busca and busca.lower() not in (a.get("titulo") or "").lower():
+    # ⚠️ 21/Ago — aqui eu tinha escrito `st.session_state.get("_so_sem_tema")`, e isso QUEBROU a
+    # bateria: a trava `teste_o_filtro_de_data...` extrai esta função e a roda ISOLADA, sem o
+    # Streamlit. `NameError: name 'st' is not defined`, e a bateria inteira parou.
+    # A lição é de desenho, não de sintaxe: **a regra de filtro não pode depender do estado da
+    # TELA.** Se ela depende, deixa de ser testável fora dela — e trava que não roda é trava que
+    # dá aprovado por ausência (o defeito de 06/Ago). A preferência vira PARÂMETRO, com padrão.
+    if so_sem_tema and a.get("tema") not in (None, "", "Sem tema"):
         return False
+
+    # ── BUSCA: em TUDO, não só no título ──
+    # Ele digitou "OBSTETRIC" e voltou zero de 520. O título quase nunca diz o assunto pelo
+    # nome que se procura — "Experiences of Racism and Risk of Preeclampsia" é cardio-obstetrícia
+    # e não tem a palavra. Quem sabe são as keywords, os descritores MeSH e o tema.
+    if busca:
+        _b = busca.lower()
+        _onde = " ".join(str(x) for x in (
+            a.get("titulo") or "", a.get("tema") or "", a.get("tema_secundario") or "",
+            a.get("revista") or "",
+            " ".join(a.get("keywords") or []), " ".join(a.get("mesh_terms") or []))).lower()
+        if _b not in _onde:
+            return False
     # Data: comparação de texto AAAA-MM-DD, que ordena igual à data. Artigo SEM data legível
     # nunca é escondido por este filtro — sumir por falta de dado seria punir o artigo pelo
     # defeito do metadado.
@@ -268,7 +324,7 @@ def passa(a):
     return True
 
 
-lista = [a for a in artigos if passa(a)]
+lista = [a for a in artigos if passa(a, _SO_SEM_TEMA)]
 
 # O painel DIZ quando está escondendo coisa, e por quê. Um contador que só mostra o total
 # filtrado deixa a pergunta "cadê o artigo?" sem resposta na própria tela.

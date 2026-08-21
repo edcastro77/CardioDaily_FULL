@@ -1,0 +1,64 @@
+﻿ramo;o_que_e;TEMA_proposto;artigos;seus_descritores;CORRIGIR_tema;observacao
+E01.370.350;Diagnóstico por IMAGEM;Imagem Cardiovascular;195;Echocardiography, Magnetic Resonance Imaging, Cine, Magnetic Resonance Imaging, Tomography, X-Ray Computed, Computed Tomography Angiography;apenas acrescentar ;Echocardiography, cardiac CT, cardiac MRI, PET/SPECT, strain, perfusion, exercise stress test, Holter monitoring, cardiopulmonary exercise test.
+C14.280.647;Myocardial Ischemia;Coronária/DAC;99;Myocardial Infarction, Coronary Artery Disease, Shock, Cardiogenic, Acute Coronary Syndrome, ST Elevation Myocardial Infarction;;
+C14.907.585;Myocardial Ischemia (vascular);Coronária/DAC;99;Myocardial Infarction, Coronary Artery Disease, Shock, Cardiogenic, Acute Coronary Syndrome, ST Elevation Myocardial Infarction, stroke, ;;
+E01.370.370.380;Técnicas cardiovasculares diagnósticas;Imagem Cardiovascular;93;Stroke Volume, Echocardiography, Electrocardiography, Cardiac Catheterization, Exercise Test;;
+C14.280.434;Heart Failure;Insuficiência Cardíaca;70;Heart Failure, Edema, Cardiac;;
+C18;Nutricional/metabólico;Cardiometabólica;60;Obesity, Diabetes Mellitus, Type 2, Vascular Calcification, Hyperlipoproteinemia Type II, Diabetes Mellitus;;
+E04.100;Procedimentos cirúrgicos CARDIOVASCULARES;Intervenção/Hemodinâmica;55;Heart Valve Prosthesis Implantation, Cardiac Surgical Procedures, Transcatheter Aortic Valve Replacement, Heart Transplantation, Angioplasty, Balloon, Coronary;;ifr, ffr, tavr 
+C14;(cardiovascular, geral);Coronária/DAC;53;Cardiovascular Diseases, Arrhythmogenic Right Ventricular Dysplasia, Coronary Vessel Anomalies, Pregnancy Complications, Cardiovascular, Marfan Syndrome;;
+C14.907.489;Hypertension;Hipertensão/HAS;40;Hypertension, Hypertension, Pulmonary, Hypertension, Pregnancy-Induced;;
+C14.280.484;Heart Valve Diseases;Valvulopatias;39;Mitral Valve Insufficiency, Aortic Valve Stenosis, Heart Valve Diseases, Tricuspid Valve Insufficiency, ;RETIREI DOIS TERMOS ;Cardiomyopathy, Hypertrophic
+C14.907.253;Cerebrovascular Disorders;Coronária/DAC;34;Stroke, Ischemic Stroke, Brain Ischemia, Giant Cell Arteritis, Hematoma, Subdural, Chronic;;
+C14.907.137;Arterial Occlusive Diseases;Coronária/DAC;33;Coronary Artery Disease, Atherosclerosis, Fibromuscular Dysplasia;;
+C14.907.355;Embolism and Thrombosis;Arritmias/Anticoagulantes;26;Pulmonary Embolism, Venous Thromboembolism, Thrombosis, Embolism, Venous Thrombosis;;
+C14.280.238;Cardiomyopathies;Miocardiopatias;22;Cardiomyopathies, Cardiomyopathy, Hypertrophic, Cardiomyopathy, Dilated, Arrhythmogenic Right Ventricular Dysplasia, Chagas Cardiomyopathy;;
+C19;Endócrino;Cardiometabólica;22;Diabetes Mellitus, Type 2, Diabetes Mellitus,Diabetes Mellitus, Type 1;CORRECAO ;RETIREI NEOPLASIA DE TIREOIDE E HIPERALDOSTERONISMO (HIPERALDO ESTA EM HAS E NEO TIREOIDE EM CARDIO ONCO)
+C14.280.067;Arrhythmias, Cardiac;Arritmias/Anticoagulantes;20;Atrial Fibrillation, Arrhythmias, Cardiac, Ventricular Premature Complexes, Bundle-Branch Block, Tachycardia, Ventricular;;
+C16;Congênito/hereditário/neonatal;Aorta/Congênitas/Genética;13;Cardiomyopathy, Dilated, Arrhythmogenic Right Ventricular Dysplasia, Hyperlipoproteinemia Type II, Amyloid Neuropathies, Familial, Coronary Vessel Anomalies;;
+C14.280.383;Heart Arrest;UTI Cardiológica;12;Death, Sudden, Cardiac, Out-of-Hospital Cardiac Arrest, Heart Arrest;;
+C14.280.945;Ventricular Dysfunction;Miocardiopatias;12;Ventricular Dysfunction, Right, Ventricular Dysfunction, Left, Takotsubo Cardiomyopathy;;
+E02.148;Terapias cardiovasculares;Intervenção/Hemodinâmica;12;Cardiac Catheterization, Angioplasty, Balloon, Coronary, Angioplasty, Balloon;;
+C14.280.955;Ventricular Outflow Obstruction;Miocardiopatias;10;, Ventricular Outflow Obstruction, Left, Ventricular Outflow Obstruction;CORRECAO ;RETIREI Aortic Valve Stenosis - QUE SERA EM VALVULOPATIA 
+C14.907.940;Vasculitis;Miocardiopatias;7;Takayasu Arteritis, Giant Cell Arteritis, Aortitis;;
+C13.703;Complicações da GRAVIDEZ;Cardio-Obstetrícia;6;Pre-Eclampsia, Prenatal Exposure Delayed Effects, Diabetes, Gestational, Pregnancy Complications, Cardiovascular, Hypertension, Pregnancy-Induced;;
+C14.280.195;Cardiomegaly;Miocardiopatias;5;Cardiomyopathy, Dilated, Hypertrophy, Left Ventricular;;
+C14.280;(todas as doenças do CORAÇÃO);Insuficiência Cardíaca;4;Heart Diseases;;
+C14.280.123;Cardiac Conduction System Disease;Arritmias/Anticoagulantes;4;Ventricular Premature Complexes, Tachycardia, Ventricular, Bundle-Branch Block;;
+C14.280.400;Heart Defects, Congenital;Aorta/Congênitas/Genética;4;Arrhythmogenic Right Ventricular Dysplasia, Coronary Vessel Anomalies, Marfan Syndrome;;
+C14.907.184;Arteritis;Miocardiopatias;4;Takayasu Arteritis, Giant Cell Arteritis;;
+C18.452.845;Amiloidose e afins;Miocardiopatias;4;Amyloidosis, Amyloid Neuropathies, Familial;;
+C14.907.109;Aortic Diseases;Aorta/Congênitas/Genética;3;Takayasu Arteritis, Aortitis;;
+C14.280.459;Heart Neoplasms;Cardio-Oncologia;1;Heart Neoplasms;;
+C14.280.778;Post-Cardiac Arrest Syndrome;UTI Cardiológica;1;Post-Cardiac Arrest Syndrome;;
+C14.907.514;Hypotension;UTI Cardiológica;1;Hypotension, Orthostatic;;
+C14.907.725;Reperfusion Injury;Intervenção/Hemodinâmica;1;Post-Cardiac Arrest Syndrome;;
+C14.280.104;Carcinoid Heart Disease;Miocardiopatias;0;;;
+C14.280.142;Cardiac Output, High;Insuficiência Cardíaca;0;;;
+C14.280.148;Cardiac Output, Low;Insuficiência Cardíaca;0;;;
+C14.280.155;Cardiac Tamponade;Miocardiopatias;0;;;
+C14.280.260;Cardiotoxicity;Cardio-Oncologia;0;;;
+C14.280.282;Endocarditis;Valvulopatias;0;;;
+C14.280.358;Heart Aneurysm;Coronária/DAC;0;;;
+C14.280.470;Heart Rupture;Coronária/DAC;0;;;
+C14.280.671;Myocardial Stunning;Coronária/DAC;0;;;
+C14.280.695;Pericardial Effusion;Miocardiopatias;0;;;
+C14.280.720;Pericarditis;Miocardiopatias;0;;;
+C14.280.793;Postpericardiotomy Syndrome;Intervenção/Hemodinâmica;0;correcao - miocardiopatia ;;
+C14.280.832;Pulmonary Heart Disease;Miocardiopatias;0;;;
+C14.280.874;Rheumatic Heart Disease;Miocardiopatias;0;doenca reumatica - especificamente febre reumatica tem que ficar em valvulopatias ;;
+C14.907;(todas as doenças VASCULARES);Coronária/DAC;0;;;
+C14.907.055;Aneurysm;Aorta/Congênitas/Genética;0;;;
+C14.907.065;Aneurysm, False;Aorta/Congênitas/Genética;0;;;
+C14.907.150;Arteriovenous Malformations;Aorta/Congênitas/Genética;0;;;
+C14.907.218;Capillary Leak Syndrome;UTI Cardiológica;0;;;
+C14.907.320;Diabetic Angiopathies;Cardiometabólica;0;;;
+C14.907.454;Hemostatic Disorders;Arritmias/Anticoagulantes;0;;;
+C14.907.613;Penetrating Atherosclerotic Ulcer;Coronária/DAC;0;correcao - Aorta/Congênitas/Genética;;
+C14.907.617;Peripheral Vascular Diseases;Coronária/DAC;0;;;
+C14.907.653;Prehypertension;Hipertensão/HAS;0;;;
+C14.907.690;Pulmonary Veno-Occlusive Disease;Miocardiopatias;0;;;
+C14.907.780;Scimitar Syndrome;Aorta/Congênitas/Genética;0;;;
+C14.907.798;Stenosis, Pulmonary Vein;Miocardiopatias;0;correcao - valvulopatias;;
+C14.907.936;Vascular Neoplasms;Cardio-Oncologia;0;;;
+C14.907.946;Vasoplegia;UTI Cardiológica;0;correcao - vasoplegia - se for artigo de sincope e disautonomia - arrimia e anticoagulante ;;

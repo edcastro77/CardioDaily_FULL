@@ -14,6 +14,12 @@ numpy>=1.26.0
 openai>=1.0.0
 pandas>=2.0.0
 PyMuPDF>=1.23.0
+# ── OCR de PDF que é IMAGEM (19/Ago/2026, src/ocr_pdf.py) ──
+# Os artigos históricos (V-HeFT, NEJM 1986) são scan do arquivo da revista: não têm camada de
+# texto, só o carimbo de download. ⚠️ pytesseract é só a PONTE — o motor é o binário Tesseract,
+# que NÃO vem pelo pip:   brew install tesseract
+pytesseract>=0.3.10
+Pillow>=10.0.0
 python-dotenv>=1.0.0
 requests
 seaborn>=0.13.0

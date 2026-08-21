@@ -1,0 +1,38 @@
+{
+ "_leia": "CAMADA 2 — o descritor manda mais que o ramo. Cada linha é régua clínica do Dr. Eduardo, não estrutura da NLM. Ditadas em 21/Ago sobre o CSV da árvore.",
+
+ "Cardiomyopathy, Hypertrophic": "Miocardiopatias",
+ "Cardiomyopathy, Dilated": "Miocardiopatias",
+ "Cardiomyopathy, Restrictive": "Miocardiopatias",
+ "Aortic Valve Stenosis": "Valvulopatias",
+ "Aortic Valve Insufficiency": "Valvulopatias",
+
+ "Hyperaldosteronism": "Hipertensão/HAS",
+ "Thyroid Neoplasms": "Cardio-Oncologia",
+
+ "Echocardiography": "Imagem Cardiovascular",
+ "Echocardiography, Doppler": "Imagem Cardiovascular",
+ "Echocardiography, Stress": "Imagem Cardiovascular",
+ "Echocardiography, Three-Dimensional": "Imagem Cardiovascular",
+ "Echocardiography, Transesophageal": "Imagem Cardiovascular",
+ "Magnetic Resonance Imaging, Cine": "Imagem Cardiovascular",
+ "Magnetic Resonance Imaging": "Imagem Cardiovascular",
+ "Tomography, X-Ray Computed": "Imagem Cardiovascular",
+ "Computed Tomography Angiography": "Imagem Cardiovascular",
+ "Positron-Emission Tomography": "Imagem Cardiovascular",
+ "Tomography, Emission-Computed, Single-Photon": "Imagem Cardiovascular",
+ "Myocardial Perfusion Imaging": "Imagem Cardiovascular",
+ "Electrocardiography, Ambulatory": "Imagem Cardiovascular",
+ "Exercise Test": "Imagem Cardiovascular",
+
+ "Fractional Flow Reserve, Myocardial": "Intervenção/Hemodinâmica",
+ "Transcatheter Aortic Valve Replacement": "Intervenção/Hemodinâmica",
+ "Cardiac Catheterization": "Intervenção/Hemodinâmica",
+ "Percutaneous Coronary Intervention": "Intervenção/Hemodinâmica",
+ "Ultrasonography, Interventional": "Intervenção/Hemodinâmica",
+
+ "Hypertension, Pulmonary": "Miocardiopatias",
+ "Pulmonary Heart Disease": "Miocardiopatias",
+ "Hypertension, Pregnancy-Induced": "Cardio-Obstetrícia",
+ "Pre-Eclampsia": "Cardio-Obstetrícia"
+}

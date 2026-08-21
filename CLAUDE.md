@@ -662,3 +662,38 @@ outputs/STAGING/{nome_do_artigo}/
 
 **NÃO existe mais:** mapa mental (`mindmap.*`), `outputs/corpus/`, CLI `./cardiodaily`, "infográfico rico
 estilo NotebookLM". O único artefato visual é o **Visual Abstract de 8 seções**.
+
+### LEI 12: NADA DESTRUTIVO SEM CONFERIR ANTES — E O TRABALHO DELE NÃO É MEU PARA APAGAR (20/Ago/2026)
+
+**Palavras do Dr. Eduardo:** *"já não pedi para você revisar antes de fazer as coisas? RÁPIDO
+SIGNIFICA ERRADO!"*
+
+**O que aconteceu.** Ele marcou 40 linhas do gabarito cego de tema — trabalho manual, dele, que
+só ele pode fazer. Mandou o arquivo. O upload chegou com **0 bytes** (ainda não tinha terminado
+de subir). Eu copiei esse arquivo por cima do original em `saidas/` **sem olhar o tamanho**, num
+`cp` de uma linha. As marcações se perderam. `saidas/` não está no git.
+
+Dois erros, e o segundo é pior:
+1. **Agi rápido em cima de um arquivo sem conferir se ele tinha conteúdo.** É a mesma família
+   que este documento inteiro persegue — ausência lida como dado — só que desta vez a ausência
+   não mentiu num número: **destruiu.**
+2. **Declarei o estrago antes de investigar.** Disse "apaguei seu trabalho" e mandei ele
+   procurar em Downloads. Só DEPOIS descobri que o upload tinha terminado e que o Excel estava
+   com o arquivo aberto (havia um `~$` no disco). Diagnóstico apressado em cima de dano
+   apressado. A LEI 7 já proíbe a segunda metade; a primeira faltava.
+
+**A REGRA — antes de QUALQUER operação que sobrescreve, move ou apaga:**
+
+| # | confere | por quê |
+|---|---|---|
+| 1 | **o arquivo de origem tem tamanho plausível?** | 0 byte, ou muito menor que o esperado, é upload incompleto — não é dado |
+| 2 | **o destino existe e é diferente da origem?** | sobrescrever com cópia do próprio destino é perda pura |
+| 3 | **o que vai ser perdido é reconstruível por MIM?** | se só o Dr. Eduardo consegue refazer (marcação a mão, curadoria, decisão), **NÃO ENCOSTA** — pede |
+| 4 | **existe backup?** | `saidas/`, `outputs/` e `ARTIGOS/` **não estão no git**. Ali não há desfazer |
+
+**Corolário duro:** trabalho MANUAL dele — gabarito marcado, curadoria da Chave 3, PDF que ele
+organizou na mão — vale mais que qualquer arquivo que o sistema gera, porque o sistema regera e
+ele não. Sobre esses arquivos o Claude **só lê**. Quem grava é ele.
+
+**E a pressa não é desculpa: é a causa.** Não existe motivo para um `cp` ser feito antes de um
+`ls -la`. O segundo custa zero.

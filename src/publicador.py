@@ -104,6 +104,14 @@ SCHEMA_ARTIGOS = {
     "gancho_abertura": "text", "publicar_no_site": "boolean", "nota_trabalho_estatistico": "integer",
     "mcid_avaliacao": "text", "muda_conduta": "text",
     "motor": "text", "tipo_documento": "text", "veredito_dominios": "jsonb",
+    # ═══ 20/Ago — AS 4 COLUNAS DO TEMA ═══
+    # Elas existem na tabela desde 17/Ago e NÃO estavam aqui. Este dicionário é a "fonte da
+    # verdade para o preflight": coluna que não está nele é coluna que o portão não sabe que
+    # existe — e, portanto, nunca confere e nunca reclama. Resultado medido em 20/Ago: 117 de
+    # 616 linhas com `tema` NULL, 78 delas só no dia 19. O portão não falhou; ele foi mantido
+    # cego por mim, enquanto um script de fora (`marcar_temas.py`) preenchia por PATCH direto,
+    # violando a LEI 5. Enquanto o script rodava, o banco parecia certo.
+    "tema": "text", "tema_secundario": "text", "tema_origem": "text", "mesh_terms": "ARRAY",
 }
 
 

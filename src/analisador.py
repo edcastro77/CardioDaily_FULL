@@ -355,17 +355,70 @@ def processar(pdf, staging):
     #
     # Sem carimbo (`_versoes.json` ausente) = staging anterior a 04/Ago = feito por prompt
     # desconhecido = APAGA. Custa uma re-análise, uma vez só, e é de propósito.
+    # ═══════════ 19/Ago/2026 — DOIS GATILHOS, PORQUE SÃO DOIS ESTRAGOS DIFERENTES ═══════════
+    #
+    # O QUE ACONTECEU HOJE. Ajustei a régua quatro vezes (a régua do nulo conclusivo, o piso de
+    # independência, a F8, o open-label). Cada ajuste muda o hash do `notas_prototipo.py` — e a
+    # terra arrasada apagava o pacote INTEIRO, **incluindo os FATOS**, obrigando a re-extrair.
+    # Na tela dele, 20 vezes seguidas:
+    #     🔥 TERRA ARRASADA — 1 prompt(s) mudaram
+    #        · motor: notas_prototipo.py@eed35fef → @22944c66
+    # Com os 279 pacotes em disco, isso significa **uma rodada completa paga a cada vez que a
+    # gente mexe numa regra**. Ele não tem dinheiro para isso, e o pior é que era à toa.
+    #
+    # POR QUE ERA À TOA: **os FATOS não dependem do motor.** O extrator lê o PDF e escreve o que
+    # o artigo diz; o motor pega esses fatos e calcula a nota, do zero, deterministicamente, toda
+    # vez. Mudar o motor não torna um fato falso — só torna a NOTA diferente. Quem fica velho é
+    # a perícia, o ACRI e o áudio, que citam a nota em PROSA ("nota 5, não muda conduta").
+    #
+    # A ORDEM DE 04/Ago CONTINUA VALENDO ONDE ELA FOI DADA. Ele disse *"se não tem certeza que
+    # foi com ESTE prompt, apaga TUDO"* falando do PROMPT DE EXTRAÇÃO — e ali continua apagando
+    # tudo, porque ali o fato em si pode ter mudado de significado. O erro era eu ter aplicado a
+    # mesma pena a um carimbo que não toca em fato nenhum.
+    #
+    # | carimbo mudou            | o que vai embora                                  |
+    # |--------------------------|---------------------------------------------------|
+    # | extração / extrator      | TUDO, inclusive os fatos (a ordem de 04/Ago)      |
+    # | **motor**                | só o que CITA a nota; os fatos ficam              |
+    # | redator · acri · audio   | a peça correspondente (isso já era assim, no _peca)|
+    _CARIMBOS_DE_EXTRACAO = ("extracao", "extrator", "extrator_meta")
+    _SO_A_NOTA = ("_ACRI.txt", "_analise.md", "_analise.pdf", "_visual.png", "_audio.mp3",
+                  "_roteiro_audio.txt", "_CANONICO.md", "_gancho.txt", "_REVISAR_publicacao.txt")
+
     _vnow = versoes_atuais(pdf)
     _vold = versoes_gravadas(dst)
     _tem_coisa = bool(glob.glob(os.path.join(dst, "*")))
     if _tem_coisa and _vold != _vnow:
         _difs = ([f"{k}: {_vold.get(k,'—')} → {v}" for k, v in _vnow.items() if _vold.get(k) != v]
                  if _vold else ["sem carimbo: staging anterior a 04/Ago, prompt desconhecido"])
-        print(f"       🔥 TERRA ARRASADA — {len(_difs)} prompt(s) mudaram; apagando o pacote inteiro:")
-        for d in _difs[:5]:
-            print(f"          · {d}")
-        for _p in glob.glob(os.path.join(dst, "*")):
-            shutil.rmtree(_p, ignore_errors=True) if os.path.isdir(_p) else os.remove(_p)
+        _mudou = ({k for k, v in _vnow.items() if _vold.get(k) != v} if _vold else set(_vnow))
+        # sem carimbo nenhum = origem desconhecida = arrasa (regra de 04/Ago, intacta)
+        _arrasa = (not _vold) or bool(_mudou & set(_CARIMBOS_DE_EXTRACAO))
+
+        if _arrasa:
+            print(f"       🔥 TERRA ARRASADA — {len(_difs)} carimbo(s) mudaram; "
+                  f"apagando o pacote inteiro (a extração mudou):")
+            for d in _difs[:5]:
+                print(f"          · {d}")
+            for _p in glob.glob(os.path.join(dst, "*")):
+                shutil.rmtree(_p, ignore_errors=True) if os.path.isdir(_p) else os.remove(_p)
+        else:
+            print(f"       ♻️  A RÉGUA MUDOU, os FATOS não — apagando só o que cita a nota "
+                  f"(a extração NÃO é refeita):")
+            for d in _difs[:5]:
+                print(f"          · {d}")
+            _n = 0
+            for _suf in _SO_A_NOTA:
+                _f = os.path.join(dst, base + _suf)
+                if os.path.exists(_f):
+                    os.remove(_f); _n += 1
+            for _extra in ("_OK", "assets"):
+                _p = os.path.join(dst, _extra)
+                if os.path.isdir(_p):
+                    shutil.rmtree(_p, ignore_errors=True); _n += 1
+                elif os.path.exists(_p):
+                    os.remove(_p); _n += 1
+            print(f"          {_n} arquivo(s) removido(s) · fatos.json PRESERVADO")
 
     # FATOS cacheados no staging → retoma a extração (a etapa de maior input). Só extrai se não houver cache.
     fatos_cache = os.path.join(dst, base + "_fatos.json")
@@ -439,7 +492,20 @@ def processar(pdf, staging):
     # vereditos inventados (6/10 e 9/10): 86% dos parágrafos mudaram, e o MESMO fato foi usado para
     # justificar as duas notas opostas. O número nu era o volante da perícia inteira.
     ver = N.veredito_completo(r)
-    texto = "".join(p.get_text() for p in fitz.open(pdf))
+    # 19/Ago — MESMA PORTA QUE O CLASSIFICADOR, e por um motivo de dinheiro: aqui é onde se
+    # PAGA. Um PDF que é imagem (scan do arquivo histórico das revistas) chega com o carimbo
+    # de download e mais nada — e o extrator produziria FATOS a partir de "Downloaded from
+    # nejm.org", com nota, perícia, áudio e tudo. Análise completa em cima de carimbo.
+    # `ocr_pdf` detecta e roda o OCR (custo zero). Ver o caso V-HeFT I no módulo.
+    import ocr_pdf as _OCR
+    texto, _origem_txt, _aviso_txt = _OCR.extrair(pdf)
+    if _origem_txt == "ocr":
+        print(f"       🔍 PDF era imagem — OCR aplicado ({len(texto)} caracteres)")
+    elif _origem_txt == "pdf_ruim":
+        # 19/Ago — esta linha virou INALCANÇÁVEL de propósito: a extração de FATOS roda ANTES
+        # e já levanta `TextoIlegivel`, para não pagar LLM em cima de carimbo. Fica aqui como
+        # rede: se um dia alguém chamar a perícia sem passar pelos FATOS, para no mesmo lugar.
+        raise _OCR.TextoIlegivel(_aviso_txt)
     texto, aviso_corte = texto_para_pericia(texto)
     if aviso_corte:
         print(f"       {aviso_corte}")
@@ -632,6 +698,8 @@ if __name__ == "__main__":
             pdfs = pdfs[:a.max]
         print(f"ANALISADOR — {len(pdfs)} artigo(s)  →  {staging}")
         print("(GOLDEN GATE: revise o staging antes de publicar)\n")
+        import ocr_pdf as _OCR_MOD
+        ilegiveis = []
         for pdf in pdfs:
             base = os.path.splitext(os.path.basename(pdf))[0]
             if os.path.exists(os.path.join(staging, base, "_OK")):   # RETOMÁVEL: pula os já concluídos
@@ -640,5 +708,17 @@ if __name__ == "__main__":
             try:
                 base, nota, mc, ents, sobe = processar(pdf, staging)
                 print(f"  {base[:46]:46} nota {nota:>2} · {'SOBE' if sobe else 'FICA'} · {' + '.join(ents)}")
+            except _OCR_MOD.TextoIlegivel as e:
+                # NÃO é erro do programa — é a porta funcionando. Merece linha própria, senão
+                # some no meio dos ERRO: e o Dr. Eduardo acha que o lote quebrou.
+                ilegiveis.append(os.path.basename(pdf))
+                print(f"  ⏭️  {os.path.basename(pdf)[:46]:46} NÃO ANALISADO (nada gasto)")
+                print(f"      {e}")
             except Exception as e:
                 print(f"  ⚠️  {os.path.basename(pdf)[:46]:46} ERRO: {type(e).__name__}: {e}")
+        if ilegiveis:
+            print(f"\n  ⏭️  {len(ilegiveis)} artigo(s) ilegível(is) — ficaram na pasta, sem custo:")
+            for n in ilegiveis:
+                print(f"        • {n}")
+            print("      São PDFs que são imagem e o OCR não deu conta. Verifique o Tesseract")
+            print("      (brew install tesseract) ou substitua o PDF por uma versão com texto.")
