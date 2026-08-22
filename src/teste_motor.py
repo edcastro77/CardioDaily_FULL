@@ -1658,6 +1658,8 @@ def teste_ficha_sem_contradicao():
                 "meta": "revisao_sistematica_meta_analise",
                 "revisao_narrativa": "revisao_narrativa",
                 "original": "artigo_original"}
+    # AAAA-MM só vale com ano plausível (19xx/20xx) e mês 01-12 — senão é ISSN.
+    _re_data = __import__('re').compile(r'^((?:19|20)\d{2}-(?:0[1-9]|1[0-2]))-')
     mau_tipo, mau_data, mau_gancho, n, vazias = [], [], [], 0, []
     for p in pastas:
         # ═══ 06/Ago — PASTA VAZIA NÃO É FICHA INCOERENTE, É LIXO DE INTERRUPÇÃO ═══
@@ -1679,9 +1681,14 @@ def teste_ficha_sem_contradicao():
             mau_tipo.append(f"{base[:28]}: {td}/{te}")
         # o mês do NOME do arquivo tem de sobreviver até a data_publicacao
         dt = str(fi.get("data_publicacao") or "")
-        if len(base) >= 7 and base[4] == "-" and base[:4].isdigit() and base[5:7].isdigit():
-            if dt[:7] and dt[:7] != base[:7]:
-                mau_data.append(f"{base[:28]}: nome {base[:7]} × data {dt[:7]}")
+        # ⚠️ 21/Ago — ESTA TRAVA LIA ISSN COMO DATA. `0066-782X-abc-122-09-...` é o ISSN dos
+        # Arquivos Brasileiros de Cardiologia; ela via "0066" como ano e "78" como mês, e
+        # reprovava 3 artigos legítimos. O padrão que o classificador monta é `AAAA-MM-Revista`,
+        # com ano plausível e mês de 01 a 12 — e é só esse que se pode comparar.
+        # Falso positivo em trava é caro de um jeito específico: ensina a ignorar o vermelho.
+        _m = _re_data.match(base)
+        if _m and dt[:7] and dt[:7] != _m.group(1):
+            mau_data.append(f"{base[:28]}: nome {_m.group(1)} × data {dt[:7]}")
         if (fi.get("gancho_lista") or "") and fi.get("gancho_lista") == fi.get("contexto_tema"):
             mau_gancho.append(base[:28])
 
@@ -2898,7 +2905,8 @@ def teste_nenhum_modulo_usado_sem_import():
 
     raizes = [os.path.dirname(os.path.abspath(__file__)),
               os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")]
-    embutidos = set(dir(builtins)) | {"__file__", "__name__", "__doc__", "self", "cls"}
+    # os dunder do módulo não estão em `builtins` mas existem sempre
+    embutidos = set(dir(builtins)) | {'__file__', '__name__', '__doc__', '__package__'} | {"__file__", "__name__", "__doc__", "self", "cls"}
     achados = []
 
     for raiz in raizes:
@@ -3820,6 +3828,132 @@ def teste_f8_so_e_fatal_se_a_troca_foi_silenciosa():
     return "F8 pega o switching silencioso, não a transparência"
 
 
+def teste_nenhum_nome_e_usado_antes_de_existir():
+    """21/Ago — 32 artigos falharam na publicação por um nome no escopo errado.
+
+        NameError: name 'NAO_SE_APLICA' is not defined      × 32, na hora de publicar
+
+    `NAO_SE_APLICA` era variável LOCAL do `montar()`. Quando escrevi `_decidir_tema` — outra
+    função, acima dela — usei o nome achando que era constante de módulo. **Compilou.** O
+    `py_compile` não olha escopo, meu teste de fumaça pegou um ramo que retorna antes, e a
+    bateria roda em modo offline, que também retorna antes. Passou por três checagens e quebrou
+    na quarta, que era a produção dele.
+
+    ═══ É A TERCEIRA VEZ, E SEMPRE A MESMA FORMA ═══
+        10/Ago  `_VOO` usado antes do import — custou 10 artigos PAGOS
+        11/Ago  `re as _re` importado na linha 256, usado na 173 (administrador)
+        21/Ago  `NAO_SE_APLICA` local usada por outra função — 32 artigos
+    Nome definido depois de onde é usado compila sempre e quebra sempre — e só na hora que o
+    caminho é percorrido de verdade, que costuma ser em produção, com dinheiro na mesa.
+
+    Esta trava varre por `ast` os módulos da corrente e reprova QUALQUER nome global usado numa
+    função que não exista no módulo. Não depende de o caminho ser exercitado.
+    """
+    import ast
+    import builtins
+    import os as _os
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    MODULOS = ("ficha_site.py", "contrato.py", "publicador.py", "analisador.py",
+               "analise.py", "notas_prototipo.py", "tema_mesh.py", "tema_llm.py",
+               "administrador.py", "classificador_ouro.py", "ocr_pdf.py",
+               "card_acri.py")   # 22/Ago: 16 cards falharam e ele não estava na lista
+    # os dunder do módulo não estão em `builtins` mas existem sempre
+    embutidos = set(dir(builtins)) | {'__file__', '__name__', '__doc__', '__package__'}
+
+    for arq in MODULOS:
+        caminho = _os.path.join(aqui, arq)
+        if not _os.path.exists(caminho):
+            continue
+        arvore = ast.parse(open(caminho, encoding="utf-8").read())
+
+        # tudo que o MÓDULO define no topo: funções, classes, atribuições, imports
+        no_topo = set()
+        for n in arvore.body:
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                no_topo.add(n.name)
+            elif isinstance(n, (ast.Import, ast.ImportFrom)):
+                for a in n.names:
+                    no_topo.add((a.asname or a.name).split(".")[0])
+            elif isinstance(n, ast.Assign):
+                # ⚠️ `for t in n.targets: if isinstance(t, ast.Name)` NÃO pega
+                # `MIN_FRASE, MAX_FRASE = 60, 150` — o alvo ali é um Tuple, não um Name.
+                # Achado em 22/Ago no card_acri.py: a trava acusaria duas constantes que
+                # existem. `ast.walk` no alvo resolve tupla, lista e aninhamento.
+                for t in n.targets:
+                    for sub in ast.walk(t):
+                        if isinstance(sub, ast.Name):
+                            no_topo.add(sub.id)
+            elif isinstance(n, (ast.If, ast.Try, ast.For, ast.While, ast.With)):
+                for sub in ast.walk(n):        # nomes criados dentro de if/try do topo valem
+                    if isinstance(sub, ast.Assign):
+                        for t in sub.targets:
+                            for s2 in ast.walk(t):
+                                if isinstance(s2, ast.Name):
+                                    no_topo.add(s2.id)
+                    elif isinstance(sub, (ast.Import, ast.ImportFrom)):
+                        for a in sub.names:
+                            no_topo.add((a.asname or a.name).split(".")[0])
+                    elif isinstance(sub, (ast.FunctionDef, ast.ClassDef)):
+                        no_topo.add(sub.name)
+
+        for fn in [n for n in arvore.body
+                   if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+            # o que a função cria localmente: parâmetros, atribuições, imports, laços, with, except
+            # ⚠️ OS PARÂMETROS DAS FUNÇÕES ANINHADAS CONTAM. A primeira versão desta trava só
+            # pegava os args da função de fora, e `ast.walk` desce nas internas — então `pat`,
+            # `de_onde`, `valor` e `s` (parâmetros de closures) apareciam como "nome que não
+            # existe". 22 falsos positivos, e eu quase reportei defeito onde não havia.
+            # Trava que grita sem motivo é pior que trava que falta: ensina a ignorar o vermelho.
+            local = set()
+            for f2 in [fn] + [x for x in ast.walk(fn)
+                              if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                                ast.Lambda)) and x is not fn]:
+                a2 = f2.args
+                local.update(a.arg for a in a2.args + a2.kwonlyargs + a2.posonlyargs)
+                if a2.vararg:
+                    local.add(a2.vararg.arg)
+                if a2.kwarg:
+                    local.add(a2.kwarg.arg)
+            usados = []
+            for n in ast.walk(fn):
+                if isinstance(n, ast.Assign):
+                    for t in n.targets:
+                        for sub in ast.walk(t):
+                            if isinstance(sub, ast.Name):
+                                local.add(sub.id)
+                elif isinstance(n, (ast.AugAssign, ast.AnnAssign, ast.NamedExpr)):
+                    if isinstance(n.target, ast.Name):
+                        local.add(n.target.id)
+                elif isinstance(n, (ast.Import, ast.ImportFrom)):
+                    for a in n.names:
+                        local.add((a.asname or a.name).split(".")[0])
+                elif isinstance(n, (ast.For, ast.AsyncFor, ast.comprehension)):
+                    alvo = n.target
+                    for sub in ast.walk(alvo):
+                        if isinstance(sub, ast.Name):
+                            local.add(sub.id)
+                elif isinstance(n, ast.ExceptHandler) and n.name:
+                    local.add(n.name)
+                elif isinstance(n, ast.withitem) and n.optional_vars is not None:
+                    for sub in ast.walk(n.optional_vars):
+                        if isinstance(sub, ast.Name):
+                            local.add(sub.id)
+                elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    local.add(n.name)
+                elif isinstance(n, ast.Global):
+                    local.update(n.names)
+                elif isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
+                    usados.append((n.id, n.lineno))
+
+            for nome, linha in usados:
+                if nome in local or nome in no_topo or nome in embutidos:
+                    continue
+                checa(f"{arq}:{linha} · {fn.name}() usa '{nome}', que não existe no módulo",
+                      False,
+                      "nome definido depois de onde é usado — compila e quebra em produção")
+    return "nenhum nome usado antes de existir (a família do _VOO, do _re e do NAO_SE_APLICA)"
+
+
 def teste_sem_tema_nao_sobe_e_ninguem_mais_escreve():
     """20/Ago — 117 de 616 linhas com `tema` NULL, e o portão não sabia que a coluna existia.
 
@@ -3860,8 +3994,12 @@ def teste_sem_tema_nao_sobe_e_ninguem_mais_escreve():
 
     # ── 2) SEM TEMA NÃO SOBE, e a diretriz não é exceção ──
     import contrato as C
+    # ⚠️ 22/Ago — este fixture nasceu com `"mesh_terms": []`, e era a trava CONSAGRANDO o buraco:
+    # enquanto ela dizia que `[]` era uma ficha legítima, o contrato tinha licença para deixar
+    # 208 de 704 linhas subirem vazias. Fixture é regra escrita em outro lugar (LEI 9).
     base = {"doc_id": "x", "doi": "10.1/x", "titulo": "T", "revista": "R",
-            "tema_secundario": "Não se aplica", "mesh_terms": []}
+            "tema_secundario": "Não se aplica",
+            "mesh_terms": ["Heart Failure"], "mesh_origem": "pubmed"}
     for tipo in ("original", "meta", "diretriz", "revisao_narrativa"):
         f = dict(base, tipo_documento=tipo, tema=_T.SEM_TEMA, tema_origem="fora_do_escopo")
         v = C.validar(f, checar_arquivos=False)
@@ -4079,6 +4217,93 @@ def teste_ocr_esta_nos_cinco_pontos_que_leem_pdf():
         checa(f"OCR ligado em {arq}", importa and chama,
               f"importa={importa} chama_extrair={chama}")
     return "os 5 pontos que abrem PDF passam pelo detector de carimbo"
+
+def teste_mesh_nunca_sobe_vazio():
+    """`mesh_terms` vazio deixou de ser resposta — e a queda prevista deixou de ser falha.
+
+    ═══ 22/Ago/2026 — OS DOIS DEFEITOS DO DIA, um de cada lado da mesma moeda ═══
+
+    O Dr. Eduardo rodou a Chave 18 por curiosidade. A tela dizia `CLASSIFICADOR · 70 falhas`.
+    Medido: **70 de 70 chegaram em C5_MOVEU.** Não havia falha nenhuma — eram as camadas
+    `C2_DOI` e `C3_PUBMED` calando e a cascata caindo para o LLM, como desenhada.
+
+    Puxando esse fio, o buraco de verdade apareceu do outro lado: **208 de 704 linhas com
+    `mesh_terms` vazio.** E o contrato AUTORIZAVA, por escrito — a linha dizia que `[]`
+    significava "procurei e não achou" e era legítimo. As palavras dele: *"não aceito — null e
+    [] na prática são a mesma coisa para mim"*.
+
+    Não é preciosismo de coluna: `mesh_terms` é por onde o **Pesquisador** acha material. Vazio,
+    o artigo existe no banco e é invisível para quem procura.
+
+    E a medida que definiu o conserto — 25 dos 169 com DOI real, perguntando ao PubMed naquele
+    instante: **0/25 já tinham MeSH.** Esperar a NLM não era opção; daí o `mesh_llm`, que propõe
+    e AMARRA ao vocabulário oficial, descartando o que não resolve.
+
+    Os dois defeitos são o mesmo defeito em espelho: **um chamava de falha o que estava certo,
+    o outro chamava de certo o que era falha.** Os dois nascem de uma palavra que serve para
+    duas coisas diferentes.
+    """
+    import ast as _ast
+    import os as _os
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    import contrato as C
+
+    ok = {"doc_id": "x", "doi": "10.1/x", "titulo": "Titulo bom", "revista": "R",
+          "tema": "Arritmias/Anticoagulantes", "tema_secundario": "Não se aplica",
+          "tema_origem": "llm", "tipo_documento": "original",
+          "mesh_terms": ["Heart Failure", "Humans"], "mesh_origem": "pubmed"}
+
+    def furou(f, palavra):
+        return any(palavra in str(x) for x in C.validar(f, checar_arquivos=False))
+
+    # ── 1) o vazio NÃO sobe — nem lista vazia, nem NULL, nem em diretriz ──
+    for tipo in ("original", "meta", "diretriz", "revisao_narrativa"):
+        checa(f"mesh_terms [] RETÉM ({tipo})",
+              furou(dict(ok, tipo_documento=tipo, mesh_terms=[]), "mesh_terms"),
+              "o contrato voltou a aceitar coluna vazia — foi assim que 208 linhas subiram")
+        checa(f"mesh_terms NULL RETÉM ({tipo})",
+              furou(dict(ok, tipo_documento=tipo, mesh_terms=None), "mesh_terms"), "")
+    # a diretriz não tem porta de NOTA (LEI 10) — isso nunca foi licença para subir sem conteúdo
+    checa("a exceção da diretriz não vale para buraco de coluna",
+          furou(dict(ok, tipo_documento="diretriz", mesh_terms=[]), "mesh_terms"),
+          "a LEI 10 fala da NOTA; buraco de coluna é outra conversa")
+
+    # ── 2) a PROCEDÊNCIA é obrigatória, e 'falha' não é procedência válida ──
+    checa("mesh_origem vazia RETÉM", furou(dict(ok, mesh_origem=""), "mesh_origem"), "")
+    checa("mesh_origem 'falha' RETÉM", furou(dict(ok, mesh_origem="falha"), "mesh_origem"),
+          "'falha' é defeito de programa — nunca sobe como se fosse origem")
+    checa("ficha completa PASSA", not furou(ok, "mesh"), str(C.validar(ok, checar_arquivos=False)))
+
+    # ── 3) a AMARRA existe e descarta o que não é descritor oficial ──
+    ml = open(_os.path.join(aqui, "mesh_llm.py"), encoding="utf-8").read()
+    arv = _ast.parse(ml)
+    nomes = {n.name for n in _ast.walk(arv) if isinstance(n, _ast.FunctionDef)}
+    for f in ("resolver", "amarrar", "descritores"):
+        checa(f"mesh_llm.{f} existe", f in nomes, "a amarra é o que impede descritor inventado")
+    checa("o que não resolve é DESCARTADO, não gravado",
+          "descartados.append" in ml and "MIN_DESCRITORES" in ml,
+          "descritor inventado é pior que faltando: entra na busca e nunca casa")
+
+    # ── 4) o publicador confere contra a TABELA REAL, não só contra o que ele declara ──
+    pub = open(_os.path.join(aqui, "publicador.py"), encoding="utf-8").read()
+    checa("publicador confere as colunas no banco", "def conferir_colunas" in pub,
+          "sem isso, coluna que só existe no código vira 400 mudo em TODA linha")
+    checa("e diz o ALTER TABLE exato", "ADD COLUMN IF NOT EXISTS" in pub, "")
+
+    # ── 5) a queda prevista é LISTA EXPLÍCITA — nunca regra genérica ──
+    #
+    # A primeira versão do conserto dizia "ok=false mas o artigo chegou ⇒ queda prevista". Rodei:
+    # o PUBLICADOR passou a mostrar 28 quedas, e ali NÃO existe cascata — eram recusas de
+    # verdade que passaram numa rodada seguinte. A regra genérica escondia recusa atrás de
+    # palavra tranquilizadora: o mesmo defeito, de cabeça para baixo.
+    cx = open(_os.path.join(aqui, "caixa_preta.py"), encoding="utf-8").read()
+    checa("a caixa-preta tem lista explícita de queda prevista", "_QUEDA_PREVISTA" in cx, "")
+    checa("e ela só contém waypoints do classificador",
+          all(w in cx for w in ("C2_DOI", "C3_PUBMED")), "")
+    corpo = cx[cx.index("_QUEDA_PREVISTA"):cx.index("_QUEDA_PREVISTA") + 400]
+    checa("nenhum waypoint de PUBLICADOR/ANALISADOR entrou na lista",
+          not any(w in corpo for w in ("P1_", "P2_", "P3_", "P4_", "A1_", "A2_")),
+          "queda prevista só existe onde alguém DESENHOU uma camada de baixo")
 
 
 if __name__ == "__main__":

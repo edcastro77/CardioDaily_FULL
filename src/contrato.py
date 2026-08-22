@@ -15,7 +15,7 @@ CAMPOS = [
     # 20/Ago — as 4 do TEMA. Estavam FORA desta lista, e por isso o portão não sabia que
     # existiam: 117 de 616 linhas subiram com `tema` NULL sem nenhum aviso. Quem preenchia era
     # o `scripts/marcar_temas.py`, um segundo portão por fora (LEI 5 violada por mim em 17/Ago).
-    "tema", "tema_secundario", "tema_origem", "mesh_terms",
+    "tema", "tema_secundario", "tema_origem", "mesh_terms", "mesh_origem",
     "keywords", "contexto_tema", "aplicabilidade_pratica", "impacto_conduta",
     "bullets_praticos", "gancho_lista", "mcid_avaliacao", "resumo_markdown",
     "caminho_pdf", "caminho_audio", "caminho_visual_abstract",
@@ -175,8 +175,31 @@ def validar(ficha, checar_arquivos=True):
         v.append(f"tema fantasma {_tema!r} — não é um dos 13; ninguém receberia este artigo")
     if not _txt(ficha.get("tema_secundario")):
         v.append("tema_secundario vazio — deveria ser um tema ou 'Não se aplica' (LEI 11)")
-    if ficha.get("mesh_terms") is None:
-        v.append("mesh_terms NULL — [] significa 'procurei e não achou'; NULL não diz nada")
+    # ── mesh_terms: 22/Ago, `[]` DEIXOU de ser resposta aceitável ──────────────────────────
+    # A linha antiga dizia, com todas as letras, que `[]` significava "procurei e não achou" e
+    # era legítimo. **Foi essa frase que deixou 208 de 704 subirem com a coluna vazia** — e o
+    # Dr. Eduardo recusou: *"não aceito — null e [] na prática são a mesma coisa para mim"*.
+    #
+    # Ele tem razão, e não é preciosismo: `mesh_terms` é o que o Pesquisador usa para ACHAR
+    # material. Vazio, o artigo existe no banco e é invisível para quem procura. "Procurei e
+    # não achou" descreve o esforço do programa; o assinante não compra esforço.
+    #
+    # Desde 22/Ago existe plano B (`mesh_llm`), então vazio não é mais falta de opção — é
+    # defeito. E `mesh_origem` diz QUAL defeito, em vez de deixar adivinhar.
+    _mesh = ficha.get("mesh_terms")
+    _morig = _txt(ficha.get("mesh_origem"))
+    if _mesh is None:
+        v.append("mesh_terms NULL — nem o PubMed nem o modelo foram consultados")
+    elif not isinstance(_mesh, list):
+        v.append(f"mesh_terms não é lista ({type(_mesh).__name__})")
+    elif not [t for t in _mesh if _txt(t)]:
+        v.append(f"mesh_terms vazio — o artigo ficaria invisível para o Pesquisador "
+                 f"(mesh_origem={_morig or 'não informada'})")
+    if not _morig:
+        v.append("mesh_origem vazia — sem ela o palpite do modelo vira permanente e "
+                 "a varredura não sabe o que pode melhorar de graça (LEI 11)")
+    elif _morig not in ("pubmed", "mesh_llm", "offline_para_teste"):
+        v.append(f"mesh_origem {_morig!r} — vocabulário é pubmed · mesh_llm; 'falha' não sobe")
 
     # 5) keywords
     kw = ficha.get("keywords")

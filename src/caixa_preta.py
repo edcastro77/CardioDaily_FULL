@@ -140,19 +140,59 @@ def relatorio(horas=24, filtro=""):
         return 1
 
     # ── 1. O QUE RODOU, POR BLOCO ──
-    por_bloco = defaultdict(lambda: {"ok": 0, "falha": 0})
+    # ═══ 22/Ago/2026 — "70 FALHAS" QUE NÃO ERAM FALHA NENHUMA ═══
+    #
+    # O Dr. Eduardo rodou a Chave 18 por curiosidade e a tela disse `CLASSIFICADOR · 70 falhas`.
+    # Medido: **70 de 70 terminaram em C5_MOVEU** — classificados e movidos. Zero órfãos. As
+    # marcas eram `C2_DOI` (o artigo não tem DOI) e `C3_PUBMED` (o PubMed não conhece o DOI), e
+    # nos dois casos a cascata faz exatamente o que foi desenhada para fazer: cai para a camada
+    # de baixo, e o LLM decide pelas páginas 1-3. Dos 42 sem DOI, quase todos eram os landmarks
+    # históricos — CONSENSUS 1987, CIBIS-II, CAPRICORN. O DOI só virou universal nos anos 2000.
+    #
+    # **Contar queda prevista como falha produz FADIGA DE ALARME.** Se 70 "falhas" são rotina,
+    # no dia em que houver uma falha de verdade ela some no meio. É o parente do buraco que este
+    # projeto persegue desde julho, só que espelhado: em vez de ausência lida como sucesso, é
+    # queda desenhada lida como quebra.
+    #
+    # Decisão dele, 22/Ago: **três colunas.** "Falhou" volta a significar UMA coisa — o artigo
+    # não chegou ao destino do bloco. A queda de camada continua VISÍVEL e comparável entre
+    # rodadas, sem gritar.
+    # ⚠️ A LISTA É EXPLÍCITA, e isso não é preguiça — é o conserto de um erro que eu cometi
+    # ao consertar o primeiro. Minha primeira versão dizia "ok=false mas o artigo chegou ⇒ queda
+    # prevista", uma regra genérica. Rodei e o PUBLICADOR passou a mostrar 28 quedas — só que
+    # **no publicador não existe cascata**: aquilo eram artigos RECUSADOS numa rodada que
+    # passaram em outra. A regra genérica teria escondido recusa de verdade atrás de uma palavra
+    # tranquilizadora, que é exatamente o defeito que eu estava consertando, de cabeça para baixo.
+    #
+    # Queda prevista existe só onde ALGUÉM DESENHOU uma camada de baixo para assumir. Hoje são
+    # duas, ambas no classificador. Waypoint novo só entra aqui por decisão, nunca por padrão.
+    _QUEDA_PREVISTA = {
+        "C2_DOI",      # o artigo não tem DOI (anterior à era do DOI, ou PDF sem metadado)
+        "C3_PUBMED",   # o PubMed não conhece este DOI (recente demais, ou fora da base)
+    }
+    _chegaram = {a for a, ms in _voo_por_artigo(linhas).items() if _chegou(ms)[0]}
+    por_bloco = defaultdict(lambda: {"ok": 0, "caiu": 0, "falha": 0})
     for l in linhas:
         b = VOO.bloco_do_waypoint(l["wp"]) or "?"
-        por_bloco[b]["ok" if l["ok"] else "falha"] += 1
+        if l["ok"]:
+            por_bloco[b]["ok"] += 1
+        elif l["wp"] in _QUEDA_PREVISTA and l.get("artigo") in _chegaram:
+            por_bloco[b]["caiu"] += 1        # a fonte de cima calou, a de baixo resolveu
+        else:
+            por_bloco[b]["falha"] += 1
     print()
     print("   ── O QUE RODOU ──")
-    print(f"   {'bloco':18s} {'marcas ok':>10s} {'falhas':>8s}")
+    print(f"   {'bloco':18s} {'marcas ok':>10s} {'caiu 1 camada':>15s} {'FALHOU':>8s}")
     for b in ("CLASSIFICADOR", "ANALISADOR", "PUBLICADOR", "ENTREGA"):
         if b in por_bloco:
             c = por_bloco[b]
-            print(f"   {b:18s} {c['ok']:>10d} {c['falha']:>8d}")
+            print(f"   {b:18s} {c['ok']:>10d} {c['caiu']:>15d} {c['falha']:>8d}")
         else:
-            print(f"   {b:18s} {'—':>10s} {'—':>8s}   (não rodou no período)")
+            print(f"   {b:18s} {'—':>10s} {'—':>15s} {'—':>8s}   (não rodou no período)")
+    _caiu = sum(c["caiu"] for c in por_bloco.values())
+    if _caiu:
+        print(f"\n   ↓ 'caiu 1 camada' = a fonte de cima calou e a de baixo resolveu, e o artigo")
+        print(f"     CHEGOU. Não é defeito — é a cascata funcionando. ({_caiu} no período)")
 
     # ── 2. QUEM NÃO CHEGOU ──
     artigos = _voo_por_artigo(linhas)

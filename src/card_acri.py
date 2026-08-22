@@ -43,6 +43,7 @@ import re
 import sys
 import json
 import glob
+import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -213,12 +214,53 @@ def gerar_um(pasta, force=False):
            f"FATOS (todo número do card tem de estar AQUI):\n"
            f"{json.dumps(d['fatos'], ensure_ascii=False, indent=1)[:6000]}")
 
-    bruto = llm_client.gerar(M.ESCRITA, open(PROMPT, encoding="utf-8").read(), contexto=ctx)
-    txt = re.sub(r"^```(?:json)?|```$", "", (bruto or "").strip(), flags=re.M).strip()
-    try:
-        campos = json.loads(txt)
-    except Exception as e:
-        return None, f"JSON inválido do modelo: {str(e)[:60]}"
+    # ═══════════ 22/Ago/2026 — 16 DE 128 CARDS FALHARAM, E A CULPA NÃO É DO MODELO ═══════════
+    #
+    # Na rodada dele, 15 das 16 falhas traziam a MESMA mensagem:
+    #     JSON inválido do modelo: Expecting value: line 1 column 1 (char 0)
+    # `char 0` não é JSON malformado — é **resposta VAZIA**. O modelo não devolveu nada, e o
+    # artigo perdeu o card. A 16ª foi `Unterminated string` (truncou no meio, provavelmente
+    # max_tokens). Duas causas diferentes, uma mensagem só.
+    #
+    # DOIS DEFEITOS, e os dois são de construção:
+    #
+    # 1 · **Este era o ÚNICO ponto do sistema pedindo JSON em texto solto.** A FASE 1.1 do
+    #     projeto trocou tudo para saída ESTRUTURADA (tool use), onde JSON inválido é
+    #     impossível — `analise.py` e `tema_llm.py` usam `gerar_json` com schema. O card ficou
+    #     de fora e continuou pedindo por gentileza: *"APENAS o JSON, sem markdown, sem crase"*.
+    #     Pedir bem funciona quase sempre. "Quase sempre" × 128 artigos = 16 perdidos.
+    #
+    # 2 · **Não havia UMA tentativa a mais.** Resposta vazia é falha transitória — a mesma
+    #     chamada repetida costuma responder. A FASE 1.3 pôs retry em toda chamada de LLM;
+    #     aqui, uma resposta vazia matava o artigo de primeira.
+    SCHEMA_CARD = {
+        "type": "object",
+        "properties": {"titulo": {"type": "string"}, "area": {"type": "string"},
+                       "a": {"type": "string"}, "c": {"type": "string"},
+                       "r": {"type": "string"}, "i": {"type": "string"}},
+        "required": ["titulo", "area", "a", "c", "r", "i"],
+        "additionalProperties": False,
+    }
+    instr = open(PROMPT, encoding="utf-8").read()
+    campos, ultimo = None, ""
+    for tentativa in (1, 2):
+        try:
+            r = llm_client.gerar_json(M.ESCRITA, instr, SCHEMA_CARD,
+                                      contexto=ctx, max_tokens=1200, nome="card_acri")
+            if isinstance(r, str):
+                r = json.loads(re.sub(r"^```(?:json)?|```$", "", r.strip(), flags=re.M).strip())
+            if isinstance(r, dict) and r.get("a"):
+                campos = r
+                break
+            ultimo = f"resposta sem conteúdo ({type(r).__name__})"
+        except Exception as e:
+            ultimo = f"{type(e).__name__}: {str(e)[:70]}"
+        if tentativa == 1:
+            time.sleep(2)          # resposta vazia costuma ser transitória
+    if not campos:
+        # ⚠️ o motivo DIZ o que houve. "JSON inválido" para os dois casos impedia qualquer
+        # diagnóstico — foi por isso que 15 falhas iguais pareceram culpa do modelo.
+        return None, f"card não gerado após 2 tentativas — {ultimo}"
 
     problemas = conferir(campos)
     if problemas:

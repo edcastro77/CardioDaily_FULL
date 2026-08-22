@@ -193,6 +193,26 @@ def _doi_ou_sintetico(doi, doc_id):
     return f"Sintetico_{doc_id}" if doc_id else None
 
 
+# ═══════════ 21/Ago/2026 — 32 ARTIGOS FALHARAM POR ESTA LINHA ESTAR NO LUGAR ERRADO ═══════════
+# `NAO_SE_APLICA` era uma variável LOCAL, declarada lá dentro do `montar()`. Quando escrevi o
+# `_decidir_tema` (uma função separada, acima), usei o nome achando que era constante de módulo.
+#
+#     NameError: name 'NAO_SE_APLICA' is not defined      × 32 artigos, na hora de publicar
+#
+# **Compilou.** O `py_compile` não pega escopo, e o meu teste de fumaça chamou
+# `_decidir_tema` direto — caminho em que o erro não aparece, porque eu passei pelo ramo que
+# retorna antes. A bateria não pegou porque roda em `CARDIODAILY_SEM_REDE`, e esse ramo... também
+# usa a constante. Ele só não estourou lá porque a trava chama `montar()`, e dentro de `montar()`
+# o nome EXISTE (é local dele) — o interpretador resolve pelo escopo de quem chama? Não: resolve
+# pelo GLOBAL, e como `montar` roda depois de definir a local, o NameError só aparece quando
+# `_decidir_tema` é chamado a partir do publicador, com a ficha completa.
+#
+# É a mesma família do `_re` importado na linha 256 e usado na 173, e do `_VOO` que custou 10
+# artigos pagos em 10/Ago: **nome definido depois de onde é usado.** Compila, e quebra em produção.
+#
+# Constante de módulo mora no TOPO do módulo. Sem exceção.
+NAO_SE_APLICA = "nao_se_aplica"   # o tipo do documento não tem esse conceito. Nunca terá.
+
 _MESH_FREQ = None      # frequência dos descritores no acervo — o peso IDF do desempate
 
 
@@ -208,8 +228,9 @@ def _mesh_do_doi(doi):
     if not doi or doi == "n/a":
         return []
     import sys as _s
-    _sc = os.path.join(os.path.dirname(_HERE), "scripts") if "_HERE" in globals() \
-        else os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+    # `_HERE` NÃO EXISTE neste módulo — eu escrevi `if "_HERE" in globals()` e o `else`
+    # mascarou o erro. A trava de escopo (21/Ago) pegou. Caminho direto, sem fantasma:
+    _sc = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
     if _sc not in _s.path:
         _s.path.insert(0, _sc)
     try:
@@ -243,8 +264,43 @@ def _tema_por_mesh(mesh):
         return None, None
 
 
+def _mesh_com_plano_b(doi, titulo, texto, revista):
+    """(descritores, mesh_origem) — a lista NUNCA volta vazia sem que a origem diga por quê.
+
+    ═══ 22/Ago/2026 — POR QUE O PLANO B (decisão do Dr. Eduardo) ═══
+    Medido no acervo de 704: **208 com `mesh_terms` vazio**, 157 deles de 2026. E numa amostra
+    de 25 desses, perguntando ao PubMed naquele instante: **0/25 já tinham MeSH.** 21 estavam
+    no PubMed sem descritor; 4 nem no PubMed (diretrizes SBC).
+
+    Ou seja: "roda a varredura de novo" não conserta — o indexador HUMANO da NLM leva de
+    semanas a meses, e a fila enche justamente dos artigos mais novos, que são os que ele mais
+    quer entregar. E `mesh_terms` não é enfeite: é por ele que o **Pesquisador** acha material.
+    Artigo sem descritor existe no banco e é invisível para quem procura.
+
+    A ordem é a mesma do tema, e pela mesma razão: **o humano manda, o modelo cobre a lacuna.**
+      pubmed ...... descritor da NLM. Substitui qualquer outro, sempre.
+      mesh_llm .... o modelo propôs e a amarra RESOLVEU contra o vocabulário oficial.
+      falha ....... nem um nem outro. NÃO é "esse artigo não tem descritor" — é defeito, e o
+                    contrato retém a linha em vez de publicar um buraco.
+    """
+    mesh = _mesh_do_doi(doi)
+    if mesh:
+        return mesh, "pubmed"
+    try:
+        import mesh_llm as _ML
+        termos, origem, detalhe = _ML.descritores(titulo, texto, revista)
+        if termos:
+            print(f"       🔤 MeSH pelo modelo: {len(termos)} descritores ({detalhe})")
+            return termos, origem
+        print(f"       ⚠️  MeSH (modelo) não entregou: {detalhe}")
+    except Exception as e:
+        # sem `except: pass` — ver `_mesh_do_doi`: exceção surda aqui mata a coluna em silêncio.
+        print(f"       ⚠️  MeSH (modelo) falhou: {type(e).__name__}: {e}")
+    return [], "falha"
+
+
 def _decidir_tema(titulo, revista, texto, doi):
-    """(tema, tema_secundario, tema_origem, mesh_terms) — nenhum deles NULL. Nunca.
+    """(tema, tema_secundario, tema_origem, mesh_terms, mesh_origem) — nenhum deles NULL. Nunca.
 
     ═══ A ORDEM, e por que ela é esta (decisão do Dr. Eduardo, 20/Ago) ═══
     Medido num gabarito cego de 40 artigos que ELE marcou a mão, contando "o tema que ele daria
@@ -279,8 +335,8 @@ def _decidir_tema(titulo, revista, texto, doi):
     # ignorar o vermelho. Com `CARDIODAILY_SEM_REDE=1` a decisão vira determinística e o resto
     # da ficha continua sendo conferido.
     if os.getenv("CARDIODAILY_SEM_REDE"):
-        return "Coronária/DAC", NAO_SE_APLICA, "offline_para_teste", []
-    mesh = _mesh_do_doi(doi)
+        return "Coronária/DAC", NAO_SE_APLICA, "offline_para_teste", ["Heart Failure"], "offline_para_teste"
+    mesh, mesh_origem = _mesh_com_plano_b(doi, titulo, texto, revista)
 
     tema = sec = None
     origem = "falha_do_classificador"
@@ -288,7 +344,7 @@ def _decidir_tema(titulo, revista, texto, doi):
         import tema_llm as _TL
         tema, sec, _porque = _TL.classificar(titulo, texto, revista)
         if tema == "fora_do_escopo":
-            return _T.SEM_TEMA, NAO_SE_APLICA, "fora_do_escopo", mesh
+            return _T.SEM_TEMA, NAO_SE_APLICA, "fora_do_escopo", mesh, mesh_origem
         if tema:
             origem = "llm"
     except Exception as e:
@@ -308,10 +364,10 @@ def _decidir_tema(titulo, revista, texto, doi):
             sec = next((c for c in (p, s) if c and c != tema), None)
 
     if not tema:
-        return _T.SEM_TEMA, NAO_SE_APLICA, origem, mesh
+        return _T.SEM_TEMA, NAO_SE_APLICA, origem, mesh, mesh_origem
     # `Não se aplica` e não vazio: a MAIORIA dos artigos tem um tema só, e isso é o normal,
     # não uma falha. Vazio aqui seria indistinguível de "o programa não chegou a olhar".
-    return tema, (sec or NAO_SE_APLICA), origem, mesh
+    return tema, (sec or NAO_SE_APLICA), origem, mesh, mesh_origem
 
 
 def montar(pasta):
@@ -457,7 +513,7 @@ def montar(pasta):
     #
     # A REGRA: "não se aplica" e "não gerado" são INFORMAÇÃO e vão escritos, com o motivo.
     # Vazio (NULL) passa a significar UMA coisa só: DEFEITO. Aí o NOT NULL vira trava de verdade.
-    NAO_SE_APLICA = "nao_se_aplica"   # o tipo do documento não tem esse conceito. Nunca terá.
+    # (a constante subiu para o topo do módulo em 21/Ago — ver o comentário lá)
     NAO_GERADO = "nao_gerado"         # poderia ter, não atingiu a porta por nota.
 
     def _porta(caminho, nota_minima, o_que):
@@ -556,7 +612,7 @@ def montar(pasta):
     #     18/Ago ......... 18 em 26
     #     19/Ago ......... 78 em 83     ← o buraco não é falha, é ausência da máquina no caminho
     # Agora quem preenche é AQUI, dentro do portão único, junto com todas as outras colunas.
-    tema, tema_secundario, tema_origem, mesh_terms = _decidir_tema(
+    tema, tema_secundario, tema_origem, mesh_terms, mesh_origem = _decidir_tema(
         titulo, revista, " ".join(str(x) for x in (a_bloco, aplic, resumo) if x), doi)
 
     _doc_id = doi if doi and doi != "n/a" else slugify(titulo)
@@ -587,7 +643,10 @@ def montar(pasta):
         "tema": tema,                           # um dos 13, ou 'Sem tema' (que o contrato RETÉM)
         "tema_secundario": tema_secundario,     # 2º tema, ou 'Não se aplica' — nunca vazio
         "tema_origem": tema_origem,             # llm | mesh | fora_do_escopo | falha_do_classificador
-        "mesh_terms": mesh_terms,               # [] = procurei e não achou ≠ NULL = não procurei
+        # 22/Ago — [] deixou de ser resposta aceitável. O Dr. Eduardo: "null e [] na prática
+        # são a mesma coisa para mim". Vazio aqui significa DEFEITO, e a origem diz qual.
+        "mesh_terms": mesh_terms,
+        "mesh_origem": mesh_origem,             # pubmed · mesh_llm · falha
         "motor": motor,                         # ORIGINAL | META | DIRETRIZ | REVISAO — a régua usada
         "tipo_documento": tipo_documento,
         "veredito_dominios": veredito_dominios,  # jsonb: os domínios medidos que produziram a nota

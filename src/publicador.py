@@ -112,6 +112,7 @@ SCHEMA_ARTIGOS = {
     # cego por mim, enquanto um script de fora (`marcar_temas.py`) preenchia por PATCH direto,
     # violando a LEI 5. Enquanto o script rodava, o banco parecia certo.
     "tema": "text", "tema_secundario": "text", "tema_origem": "text", "mesh_terms": "ARRAY",
+    "mesh_origem": "text",
 }
 
 
@@ -164,6 +165,71 @@ def _retirar_do_supabase(doi, doc_id, publicar=False):
         return f"⚠️  retratação falhou: {r.status_code} {r.text[:120]}"
     except Exception as e:
         return f"⚠️  retratação falhou: {type(e).__name__}: {str(e)[:100]}"
+
+
+_COLUNAS_CONFERIDAS = None
+
+
+def conferir_colunas():
+    """As colunas de `SCHEMA_ARTIGOS` existem MESMO na tabela? Roda uma vez por processo.
+
+    ═══ 22/Ago/2026 — O BURACO QUE O `_preflight` NÃO PODIA VER ═══
+    O `_preflight` compara o payload com `SCHEMA_ARTIGOS` — o schema que EU declaro aqui. Ele
+    mata o 400 mudo quando o payload discorda da minha declaração, mas é cego para o caso
+    inverso: **quando a minha declaração discorda do banco.**
+
+    Isso deixou de ser hipótese em 22/Ago, ao entrar a coluna `mesh_origem`: se ela existisse só
+    neste arquivo e não na tabela, TODA linha levaria 400 do PostgREST — e o portão diria
+    "erro ao publicar", sem dizer que faltava um `ALTER TABLE` de uma linha. É a mesma família
+    do `SCHEMA_ARTIGOS` cego de 20/Ago (117 linhas com `tema` NULL): o portão não falhou,
+    ficou sem saber.
+
+    Uma consulta por rodada. Se faltar coluna, PARA e escreve o SQL exato.
+    """
+    global _COLUNAS_CONFERIDAS
+    if _COLUNAS_CONFERIDAS is not None:
+        return _COLUNAS_CONFERIDAS
+    import requests
+    url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    key = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
+           or os.getenv("SUPABASE_KEY", ""))
+    if not url or not key:
+        _COLUNAS_CONFERIDAS = []
+        return _COLUNAS_CONFERIDAS
+    h = {"apikey": key, "Authorization": f"Bearer {key}"}
+    cols = [c for c in SCHEMA_ARTIGOS if c != "id"]
+    try:
+        r = requests.get(f"{url}/rest/v1/artigos", headers=h,
+                         params={"select": ",".join(cols), "limit": 1}, timeout=30)
+        if r.status_code < 400:
+            _COLUNAS_CONFERIDAS = []
+            return _COLUNAS_CONFERIDAS
+        # alguma faltou — descobre QUAIS, uma a uma (só acontece quando já deu errado)
+        faltando = []
+        for c in cols:
+            rr = requests.get(f"{url}/rest/v1/artigos", headers=h,
+                              params={"select": c, "limit": 1}, timeout=20)
+            if rr.status_code >= 400:
+                faltando.append(c)
+    except Exception as e:
+        print(f"   ⚠️  não deu para conferir as colunas ({type(e).__name__}: {e})")
+        _COLUNAS_CONFERIDAS = []
+        return _COLUNAS_CONFERIDAS
+
+    _COLUNAS_CONFERIDAS = faltando
+    if faltando:
+        print("\n   ══════════════════════════════════════════════════════════════════")
+        print("   ⛔ A TABELA `artigos` NÃO TEM ESTA(S) COLUNA(S) — nada será publicado")
+        for c in faltando:
+            print(f"      · {c}   ({SCHEMA_ARTIGOS[c]})")
+        print("\n   Rode isto no SQL Editor do Supabase e chame a Chave 2 de novo:\n")
+        for c in faltando:
+            tipo = {"ARRAY": "text[]", "jsonb": "jsonb", "integer": "int",
+                    "boolean": "boolean", "date": "date",
+                    "timestamp": "timestamptz"}.get(SCHEMA_ARTIGOS[c], "text")
+            print(f"      ALTER TABLE artigos ADD COLUMN IF NOT EXISTS {c} {tipo};")
+        print("   ══════════════════════════════════════════════════════════════════\n")
+    return _COLUNAS_CONFERIDAS
 
 
 def _preflight(payload):
@@ -349,7 +415,13 @@ def processar_pasta(pasta, publicar=False):
                 tipo_documento=ficha.get("tipo_documento"), violacoes=0)
 
     # passou no portão do CONTRATO → agora o PREFLIGHT de SCHEMA (roda até no dry-run: pega o erro antes)
-    prob = _preflight(_payload_site(ficha))
+    # 22/Ago — primeiro contra a TABELA REAL (uma consulta por rodada), depois contra o schema
+    # declarado. A ordem importa: coluna que não existe no banco faz TODA linha levar 400, e sem
+    # esta conferência a mensagem seria "erro ao publicar" em vez de "falta um ALTER TABLE".
+    faltando = conferir_colunas()
+    prob = [f"coluna '{c}' declarada aqui mas AUSENTE na tabela artigos — rode o ALTER TABLE acima"
+            for c in faltando]
+    prob += _preflight(_payload_site(ficha))
     if prob:
         open(os.path.join(pasta, "_REVISAR_publicacao.txt"), "w", encoding="utf-8").write(
             "RECUSADO NO PREFLIGHT DE SCHEMA — tipo/coluna não bate com a tabela artigos:\n\n"

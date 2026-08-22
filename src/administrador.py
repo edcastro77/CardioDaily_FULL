@@ -276,9 +276,11 @@ if _d_ini and _d_fim and _d_fim < _d_ini:
              f"nenhuma publicação cabe nessa janela.")
 
 
-def passa(a, so_sem_tema=False):
+def passa(a, so_sem_tema=False, nota_min=1, nota_max=10):
     n = a.get("nota_aplicabilidade") or 0
-    if not (nmin <= n <= nmax):
+    # nmin/nmax nascem do slider do Streamlit; a REGRA de filtro não pode depender da TELA,
+    # senão deixa de ser testável fora dela (mesmo motivo do `st.session_state`, 21/Ago).
+    if not (nota_min <= n <= nota_max):
         return False
     if f_tipo and a.get("tipo_estudo") not in f_tipo:
         return False
@@ -324,7 +326,7 @@ def passa(a, so_sem_tema=False):
     return True
 
 
-lista = [a for a in artigos if passa(a, _SO_SEM_TEMA)]
+lista = [a for a in artigos if passa(a, _SO_SEM_TEMA, nmin, nmax)]
 
 # O painel DIZ quando está escondendo coisa, e por quê. Um contador que só mostra o total
 # filtrado deixa a pergunta "cadê o artigo?" sem resposta na própria tela.

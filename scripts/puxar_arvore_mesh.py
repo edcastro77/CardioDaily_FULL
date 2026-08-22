@@ -25,7 +25,24 @@ Documentação: https://hhs.github.io/meshrdf/sparql-and-uri-requests
 
 Este programa só LÊ e grava um cache local. Nada de Supabase, nada de LLM, custo zero.
 
-Uso:  python3 scripts/puxar_arvore_mesh.py          # continua de onde parou
+═══ O QUE NÃO FUNCIONA AQUI — E QUASE PASSOU (22/Ago/2026) ═══
+Tentei acrescentar um modo `--completo`, que puxaria os 30.594 descritores tópicos de uma vez
+para servir de vocabulário de conferência do `src/mesh_llm.py`. Paginava por OFFSET, 5.000 por
+página. **Medido antes de rodar em produção:**
+
+    LIMIT 5000 OFFSET 0        →  1000 linhas      (o endpoint TETA em 1.000, e não avisa)
+    LIMIT 5000 OFFSET 40000    →  resposta VAZIA   (offset alto, sem erro HTTP)
+
+Isto é: eu pegaria 1.000, pularia 4.000, e gravaria um arquivo chamado "vocabulário oficial
+completo" com **um quinto** do MeSH — sem uma única exceção, sem um único aviso. É o defeito
+da casa: a ausência lida como se fosse o caso favorável.
+
+Por isso a amarra do `mesh_llm.py` NÃO usa vocabulário baixado em massa. Ela resolve termo a
+termo contra o E-utilities (`db=mesh`) e guarda o resultado num cache que só cresce — o mesmo
+princípio que já governa este arquivo: *varrer o oceano para pescar num aquário* é desperdício,
+e pior, é desperdício que mente quando falha.
+
+Uso:  python3 scripts/puxar_arvore_mesh.py            # continua de onde parou
       python3 scripts/puxar_arvore_mesh.py --zero
 """
 import json
