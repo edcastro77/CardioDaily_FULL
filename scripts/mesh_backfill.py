@@ -75,7 +75,65 @@ def esc(s):
     return str(s or "").replace("'", "''")
 
 
+def conferir(url, key):
+    """A conferência DEPOIS de aplicar o SQL — sem LLM, sem custo, sem escrever nada.
+
+    ═══ 22/Ago — POR QUE ISTO É UM BOTÃO E NÃO UMA CONSULTA ═══
+    Eu havia deixado a conferência como a última linha do `MESH_LLM.sql`, contando que ele
+    lesse o resultado no SQL Editor. Ele respondeu: *"esta última conferência que não sei como
+    fazer?"* — e a pergunta é justa. **Conferência que depende de o dono saber ler saída de SQL
+    não é conferência: é mais uma coisa que fica sem ser feita.** Foi assim que 208 linhas
+    ficaram vazias sem ninguém ver.
+    """
+    p = {"select": "doc_id,mesh_terms,mesh_origem,titulo", "limit": "3000"}
+    r = urllib.request.Request(f"{url}/rest/v1/artigos?{urllib.parse.urlencode(p)}",
+                               headers={"apikey": key, "Authorization": f"Bearer {key}"})
+    try:
+        linhas = json.load(urllib.request.urlopen(r, timeout=60))
+    except Exception as e:
+        # ⚠️ a coluna `mesh_origem` pode não existir ainda — e aí o PostgREST devolve 400.
+        # Dizer "erro" seria inútil; o que ele precisa é saber que falta o ALTER TABLE.
+        print(f"⛔ não consegui ler o banco: {type(e).__name__}")
+        print("   Se a mensagem fala em 'mesh_origem', é porque o ALTER TABLE ainda não rodou.")
+        print("   Ele é a PRIMEIRA linha do saidas/MESH_LLM.sql.")
+        return 1
+
+    def vazio(v):
+        return v is None or (isinstance(v, list) and not v) or str(v).strip() in ("", "[]", "{}")
+
+    vazios = [x for x in linhas if vazio(x.get("mesh_terms"))]
+    por_origem = {}
+    for x in linhas:
+        por_origem[x.get("mesh_origem") or "(sem origem)"] = \
+            por_origem.get(x.get("mesh_origem") or "(sem origem)", 0) + 1
+
+    print("═" * 70)
+    print(" CONFERÊNCIA DO MeSH · o que está no Supabase agora")
+    print("═" * 70)
+    print(f"\n   {len(linhas)} artigos no banco\n")
+    for o, n in sorted(por_origem.items(), key=lambda x: -x[1]):
+        rot = {"pubmed": "descritor HUMANO da NLM (a verdade)",
+               "mesh_llm": "proposto pelo modelo, conferido contra o oficial",
+               "(sem origem)": "⚠️  linha antiga, ainda sem procedência"}.get(o, o)
+        print(f"      {n:>5}  {o:<14} {rot}")
+
+    print()
+    if not vazios:
+        print("   ✅ ZERO vazios. Todo artigo do acervo é achável pelo Pesquisador.")
+        return 0
+    print(f"   ⚠️  {len(vazios)} AINDA VAZIOS — invisíveis para quem procura:")
+    for x in vazios[:10]:
+        print(f"        · {str(x.get('titulo'))[:60]}")
+    if len(vazios) > 10:
+        print(f"        … e mais {len(vazios) - 10}")
+    print("\n   Rode a CHAVE 25 de novo (ela pula quem já está no SQL e refaz só estes).")
+    return 0
+
+
 def main():
+    if "--conferir" in sys.argv:
+        url, key = _env()
+        return conferir(url, key)
     limite = None
     if "--limite" in sys.argv:
         limite = int(sys.argv[sys.argv.index("--limite") + 1])

@@ -26,8 +26,22 @@ echo "════════════════════════�
 echo
 echo "   Enter    = rodar TODOS os vazios"
 echo "   um número = rodar só os N primeiros (para conferir antes de gastar)"
+echo "   c        = só CONFERIR o banco (grátis, não chama modelo, não escreve)"
 echo
 read -p "   Quantos? " N
+
+# ═══ 22/Ago — A CONFERÊNCIA VIROU BOTÃO ═══
+# Eu havia deixado a conferência como a última consulta do MESH_LLM.sql, contando que ele a
+# lesse no SQL Editor. Ele perguntou: "esta última conferência que não sei como fazer?" — e a
+# pergunta é justa. Conferência que depende do dono saber ler saída de SQL não é conferência:
+# é mais uma coisa que fica sem ser feita. Foi assim que 208 linhas ficaram vazias sem ninguém
+# ver. Agora é uma tecla, e responde em português.
+if [ "$(echo "$N" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" = "c" ]; then
+  echo
+  python -u scripts/mesh_backfill.py --conferir
+  echo
+  read -p "Enter para fechar. "; exit 0
+fi
 
 # ⚠️ 22/Ago — A ENTRADA QUE NÃO É NÚMERO **PARA**, não segue.
 # A primeira versão desta linha era `if é número; então limite; SENÃO roda tudo`. Ou seja:
