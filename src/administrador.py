@@ -448,15 +448,23 @@ def indice_do_disco():
         # O `doc_id` é a chave que o portão usa e existe em toda linha; indexar pelos dois torna
         # a ponte imune a um dos lados faltar.
         try:
-            # 10/Ago — o administrador LÊ, não publica: `montar()` é código de produção e marca
-            # o waypoint P1_FICHA. Sem silenciar, cada abertura do painel escrevia uma marca de
-            # produção por pacote no plano de voo — e a Chave 18 passava a relatar artigos
-            # "parados no P1_FICHA" que na verdade tinham chegado ao fim horas antes.
-            # Mesmo motivo do `ensaio_seco.py`; achado na mesma varredura.
+            # 10/Ago — o administrador LÊ, não publica: silencia o plano de voo para não
+            # escrever marca de produção a cada abertura do painel (a Chave 18 passava a
+            # relatar como "parados no P1_FICHA" artigos que tinham terminado horas antes).
+            #
+            # ═══ 22/Ago — AQUI ESTAVA `_F.montar(pasta)`, E ERA O TRAVAMENTO DA CHAVE 3 ═══
+            # *"o administrador não está funcionando. Eu carreguei vários artigos."*
+            # `montar()` monta a ficha INTEIRA — e desde 20/Ago isso inclui chamar o PubMed e o
+            # LLM (o tema entrou no portão), e desde 22/Ago o MeSH também. Este laço roda em
+            # TODAS as pastas do STAGING: medido hoje, **410**. Ou seja, abrir o painel disparava
+            # até 820 chamadas de modelo para descobrir nomes de arquivo que estão no disco.
+            # Horas de espera, dinheiro gasto — e sem erro na tela, porque o `except` abaixo
+            # engolia tudo e a página só ficava pendurada.
+            # `doc_id_da_pasta()` lê o mesmo dado do `_CANONICO.md`, sem tocar em rede.
             import voo as _VOO
             _VOO.silenciar(True)
             import ficha_site as _F
-            _d = (_F.montar(pasta) or {}).get("doc_id")
+            _d = _F.doc_id_da_pasta(pasta)
             if _d:
                 ix[str(_d).strip().lower()] = reg
         except Exception:

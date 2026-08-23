@@ -370,8 +370,51 @@ def _decidir_tema(titulo, revista, texto, doi):
     return tema, (sec or NAO_SE_APLICA), origem, mesh, mesh_origem
 
 
+def doc_id_da_pasta(pasta):
+    """O `doc_id` deste pacote — SEM LLM, SEM PubMed, SEM rede. Só o disco.
+
+    ═══ 22/Ago/2026 — POR QUE ISTO PRECISOU EXISTIR ═══
+
+    O Dr. Eduardo: *"o administrador não está funcionando. Eu carreguei vários artigos."*
+
+    O painel de curadoria monta um índice do STAGING para saber onde está o card e o ACRI de
+    cada artigo. Para isso ele precisava de UMA coisa: o `doc_id` da pasta. E o jeito que eu
+    deixei de obtê-lo era chamar `montar()` — a ficha INTEIRA, das 410 pastas.
+
+    Até 20/Ago isso era só desperdício: `montar()` era determinístico e barato ("NÃO chama LLM",
+    diz o cabeçalho deste arquivo, escrito quando era verdade). Naquele dia eu liguei o TEMA
+    dentro dele (LEI 5, e estava certo), e `montar()` passou a chamar o PubMed e o modelo. Hoje,
+    22/Ago, liguei o MeSH também. Resultado, medido no traceback: abrir a Chave 3 disparava
+    **até duas chamadas de LLM por pasta, 410 pastas** — horas de espera e dinheiro gasto para
+    descobrir nomes de arquivo que estão ali, no disco, de graça.
+
+    E não dava erro: o `except Exception: pass` engolia tudo e a tela só ficava pendurada.
+
+    ⚠️ **É A LEI 9, e fui eu quem cometeu.** Quando o `montar()` ficou caro, a BATERIA travou —
+    consertei com `CARDIODAILY_SEM_REDE=1` e segui em frente, sem varrer QUEM MAIS chamava
+    `montar()`. O administrador chamava, e ficou quebrado por dois dias sem ninguém saber, porque
+    o defeito não grita: ele espera.
+
+    Regra que fica: **quem só quer saber ONDE está o pacote não paga pelo que ele SIGNIFICA.**
+    """
+    can = glob.glob(os.path.join(pasta, "*_CANONICO.md"))
+    canon = open(can[0], encoding="utf-8").read() if can else ""
+    titulo = _campo(canon, "titulo")
+    doi = _campo(canon, "doi")
+    if not titulo:
+        titulo = _do_nome_do_arquivo(pasta).get("titulo", "")
+    if doi and doi != "n/a":
+        return doi
+    return slugify(titulo) if titulo else ""
+
+
 def montar(pasta):
-    """Lê uma pasta do STAGING e devolve a ficha (dict com os 16 campos)."""
+    """Lê uma pasta do STAGING e devolve a ficha (dict com os 16 campos).
+
+    ⚠️ DESDE 20/Ago ESTA FUNÇÃO CHAMA O PubMed E O LLM (o tema entrou no portão, LEI 5) — e
+    desde 22/Ago o MeSH também. Ela deixou de ser barata. Quem precisa só de identidade
+    (`doc_id`, título) usa `doc_id_da_pasta()`, que não toca em rede.
+    """
     base = os.path.basename(pasta.rstrip("/"))
     can = glob.glob(os.path.join(pasta, "*_CANONICO.md"))
     canon = open(can[0], encoding="utf-8").read() if can else ""

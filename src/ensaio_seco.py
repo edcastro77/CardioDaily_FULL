@@ -86,6 +86,15 @@ def ensaiar(pasta):
     nota_nova = r["aplic"]
 
     # o CONTRATO, com a ficha real montada do disco — é exatamente o que o portão faria
+    #
+    # ⚠️ 22/Ago — ESTE ENSAIO DEIXOU DE SER DE GRAÇA, e isso precisa estar escrito.
+    # Ele nasceu para ensaiar a régua SEM fazer o Dr. Eduardo gastar. Só que em 20/Ago o tema
+    # entrou dentro de `montar()` (PubMed + LLM) e em 22/Ago o MeSH também — então cada pacote
+    # ensaiado agora custa até duas chamadas de modelo. **Mantive o `montar()` de propósito:**
+    # o ensaio existe para reproduzir EXATAMENTE o que o portão faria, e uma ficha fingida
+    # (com `CARDIODAILY_SEM_REDE`) aprovaria coisas que o portão de verdade recusaria — trocaria
+    # um custo por uma mentira, que é pior.
+    # O que muda é a honestidade: o programa AVISA o custo antes de rodar (ver `main`).
     try:
         ficha = F.montar(pasta)
     except Exception as e:
@@ -107,10 +116,28 @@ def main():
         print("STAGING vazio — nada a ensaiar.")
         return 0
 
+    # ═══ 22/Ago — A TELA DIZIA "CUSTO ZERO · NÃO CHAMA MODELO", E ERA MENTIRA ═══
+    # Verdade até 19/Ago. Em 20/Ago o TEMA entrou dentro de `ficha_site.montar()` (PubMed +
+    # LLM, LEI 5, e estava certo), e em 22/Ago o MeSH também. O ensaio chama `montar()` uma vez
+    # por pacote — de propósito, porque ele existe para reproduzir o que o PORTÃO faria, e uma
+    # ficha fingida aprovaria o que o portão recusaria.
+    # O que não podia continuar era a TELA anunciando grátis enquanto o cartão era debitado.
+    # É o mesmo defeito do "US$0,30 chumbado" da Chave 2 (C·3): instrumento que mente.
+    _n = len(pastas)
+    _custo = _n * 0.0012                      # ~2 chamadas da cadeia CLASSIFICACAO por pacote
     print("═" * 82)
-    print(" ENSAIO SECO · o que aconteceria se você rodasse · CUSTO ZERO")
-    print(" não chama modelo, não fala com o banco, não escreve nada")
+    print(" ENSAIO SECO · o que aconteceria se você rodasse")
+    print(" não fala com o banco, não escreve nada, não move arquivo")
+    print(f" ⚠️  MAS CHAMA O MODELO: {_n} pacote(s) × tema + MeSH ≈ US$ {_custo:.2f}")
+    print("     (desde 20/Ago o tema mora dentro da ficha; o ensaio monta a ficha de verdade")
+    print("      justamente para não aprovar aqui o que o portão recusaria lá)")
     print("═" * 82)
+    if _n > 40 and sys.stdin.isatty():
+        _r = input(f"\n   São {_n} pacotes (~US$ {_custo:.2f}). Seguir? [s/N]: ")
+        if _r.strip().lower() not in ("s", "si", "sim", "y", "yes", "ok"):
+            print(f'\n⛔ CANCELADO — você digitou "{_r.strip()}", e eu esperava sim / s.')
+            print("   Nada rodou, nada foi gasto.")
+            return 0
 
     por_tipo = defaultdict(lambda: Counter())
     recusas = defaultdict(list)

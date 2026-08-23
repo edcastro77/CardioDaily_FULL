@@ -4305,6 +4305,110 @@ def teste_mesh_nunca_sobe_vazio():
           not any(w in corpo for w in ("P1_", "P2_", "P3_", "P4_", "A1_", "A2_")),
           "queda prevista só existe onde alguém DESENHOU uma camada de baixo")
 
+def teste_quem_so_le_nao_paga_pela_ficha_inteira():
+    """`ficha_site.montar()` custa dinheiro desde 20/Ago. Quem só LÊ o disco não pode chamá-la.
+
+    ═══ 22/Ago/2026 — O TRAVAMENTO DA CHAVE 3 ═══
+
+    Palavras dele: *"o administrador não está funcionando. Eu carreguei vários artigos."*
+
+    O painel de curadoria monta um índice do STAGING para achar o card e o ACRI de cada artigo.
+    Precisava de UMA coisa por pasta: o `doc_id`. E o jeito que eu deixei de obtê-lo era chamar
+    `montar()` — a ficha inteira, em TODAS as pastas. Medido: **410 pastas.**
+
+    Até 19/Ago isso era só desperdício: `montar()` era determinístico e barato, e o cabeçalho
+    do arquivo dizia, com todas as letras, "NÃO chama LLM". Em 20/Ago eu liguei o TEMA dentro
+    dele (PubMed + LLM) e em 22/Ago o MeSH. Abrir a Chave 3 passou a disparar até **820
+    chamadas de modelo** — cerca de uma hora — para descobrir nomes de arquivo que estavam ali,
+    no disco, de graça. Medido depois do conserto: **0,30 s para as 410**, 409 resolvidos.
+
+    E não dava erro: um `except Exception: pass` engolia tudo e a tela só ficava pendurada.
+    **Defeito que espera é pior que defeito que grita** — ninguém vai procurar a causa de uma
+    coisa que "está lenta hoje".
+
+    ⚠️ É A LEI 9, cometida por mim, pela segunda vez na mesma semana. Quando `montar()` ficou
+    caro, quem travou primeiro foi a BATERIA. Eu consertei a bateria (`CARDIODAILY_SEM_REDE=1`)
+    e segui em frente **sem varrer quem mais chamava `montar()`**. Eram três:
+
+        administrador.py  · só queria o doc_id  → doc_id_da_pasta()      [travava a Chave 3]
+        rodar_em_blocos.py· só queria o doc_id  → doc_id_da_pasta()      [pagava DUAS vezes
+                                                  por artigo, dentro da própria Chave 2]
+        ensaio_seco.py    · precisa da ficha    → mantido, mas a tela parou de dizer
+                                                  "CUSTO ZERO", que era mentira desde 20/Ago
+
+    A regra que fica: **quem só quer saber ONDE está o pacote não paga pelo que ele SIGNIFICA.**
+    """
+    import ast as _ast
+    import os as _os
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    raiz = _os.path.dirname(aqui)
+
+    import ficha_site as _F
+    checa("ficha_site.doc_id_da_pasta existe", hasattr(_F, "doc_id_da_pasta"),
+          "sem ela, quem precisa do doc_id volta a chamar montar()")
+
+    # ── 1) o caminho barato NÃO toca em rede: nem LLM, nem PubMed ──
+    fonte = open(_os.path.join(aqui, "ficha_site.py"), encoding="utf-8").read()
+    arv = _ast.parse(fonte)
+    fn = next((n for n in _ast.walk(arv)
+               if isinstance(n, _ast.FunctionDef) and n.name == "doc_id_da_pasta"), None)
+    checa("doc_id_da_pasta é uma função", fn is not None, "")
+    if fn:
+        chamadas = {getattr(n.func, "id", "") or getattr(n.func, "attr", "")
+                    for n in _ast.walk(fn) if isinstance(n, _ast.Call)}
+        for proibida in ("montar", "classificar", "descritores", "_decidir_tema",
+                         "_mesh_do_doi", "_mesh_com_plano_b", "urlopen", "gerar_json"):
+            checa(f"doc_id_da_pasta não chama {proibida}", proibida not in chamadas,
+                  "o caminho barato deixou de ser barato")
+
+    # ── 2) QUEM PODE chamar montar(): só o portão e o ensaio (que avisa o custo) ──
+    PODEM = {"publicador.py", "ficha_site.py", "ensaio_seco.py", "teste_motor.py"}
+    culpados = []
+    for sub in ("src", "scripts"):
+        d = _os.path.join(raiz, sub)
+        if not _os.path.isdir(d):
+            continue
+        for nome in sorted(_os.listdir(d)):
+            if not nome.endswith(".py") or nome in PODEM:
+                continue
+            txt = open(_os.path.join(d, nome), encoding="utf-8", errors="ignore").read()
+            try:
+                a = _ast.parse(txt)
+            except SyntaxError:
+                continue
+            for n in _ast.walk(a):
+                # `X.montar(...)` onde X é o ficha_site importado com qualquer apelido
+                if (isinstance(n, _ast.Call) and isinstance(n.func, _ast.Attribute)
+                        and n.func.attr == "montar"
+                        and isinstance(n.func.value, _ast.Name)
+                        and ("ficha" in n.func.value.id.lower()
+                             or n.func.value.id in ("F", "_F"))):
+                    culpados.append(f"{sub}/{nome}:{n.lineno}")
+    checa("ninguém fora do portão chama ficha_site.montar()", not culpados,
+          "chamam e vão pagar por isso: " + ", ".join(culpados))
+
+    # ── 3) o ensaio seco NÃO pode mais anunciar grátis ──
+    # ⚠️ a 1ª versão desta checagem procurava "CUSTO ZERO" no ARQUIVO INTEIRO — e reprovou por
+    # causa do meu próprio comentário explicando o conserto. Trava que não distingue o que o
+    # programa DIZ do que o programador ESCREVEU obriga a apagar a explicação para ficar verde,
+    # e explicação apagada é como o defeito volta. Ela olha só o que vai para a TELA.
+    ens = open(_os.path.join(aqui, "ensaio_seco.py"), encoding="utf-8").read()
+    impresso = []
+    for n in _ast.walk(_ast.parse(ens)):
+        if isinstance(n, _ast.Call) and getattr(n.func, "id", "") == "print":
+            for arg in _ast.walk(n):
+                if isinstance(arg, _ast.Constant) and isinstance(arg.value, str):
+                    impresso.append(arg.value)
+    tela = " ".join(impresso)
+    # ⚠️ e a 2ª versão usou `.upper()`, o que pegou a linha `(ensaio, custo zero)` — que fala do
+    # `reparar_notas.py`, outro programa, e que É de graça (não chama `montar()`; a checagem
+    # acima prova). Trava larga demais reprova o certo, e quem apaga o certo para ficar verde
+    # está trocando a prova pelo placar. É o BANNER que precisa dizer a verdade.
+    checa("o BANNER do ensaio não anuncia 'CUSTO ZERO'", "CUSTO ZERO" not in tela,
+          "ele chama montar() por pacote — dizer grátis é o instrumento mentindo (LEI 7)")
+    checa("o BANNER do ensaio avisa que CHAMA O MODELO", "CHAMA O MODELO" in tela,
+          "quem vai gastar precisa saber ANTES de apertar")
+
 
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,

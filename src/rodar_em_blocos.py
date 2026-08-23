@@ -140,7 +140,14 @@ def analisar_e_publicar_um(pdf, staging=None, publicar=True):
         return None, "RETIDO(<6)", nota
     pasta = os.path.join(staging, base)
     status, nota, _viol = P.processar_pasta(pasta, publicar=publicar)
-    doc_id = F.montar(pasta).get("doc_id") if str(status).startswith(("PUBLICADO", "APROVADO")) else None
+    # ⚠️ 22/Ago — AQUI ESTAVA `F.montar(pasta).get("doc_id")`, E ERA DINHEIRO JOGADO FORA.
+    # O `P.processar_pasta` da linha de cima JÁ montou a ficha inteira (é o portão fazendo o
+    # trabalho dele). Esta linha montava TUDO DE NOVO só para ler um campo — e desde 20/Ago
+    # montar a ficha significa chamar o PubMed e o LLM do tema; desde 22/Ago, o do MeSH também.
+    # Ou seja: cada artigo publicado pagava DUAS vezes pelas mesmas duas chamadas.
+    # Achado na varredura da LEI 9 disparada pelo travamento da Chave 3 (mesmo defeito, outro
+    # arquivo). `doc_id_da_pasta` lê o `_CANONICO.md`: 0,7 ms, zero rede, zero custo.
+    doc_id = F.doc_id_da_pasta(pasta) if str(status).startswith(("PUBLICADO", "APROVADO")) else None
     return doc_id, status, nota
 
 
