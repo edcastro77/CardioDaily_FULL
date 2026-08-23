@@ -76,7 +76,18 @@ def buscar():
                                            # 20/Ago — as 4 do tema. Sem elas o painel não tinha como
                                            # filtrar pelo vocabulário de verdade (ver o comentário
                                            # do filtro "Tema", logo abaixo).
-                                           "tema,tema_secundario,tema_origem,keywords,mesh_terms",
+                                           "tema,tema_secundario,tema_origem,keywords,mesh_terms,"
+                                           # ═══ 22/Ago — SEM ESTAS DUAS, A TELA NÃO EXPLICA O 5 ═══
+                                           # Ele viu "nota 5" no painel e reagiu: *"5 não sobe!"* —
+                                           # e ele tem razão, para meta, revisão e artigo original.
+                                           # Medido: as 18 linhas <6 do banco são TODAS diretriz,
+                                           # a exceção que ele mesmo criou em 05/Ago. Zero violação.
+                                           # Mas a tela pedia `nota` e não pedia `tipo_documento`:
+                                           # um 5 legítimo ficava IDÊNTICO a um 5 que furou a regra.
+                                           # Painel que mostra o número sem o critério faz o dono
+                                           # desconfiar do sistema todo — e desconfiança custa mais
+                                           # caro que buraco, porque para a operação inteira.
+                                           "tipo_documento,muda_conduta",
                                  "order": "nota_aplicabilidade.desc"},
                          headers=cabecalhos(key), timeout=40)
         r.raise_for_status()
@@ -490,8 +501,42 @@ if lista:
     c1, c2 = st.columns([2, 1])
     with c1:
         st.markdown(f"**{a.get('titulo','')}**")
-        st.caption(f"{a.get('revista','')} · {(a.get('data_publicacao') or '')[:10]} · tema: {a.get('doenca_principal','')}")
-        st.markdown(f"**NAC {a.get('nota_aplicabilidade')}/10** · Rigor {a.get('nota_trabalho_estatistico')}/10")
+        # ⚠️ o tema mostrado é `tema` (os 13, do tripé), não `doenca_principal` (os 8 antigos,
+        # feitos por regex). Foi por olhar o vocabulário errado que a busca devolvia zero em
+        # 20/Ago. `doenca_principal` continua existindo porque o SITE usa; a curadoria não.
+        _t2 = a.get("tema_secundario")
+        _temas = a.get("tema") or "—"
+        if _t2 and _t2 not in ("Não se aplica", "nao_se_aplica"):
+            _temas += f" + {_t2}"
+        st.caption(f"{a.get('revista','')} · {(a.get('data_publicacao') or '')[:10]} · {_temas}")
+        st.markdown(f"**NAC {a.get('nota_aplicabilidade')}/10** · "
+                    f"Rigor {a.get('nota_trabalho_estatistico')}/10")
+
+        # ═══ 22/Ago — A TELA PRECISA EXPLICAR O NÚMERO, NÃO SÓ EXIBIR ═══
+        # Ele viu "nota 5" e reagiu: *"5 não sobe!"* — e está certo: pela LEI 10, meta, revisão
+        # e artigo original abaixo de 6 ficam retidos. Medido no banco: as 18 linhas <6 são
+        # TODAS diretriz, a única exceção, criada por ele em 05/Ago. Zero violação.
+        # Só que a tela mostrava o 5 pelado. Número sem critério faz o dono desconfiar do
+        # sistema inteiro — e desconfiança para a operação, o que é pior que qualquer buraco.
+        _tipo = str(a.get("tipo_documento") or "").strip().lower()
+        _mc = str(a.get("muda_conduta") or "").strip()
+        _n = a.get("nota_aplicabilidade") or 0
+        if _tipo == "diretriz":
+            st.info(
+                f"**DIRETRIZ · {_mc or 'sem recomendação registrada'}**  \n"
+                "Diretriz sobe em QUALQUER nota — decisão sua, 05/Ago: *“não teremos nenhum "
+                "impedimento para subir; mesmo com as limitações, é o que tem para hoje.”*  \n"
+                "Não existe “outra diretriz de fibrilação atrial”: existe **a** diretriz. Se "
+                "ela é fraca, o médico precisa saber que é fraca **e mesmo assim precisa dela**. "
+                "A nota aqui responde *“confie quanto?”*, não *“publica ou não?”*."
+                + ("  \n⚠️ Esta é a razão de você estar vendo um número abaixo de 6."
+                   if _n < 6 else ""))
+        elif _n < 6:
+            # não deveria existir: o contrato retém. Se aparecer, é buraco e a tela GRITA.
+            st.error(f"⛔ **{_tipo or 'tipo desconhecido'} com nota {_n}** — pela LEI 10 isto "
+                     "deveria estar RETIDO. Só diretriz sobe abaixo de 6. Me mostre esta tela.")
+        elif _mc:
+            st.markdown(f"**Muda conduta:** {_mc}")
         if a.get("mcid_avaliacao"):
             st.markdown(f"**MCID:** {a['mcid_avaliacao']}")
         links = []

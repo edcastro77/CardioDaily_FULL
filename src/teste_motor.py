@@ -4409,6 +4409,70 @@ def teste_quem_so_le_nao_paga_pela_ficha_inteira():
     checa("o BANNER do ensaio avisa que CHAMA O MODELO", "CHAMA O MODELO" in tela,
           "quem vai gastar precisa saber ANTES de apertar")
 
+def teste_a_tela_explica_a_nota_em_vez_de_so_exibir():
+    """Nota abaixo de 6 no painel: ou a tela diz POR QUE é legítima, ou ela GRITA.
+
+    ═══ 22/Ago/2026 ═══
+    Palavras dele, ao ver a Chave 3: **"5 não sobe!"**
+
+    E ele está certo — pela LEI 10, meta, revisão e artigo original abaixo de 6 ficam retidos.
+    Medido no banco naquele minuto: **18 linhas com nota <6, e as 18 são diretriz** — a única
+    exceção que existe, criada por ele em 05/Ago (*"não teremos nenhum impedimento para subir;
+    mesmo com as limitações, é o que tem para hoje"*). Zero violação.
+
+    O defeito era da TELA. O `buscar()` pedia `nota_aplicabilidade` e **não pedia
+    `tipo_documento`**: no painel, um 5 de diretriz ficava idêntico a um 5 que furou a regra.
+    O banco já guardava a resposta certa (`muda_conduta = "REFERÊNCIA, NÃO AUTORIDADE"`) e ela
+    não chegava à tela onde ele decide.
+
+    **Número sem critério faz o dono desconfiar do sistema inteiro** — e desconfiança para a
+    operação, o que custa mais caro que buraco. A régua do CardioDaily só vale se ele puder ler
+    o veredito e conferir o raciocínio; foi para isso que o VEREDITO ABERTO existe no redator
+    desde 02/Ago. A curadoria estava sem ele.
+    """
+    import ast as _ast
+    import os as _os
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    adm = open(_os.path.join(aqui, "administrador.py"), encoding="utf-8").read()
+
+    # ── 1) o painel PEDE ao banco o que precisa para explicar ──
+    for col in ("tipo_documento", "muda_conduta", "nota_aplicabilidade"):
+        checa(f"o painel pede '{col}' ao Supabase", f"{col}" in adm.split("def ler_agenda")[0],
+              "coluna que o painel não pede é critério que ele não pode mostrar")
+
+    # ── 2) diretriz: a tela diz que a exceção existe, e de quem foi ──
+    checa("a tela nomeia a exceção da diretriz", "05/Ago" in adm and "DIRETRIZ" in adm,
+          "sem a data e o dono da decisão, parece defeito do programa")
+
+    # ── 3) não-diretriz abaixo de 6: a tela GRITA em vez de exibir em silêncio ──
+    checa("nota <6 fora de diretriz vira erro na tela", "st.error" in adm and "LEI 10" in adm,
+          "se o buraco voltar, tem que aparecer na tela dele, não num relatório meu")
+
+    # ── 4) o tema mostrado é o dos 13, não o vocabulário velho de 8 ──
+    #     Ele já apontou isto em 20/Ago: "a lista de temas está podre" — a busca por OBSTETRIC
+    #     devolvia zero de 520 porque a tela lia `doenca_principal`, outra lista.
+    arv = _ast.parse(adm)
+    legenda = [n for n in _ast.walk(arv)
+               if isinstance(n, _ast.Call) and getattr(n.func, "attr", "") == "caption"]
+    fonte_legenda = " ".join(_ast.dump(n) for n in legenda)
+    checa("a legenda do artigo mostra `tema`, não `doenca_principal`",
+          "doenca_principal" not in fonte_legenda,
+          "duas listas de tema na mesma tela — o defeito de 20/Ago voltando")
+
+    # ── 5) a regra que a tela afirma é a MESMA que o contrato aplica (uma fonte só) ──
+    import contrato as C
+    base = {"doc_id": "x", "doi": "10.1/x", "titulo": "Titulo bom", "revista": "R",
+            "tema": "Arritmias/Anticoagulantes", "tema_secundario": "Não se aplica",
+            "tema_origem": "llm", "mesh_terms": ["Heart Failure"], "mesh_origem": "pubmed",
+            "nota_aplicabilidade": 5}
+    for tipo in ("original", "meta", "revisao_narrativa"):
+        v = C.validar(dict(base, tipo_documento=tipo), checar_arquivos=False)
+        checa(f"nota 5 RETIDA no contrato ({tipo})", any("< 6" in str(x) for x in v),
+              "a tela diria 'deveria estar retido' e o portão deixaria passar")
+    v = C.validar(dict(base, tipo_documento="diretriz"), checar_arquivos=False)
+    checa("nota 5 PASSA no contrato (diretriz)", not any("< 6" in str(x) for x in v),
+          "a exceção de 05/Ago sumiu do portão — 13 diretrizes voltariam a ser retidas")
+
 
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,
