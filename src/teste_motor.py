@@ -4473,6 +4473,114 @@ def teste_a_tela_explica_a_nota_em_vez_de_so_exibir():
     checa("nota 5 PASSA no contrato (diretriz)", not any("< 6" in str(x) for x in v),
           "a exceção de 05/Ago sumiu do portão — 13 diretrizes voltariam a ser retidas")
 
+def teste_recusa_pela_regua_nao_e_a_mesma_coisa_que_bug_meu():
+    """Três destinos, três significados — e o defeito NÃO tira o artigo da fila.
+
+    ═══ 22/Ago/2026 ═══
+    Palavras dele: *"esta categoria de recusados era para situações raras de artigos que não se
+    enquadram... desde quando o classificador tem autonomia para pegar um artigo de revisão ou
+    original e dar nota e excluir?"*
+
+    Ele estava certo nos dois pontos. O classificador nunca fez isso — ele descarta caso/carta
+    para `DESCARTE`. Quem enchia `_RECUSADOS` era o publicador, com um `else` que não perguntava
+    o motivo. MEDIDO nos 267 que estavam lá:
+
+        255  a RÉGUA segurou (nota 0, 3, 4, 5) — decisão de produto, LEI 10
+          9  DEFEITO NOSSO — inclusive **DOIS artigos nota 9**
+          3  sem registro
+
+    E `_pdfs_na_fila` ignorava a pasta: tudo que entrava saía da fila PARA SEMPRE. Um vericiguat
+    nota 9, com perícia, áudio e visual prontos, exilado por uma sigla trocada no NOSSO texto.
+
+    Dois defeitos independentes, achados puxando o mesmo fio:
+      · o contrato exigia nota 1–10 e o motor produz **0** de propósito (pré-clínico, protocolo).
+        43 artigos de bancada apareciam como "programa quebrado". Decisão dele: o motor está
+        certo, a faixa passa a ser 0–10 — e 0 continua retido, porque 0 < 6.
+      · **e eu repeti o defeito dentro do conserto**: mandei os 9 de `_DEFEITO` para uma pasta
+        que NÃO é pasta de tipo. Pela LEI 8, PDF fora de pasta de tipo não entra na fila — eu
+        os teria tornado invisíveis de outro jeito. Por isso a checagem 3 abaixo existe.
+    """
+    import ast as _ast
+    import os as _os
+    import types as _types
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    raiz = _os.path.dirname(aqui)
+
+    fonte = open(_os.path.join(aqui, "rodar_em_blocos.py"), encoding="utf-8").read()
+    arv = _ast.parse(fonte)
+    fn = next((n for n in arv.body
+               if isinstance(n, _ast.FunctionDef) and n.name == "_destino_da_recusa"), None)
+    checa("_destino_da_recusa existe", fn is not None,
+          "sem ela o publicador volta ao `else` cego que não pergunta o motivo")
+    if not fn:
+        return
+    mod = _types.ModuleType("_rb")
+    mod.__dict__.update(RETIDOS="_RETIDOS_PELA_REGUA", DEFEITO="_DEFEITO")
+    exec(compile(_ast.Module(body=[fn], type_ignores=[]), "<rb>", "exec"), mod.__dict__)
+    decidir = mod._destino_da_recusa
+
+    # ── 1) os casos REAIS de 22/Ago, um a um ──
+    regua = ["contexto_tema: ausente: bloco A do ACRI vazio",
+             "impacto_conduta: ausente: bloco I do ACRI vazio",
+             "gancho_lista: ausente: sem gancho no ACRI",
+             "nota 5 < 6: por regra o artigo FICA retido",
+             "contexto_tema vazio ou raso (<40 chars)",
+             "caminho_pdf ausente/inexistente: ''"]
+    casos = [
+        ("VICTORIA nota 9 · sigla trocada", 9,
+         ["INVERSÃO FE: estudo de fração REDUZIDA mas o texto usa a sigla 'ICFEP'"], "_DEFEITO"),
+        ("os 32 do NameError", None,
+         ["preflight de schema: NameError: NAO_SE_APLICA"], "_DEFEITO"),
+        ("nota 8 com coluna faltando no banco", 8,
+         ["coluna 'mesh_origem' declarada aqui mas AUSENTE na tabela artigos"], "_DEFEITO"),
+        ("EXCEL 2016 · a régua segurou", 5, regua, "_RETIDOS_PELA_REGUA"),
+        ("pré-clínico da Circulation · nota 0", 0,
+         [x.replace("nota 5", "nota 0") for x in regua], "_RETIDOS_PELA_REGUA"),
+    ]
+    for nome, nota, viol, esperado in casos:
+        d, _m = decidir(viol, nota)
+        checa(f"{nome} → {esperado}", d == esperado, f"foi para {d}")
+
+    # ── 2) o defeito NÃO tira o artigo da fila (é o que o faz voltar sozinho) ──
+    checa("_DEFEITO fora de FILA_FORA", "FILA_FORA" in fonte and '"_DEFEITO"' not in
+          fonte.split("FILA_FORA =")[1].split(")")[0],
+          "se `_DEFEITO` entrar na lista, bug meu vira artigo perdido para sempre")
+    trecho = fonte[fonte.index("destino, motivo = _destino_da_recusa"):][:900]
+    checa("em DEFEITO o publicador NÃO chama _tirar_da_fila",
+          "_tirar_da_fila" not in trecho.split("else:")[0],
+          "mover o PDF em caso de defeito é exilá-lo por erro nosso")
+
+    # ── 3) NENHUM PDF pode acabar fora de uma pasta de TIPO (LEI 8) ──
+    # Esta checagem nasce de um erro MEU, cometido dentro do próprio conserto: mandei 9 PDFs
+    # para `_DEFEITO`, que não é pasta de tipo — e `_pdfs_na_fila` os teria ignorado.
+    import analisador as _A
+    for pasta in ("_DEFEITO", "_RETIDOS_PELA_REGUA", "_RECUSADOS"):
+        d = _os.path.join(raiz, "ARTIGOS", "CLASSIFICADOS", pasta)
+        if not _os.path.isdir(d):
+            continue
+        pdfs = [f for f in _os.listdir(d) if f.lower().endswith(".pdf")]
+        if pasta == "_DEFEITO":
+            checa("_DEFEITO não guarda PDF (só o registro)", not pdfs,
+                  f"{len(pdfs)} PDF(s) ali — fora de pasta de tipo, invisíveis para a fila")
+    checa("as pastas de retenção não são pastas de tipo",
+          all(p not in _A._TIPO_POR_PASTA for p in ("_DEFEITO", "_RETIDOS_PELA_REGUA")),
+          "se virarem, o artigo retido volta à fila e é reanalisado (e pago) todo mês")
+
+    # ── 4) o contrato aceita 0, e 0 continua retido ──
+    import contrato as C
+    base = {"doc_id": "x", "doi": "10.1/x", "titulo": "Titulo bom", "revista": "R",
+            "tema": "Arritmias/Anticoagulantes", "tema_secundario": "Não se aplica",
+            "tema_origem": "llm", "mesh_terms": ["Heart Failure"], "mesh_origem": "pubmed",
+            "tipo_documento": "original"}
+    v0 = C.validar(dict(base, nota_aplicabilidade=0), checar_arquivos=False)
+    checa("nota 0 NÃO é 'inválida' (o motor a produz de propósito)",
+          not any("inválida" in str(x) for x in v0),
+          "43 artigos pré-clínicos apareciam como defeito de programa")
+    checa("mas nota 0 continua RETIDA pela LEI 10", any("< 6" in str(x) for x in v0), "")
+    vneg = C.validar(dict(base, nota_aplicabilidade=-1), checar_arquivos=False)
+    checa("nota negativa continua inválida", any("inválida" in str(x) for x in vneg),
+          "alargar a faixa não é abrir a porteira")
+
 
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,

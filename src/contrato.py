@@ -110,8 +110,23 @@ def validar(ficha, checar_arquivos=True):
     # original continuam retidos abaixo de 6 (LEI 10 — o CardioDaily publica menos e reprova mais).
     _eh_diretriz = str(ficha.get("tipo_documento") or "").strip().lower() == "diretriz"
     n = ficha.get("nota_aplicabilidade")
-    if not isinstance(n, int) or not (1 <= n <= 10):
-        v.append(f"nota_aplicabilidade inválida: {n!r} (int 1–10)")
+    # ═══ 22/Ago/2026 — A FAIXA ERA 1–10 E O MOTOR PRODUZ 0 ═══
+    # Duas peças do sistema discordando sobre o que é uma nota válida, e nenhuma sabia disso.
+    #
+    #   MOTOR    → nota 0 · "estudo pré-clínico (animal/in vitro): não há paciente, logo não há
+    #                        aplicabilidade clínica para pontuar"     (11/Ago, e igual p/ protocolo)
+    #   CONTRATO → "nota_aplicabilidade inválida: 0 (int 1–10)"
+    #
+    # O 0 é VEREDITO, não falha: é o motor dizendo "isto não é para beira de leito". Medido em
+    # 22/Ago: **43 artigos** — ciência básica da Circulation (JNK2, Sam68, GPRASP1, microplástico
+    # em cardiomiócito) e protocolos (VALIANT baseline) — apareciam como defeito de programa.
+    # Decisão dele: quem está certo é o MOTOR. A faixa passa a ser 0–10.
+    #
+    # ⚠️ Isto NÃO abre porta nenhuma: 0 < 6, então continua retido pela LEI 10. O que muda é
+    # que ele fica em `_RETIDOS_PELA_REGUA` (com o motivo à vista na Chave 3) em vez de ir para
+    # `_DEFEITO` e voltar para a fila para sempre, sendo reanalisado e recusado todo mês.
+    if not isinstance(n, int) or isinstance(n, bool) or not (0 <= n <= 10):
+        v.append(f"nota_aplicabilidade inválida: {n!r} (int 0–10; 0 = sem paciente a quem aplicar)")
     elif n < 6 and not _eh_diretriz:
         v.append(f"nota {n} < 6: por regra o artigo FICA retido (não publica). "
                  f"Bug real: um nota 5 foi parar no Supabase em 25/07.")

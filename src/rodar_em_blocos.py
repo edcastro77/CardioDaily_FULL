@@ -37,8 +37,78 @@ P._carregar_env()
 # propósito: subir é opcional, mas voltar a errar 400 de uma vez não pode acontecer duas vezes.
 RAMPA = [(10, 3), (20, 3), (30, None)]   # (tamanho do bloco, blocos bons para subir; None = topo)
 
-FILA_FORA = ("_PUBLICADOS", "_RECUSADOS", "MINIRREVISOES")   # NÃO são fila do publicador
-# (MINIRREVISOES é a trilha da minirevisão/opinião: condutas+fluxograma via minirevisao.py, não sobe no Supabase)
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# 22/Ago/2026 — UMA PASTA COM TRÊS SIGNIFICADOS, E EXÍLIO SEM APELAÇÃO
+#
+# Palavras dele: *"esta categoria de recusados era para situações raras de artigos que não se
+# enquadram... desde quando o classificador tem autonomia para pegar um artigo de revisão ou
+# original e dar nota e excluir?"*
+#
+# Ele está certo nos dois pontos, e o segundo é pior do que parecia. O classificador NÃO faz
+# isso — ele descarta caso/carta para `DESCARTE`, como desenhado. Quem enchia o `_RECUSADOS`
+# era ESTE arquivo, na linha do publicador, com um `else` que não perguntava o motivo.
+#
+# MEDIDO nos 267 que estavam lá:
+#     257  a RÉGUA segurou (nota 0, 3, 4, 5) — decisão de produto, LEI 10
+#       7  DEFEITO NOSSO — 5 por inversão de sigla FE, 1 nota 6, e **1 nota 9**
+#       3  sem registro
+#
+# Dois erros somados:
+#   ① "não é cardiologia", "a régua reprovou" e "o programa quebrou" no MESMO balde —
+#      indistinguíveis. É a LEI 11 violada em forma de diretório.
+#   ② `_pdfs_na_fila` ignorava a pasta, então o que entrava SAÍA DA FILA PARA SEMPRE. A LEI 10
+#      diz "publica menos e reprova mais"; ela NÃO diz "some com o artigo". A prova de que já
+#      doeu: a Chave 24 precisou existir para arrastar 96 de volta à mão.
+#
+# DECISÃO DELE, 22/Ago — três destinos, e só um deles é definitivo:
+#     _PUBLICADOS ............ subiu. Sai da fila.
+#     _RETIDOS_PELA_REGUA .... a régua segurou. Sai da fila (não se paga de novo por ele todo
+#                              mês), mas aparece na CHAVE 3 com nota e delatores. É o produto
+#                              que ele vende: "olhei 24 e 12 não prestam" — e só dá para vender
+#                              isso mostrando os 12.
+#     _DEFEITO ............... o programa quebrou. **CONTINUA NA FILA**: assim que o bug for
+#                              corrigido, a Chave 2 o reencontra sozinha e refaz. Os FATOS já
+#                              estão pagos, então custa quase nada. Sem isto, todo bug meu vira
+#                              artigo perdido em silêncio — foi o que aconteceu com a nota 9.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+RETIDOS = "_RETIDOS_PELA_REGUA"
+DEFEITO = "_DEFEITO"
+
+# ⚠️ `_DEFEITO` NÃO está aqui, de propósito: é o que faz o artigo voltar sozinho.
+# `_RECUSADOS` continua na lista porque a pasta antiga ainda existe no disco de quem não
+# migrou — mas ninguém escreve nela nunca mais (ver `_destino_da_recusa`).
+# (MINIRREVISOES é a trilha da minirevisão/opinião: condutas+fluxograma via minirevisao.py,
+#  não sobe no Supabase — por isso nunca foi fila do publicador.)
+FILA_FORA = ("_PUBLICADOS", "_RECUSADOS", RETIDOS, "MINIRREVISOES")
+
+
+def _destino_da_recusa(violacoes, nota):
+    """(subpasta, motivo) — a régua segurou, ou o programa quebrou?
+
+    A pergunta que o `else` antigo não fazia. E a resposta NÃO pode sair da nota sozinha: a
+    nota 9 do vericiguat foi barrada por uma sigla trocada no NOSSO texto, e um artigo pode ter
+    nota 8 e cair por erro de schema. Quem separa é a VIOLAÇÃO, não o número.
+    """
+    v = " · ".join(str(x) for x in (violacoes or []))
+    marcas_de_defeito = (
+        "INVERSÃO FE",          # o redator trocou ICFEr por ICFEp — texto nosso, não do artigo
+        "NameError", "TypeError", "AttributeError", "KeyError",
+        "preflight",            # tipo/coluna não bate com a tabela
+        "não existe na tabela", "ALTER TABLE",
+        "ausente:",             # peça que DEVIA existir e não veio (o selo de defeito, 03/Ago)
+    )
+    if any(m.lower() in v.lower() for m in marcas_de_defeito):
+        # ⚠️ exceção: com nota <6 o analisador NÃO GERA ACRI nem perícia (a porta é ≥6), então
+        # os selos `ausente:` são CONSEQUÊNCIA da retenção, não defeito. Sem esta linha, os 257
+        # retidos pela régua iriam todos para `_DEFEITO` e voltariam à fila para sempre.
+        so_ausente = all("ausente:" in str(x).lower() or "< 6" in str(x)
+                         or "vazio ou raso" in str(x).lower()
+                         or "caminho_pdf" in str(x).lower() for x in (violacoes or []))
+        if not (so_ausente and isinstance(nota, int) and nota < 6):
+            return DEFEITO, "defeito do programa"
+    if isinstance(nota, int) and nota < 6:
+        return RETIDOS, f"a régua segurou (nota {nota})"
+    return DEFEITO, "recusado sem nota baixa — logo, não foi a régua"
 
 
 _CHAVE_DO_TIPO = {"diretriz": "agree", "revisao_narrativa": "qualidade_revisao",
@@ -221,7 +291,7 @@ def main(classificados, tam_bloco=20, maximo=0, rampa=False, so_pasta="", so_art
     if total == 0:
         print("Fila vazia — nada a fazer (tudo já concluído, ou pasta sem PDF).")
         return
-    pub_ok = pub_rec = 0
+    pub_ok = pub_rec = pub_def = 0
     falhou = []                      # 03/Ago: as falhas rolavam a tela e sumiam. Agora viram lista no fim.
 
     # ── a fila é consumida em blocos de tamanho VARIÁVEL (a rampa) ──
@@ -282,8 +352,22 @@ def main(classificados, tam_bloco=20, maximo=0, rampa=False, so_pasta="", so_art
                 print(f"   {status:16} {os.path.basename(pasta)[:40]}")
                 if str(status).startswith("PUBLICADO"):
                     _tirar_da_fila(pdf, classificados, "_PUBLICADOS"); pub_ok += 1
-                else:                                            # RECUSADO pelo portão/preflight
-                    _tirar_da_fila(pdf, classificados, "_RECUSADOS"); pub_rec += 1
+                else:
+                    # 22/Ago — o `else` cego virou uma PERGUNTA: foi a régua ou fomos nós?
+                    destino, motivo = _destino_da_recusa(viol, nota)
+                    if destino == DEFEITO:
+                        # NÃO sai da fila: o próximo run tenta de novo, com o bug corrigido.
+                        os.makedirs(os.path.join(classificados, DEFEITO), exist_ok=True)
+                        with open(os.path.join(classificados, DEFEITO, "_o_que_falhou.txt"),
+                                  "a", encoding="utf-8") as f:
+                            f.write(f"{os.path.basename(pdf)}\n   nota {nota} · "
+                                    f"{' · '.join(str(x)[:110] for x in (viol or []))}\n\n")
+                        print(f"      🔧 {motivo} — FICA NA FILA para o próximo run")
+                        pub_def += 1
+                    else:
+                        _tirar_da_fila(pdf, classificados, RETIDOS)
+                        print(f"      ⚖️  {motivo} — vai para {RETIDOS} (aparece na Chave 3)")
+                        pub_rec += 1
             except Exception as e:
                 print(f"   ⚠️  publicação falhou (fica na fila p/ refazer): "
                       f"{os.path.basename(pasta)[:40]} — {type(e).__name__}: {e}")
@@ -307,7 +391,12 @@ def main(classificados, tam_bloco=20, maximo=0, rampa=False, so_pasta="", so_art
               f"falhas neste bloco {falhas_no_bloco} ═══\n")
         i += len(bloco)
 
-    print(f"FIM · {pub_ok} publicado(s) no Supabase (rascunho) · {pub_rec} recusado(s) (em _RECUSADOS).")
+    print(f"FIM · {pub_ok} publicado(s) no Supabase (rascunho) · "
+          f"{pub_rec} retido(s) pela régua (em {RETIDOS}, visíveis na Chave 3) · "
+          f"{pub_def} com DEFEITO NOSSO (continuam na fila).")
+    if pub_def:
+        print(f"    🔧 os {pub_def} com defeito NÃO são veredito sobre o artigo — conserte e"
+              f" rode a Chave 2 de novo; os FATOS já estão pagos.")
     if falhou:
         print(f"\n⚠️  {len(falhou)} artigo(s) FALHARAM e ficaram na fila para refazer:")
         for nome, motivo in falhou[:15]:
