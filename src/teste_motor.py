@@ -4788,6 +4788,63 @@ def teste_minirrevisao_processada_sai_da_fila():
               "getsize" in corpo, "foi assim que um gabarito dele morreu em 20/Ago")
         checa("MOVE, não copia nem apaga", "move" in corpo and "remove" not in corpo, "")
 
+def teste_titulo_curto_nao_e_titulo_quebrado():
+    """"Syncope" é o nome do artigo, não um buraco de extração — 26/Ago/2026.
+
+    Ele: *"me explica por que ele recusou o artigo de síncope do NEJM — revisão maravilhosa!"*
+
+    A régua não tinha nada a ver. O que barrou foi UMA LINHA do contrato:
+
+        if len(titulo.strip()) < 10:
+            "titulo vazio ou curto demais (<10 chars) — cheira a buraco de nome"
+
+    **O artigo se chama "Syncope".** Sete caracteres. É uma Review do NEJM, e o NEJM dá títulos
+    de uma palavra às revisões: Syncope · Hypertension · Myocarditis. O dado estava CERTO e a
+    trava reprovou pelo FORMATO.
+
+    A regra confundia duas coisas que só se parecem:
+        "o título NÃO VEIO"  → defeito de extração ("", "Mo", "Article", "n/a")
+        "o título é CURTO"   → o artigo é assim
+
+    O 10 nasceu como sintoma de extração quebrada — e sintoma não é diagnóstico. É o mesmo
+    erro de forma do `qualidade_entrada` (22/Ago): tratar a ausência de um sinal como prova
+    do caso ruim, quando o certo é olhar o que o dado DIZ.
+
+    Agora decide o CONTEÚDO do título mais a integridade do resto da identidade: título curto
+    passa se for palavra de verdade E revista e data estiverem íntegras — porque extração que
+    quebra no título quebra em tudo.
+    """
+    import contrato as C
+    base = dict(revista="The New England Journal of Medicine", data_publicacao="2026-08-01")
+
+    def passa(t, **kw):
+        return not C._titulo_furou(dict(base, **kw, titulo=t))
+
+    # ── 1) O CASO REAL, e os irmãos dele no NEJM ──
+    for t in ("Syncope", "Hypertension", "Myocarditis", "Atrial Fibrillation"):
+        checa(f"título de uma palavra passa: {t!r}", passa(t),
+              "o NEJM dá títulos de uma palavra às revisões — não é buraco")
+
+    # ── 2) O QUE A TRAVA EXISTIA PARA PEGAR continua sendo pego ──
+    for t, porque in (("", "vazio"),
+                      ("Mo", "o `ModuleNotFoundError` decapitado por um [:110] em 19/Ago"),
+                      ("Article", "rótulo genérico, não é o nome do artigo"),
+                      ("n/a", "ausência com nome de dado"),
+                      ("10.1056", "código, não título"),
+                      ("---", "pontuação")):
+        checa(f"ainda barra {t!r} ({porque})", not passa(t), "voltou a passar lixo de extração")
+
+    # ── 3) O CURTO SÓ PASSA SE O RESTO DA IDENTIDADE SUSTENTAR ──
+    # É o que distingue "o artigo se chama assim" de "a extração quebrou em tudo".
+    checa("curto + sem revista → barra", not passa("Syncope", revista=""),
+          "extração que quebra no título quebra na revista também")
+    checa("curto + data inválida → barra", not passa("Syncope", data_publicacao="2026"),
+          "idem para a data")
+    checa("curto + identidade íntegra → passa", passa("Syncope"), "")
+
+    # ── 4) e o título longo de sempre não foi afetado ──
+    checa("título normal passa", passa("Vericiguat in Patients with Heart Failure"), "")
+
 
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,

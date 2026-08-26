@@ -50,6 +50,57 @@ def _txt(v):
 PREFIXO_DEFEITO = "ausente:"
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# 26/Ago/2026 — "SYNCOPE": A TRAVA REPROVOU UM ARTIGO PORQUE O TÍTULO ERA CURTO
+#
+# Ele: *"me explica por que ele recusou o artigo de síncope do NEJM — revisão maravilhosa!"*
+#
+# A régua não tinha nada a ver com isso. O que barrou foi UMA LINHA:
+#
+#     if len(titulo.strip()) < 10:
+#         "titulo vazio ou curto demais (<10 chars) — cheira a buraco de nome"
+#
+# **O artigo se chama "Syncope".** Uma palavra, sete caracteres. É uma Review do NEJM, e o
+# NEJM dá títulos de uma palavra às revisões: Syncope · Hypertension · Myocarditis ·
+# Atrial Fibrillation. O dado estava CERTO e a trava reprovou por causa do formato.
+#
+# A regra confundia duas coisas que só se parecem:
+#     "o título NÃO VEIO"        → defeito de extração ("", "Mo", "Article", "n/a")
+#     "o título é CURTO"         → o artigo é assim, e não é problema nosso
+#
+# O 10 nasceu como sintoma de extração quebrada, e sintoma não é diagnóstico. Agora quem
+# decide é o CONTEÚDO do título mais a integridade do resto da identidade: um título curto
+# passa se for uma palavra de verdade E a revista e a data estiverem lá — porque, se a
+# extração tivesse quebrado, teria quebrado nos outros campos também.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+_TITULO_LIXO = {"n/a", "na", "none", "null", "sem titulo", "sem título", "untitled",
+                "article", "artigo", "review", "editorial", "pdf", "documento", "-", "--"}
+
+
+def _titulo_furou(ficha):
+    """[] se o título serve. Lista de violações se ele é buraco de extração."""
+    t = (ficha.get("titulo") or "").strip()
+    if not t:
+        return ["titulo vazio — a extração não devolveu nome nenhum"]
+    if t.lower() in _TITULO_LIXO:
+        return [f"titulo {t!r} é rótulo genérico, não o nome do artigo — buraco de extração"]
+    # sem NENHUMA letra (só número, código, pontuação) = lixo de extração
+    if not re.search(r"[A-Za-zÀ-ÿ]{3}", t):
+        return [f"titulo {t!r} não tem nem uma palavra legível — buraco de extração"]
+    if len(t) >= 10:
+        return []
+    # ── curto: só passa se o RESTO da identidade estiver íntegro ──
+    # Extração que quebra no título quebra em tudo. Se revista e data vieram bem, o título
+    # curto é o título mesmo. É o caso do "Syncope" (NEJM, 2026, revisão narrativa).
+    _rev = _txt(ficha.get("revista"))
+    _dat = re.match(r"^\d{4}-\d{2}-\d{2}$", str(ficha.get("data_publicacao") or ""))
+    if _rev and _dat and re.fullmatch(r"[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\- ]{3,}", t):
+        return []
+    return [f"titulo {t!r} curto E o resto da identidade não sustenta "
+            f"(revista={'ok' if _rev else 'vazia'} · data={'ok' if _dat else 'inválida'}) "
+            f"— cheira a buraco de nome"]
+
+
 def validar(ficha, checar_arquivos=True):
     """Recebe a ficha (dict com os 16 campos). Devolve lista de VIOLAÇÕES (vazia = passou).
     Cada violação é uma string dizendo QUAL campo furou e por quê — vira o relatório do _REVISAR."""
@@ -73,8 +124,7 @@ def validar(ficha, checar_arquivos=True):
     # 2) identidade / texto obrigatório e coerente
     if not _txt(ficha.get("doc_id")):
         v.append("doc_id vazio")
-    if not _txt(ficha.get("titulo")) or len(ficha.get("titulo", "").strip()) < 10:
-        v.append("titulo vazio ou curto demais (<10 chars) — cheira a buraco de nome")
+    v += _titulo_furou(ficha)
     if not _txt(ficha.get("revista")):
         v.append("revista vazia")
 
