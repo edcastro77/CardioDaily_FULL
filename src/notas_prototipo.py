@@ -105,8 +105,9 @@ def selo_prospectivo(a):
     for campo, dito in (("desenho_apropriado", "o desenho não é o apropriado para a pergunta"),
                         ("qualidade_entrada", "a qualidade da coleta não está demonstrada"),
                         ("follow_up_completo", "o seguimento não está declarado completo")):
-        if a.get(campo) is not True:
-            faltou.append(dito + (" (o artigo não informa)" if a.get(campo) is None else ""))
+        _v = coleta_padronizada(a) if campo == "qualidade_entrada" else a.get(campo)
+        if _v is not True:
+            faltou.append(dito + (" (o artigo não informa)" if _v is None else ""))
     return (not faltou), "; ".join(faltou)
 
 
@@ -1769,18 +1770,53 @@ def teto_rigor(a):
     return _TETO_RIGOR_DESENHO.get(a.get("desenho"), 6)
 
 
+def coleta_padronizada(a):
+    """True · False · None — e o None é a resposta que faltava (22/Ago/2026).
+
+    ═══ POR QUE ESTA FUNÇÃO EXISTE ═══
+    `qualidade_entrada` era um BOOLEANO obrigatório, e o prompt dava duas saídas: "padronizada"
+    ou "raspada de prontuário". Artigo observacional quase nunca descreve codebook ou laboratório
+    calibrado — não cabe no limite de palavras. Diante do silêncio, o modelo marcava `false`; e
+    `false` capava o rigor em 5, que capava a nota de aplicabilidade.
+
+    MEDIDO: **181 observacionais do acervo com `false`**, e `garbage-in` era o motivo nº 1 entre
+    os 255 retidos (55 artigos). Impossível separar "o artigo disse que era ruim" de "o artigo
+    não disse nada" — porque o campo não distinguia.
+
+    Agora o campo é `padronizada · nao_padronizada · nao_informado`. Esta função traduz, e
+    **entende os dois formatos**: 942 pacotes no disco ainda têm o booleano velho, e re-extrair
+    todos custaria dinheiro para reaprender o que já está lá.
+
+    ⚠️ O booleano ANTIGO `False` é lido como None (não informado), de propósito. Ele foi
+    produzido por um prompt que não oferecia "não sei" — tratá-lo como "o artigo declarou coleta
+    ruim" seria dar valor de prova a uma resposta que o modelo foi OBRIGADO a dar. Quem quiser o
+    desconto sobre um desses artigos, re-extrai; e a re-extração é justamente o que a Chave 26 faz.
+    """
+    v = a.get("qualidade_entrada")
+    if isinstance(v, str):
+        t = v.strip().lower()
+        if t == "padronizada":
+            return True
+        if t == "nao_padronizada":
+            return False
+        return None                      # "nao_informado" e qualquer coisa não reconhecida
+    if v is True:
+        return True
+    return None                          # False antigo e None → não informado
+
+
 def nota_estatistica(a):
     """Qualidade metodológica DENTRO do tipo. Começa alto; desce com os delatores."""
     # base 10 só para o desenho apropriado IMPECÁVEL de etiologia/prognóstico/diagnóstico
     q = a["pergunta"]
     impecavel_obs = (q in ("etiologia", "prognostico", "diagnostico")
-                     and a.get("desenho_apropriado") and a.get("qualidade_entrada")
+                     and a.get("desenho_apropriado") and coleta_padronizada(a) is True
                      and a.get("follow_up_completo") and not a.get("dicotomizou_continuo"))
     # aquisição impecável = piso 8 (sem viés de desfecho/hindsight); senão 9 (interv/meta) ou menos (obs falho)
     if impecavel_obs:
         s = 8
     elif q in ("etiologia", "prognostico", "diagnostico"):
-        s = 7 if a.get("qualidade_entrada", True) else 5
+        s = 7 if coleta_padronizada(a) is not False else 5
     elif (q == "intervencao" and a.get("desenho") == "rct" and not a.get("open_label")
           and a.get("desfecho_duro") and a.get("efeito_grande")):
         s = 10  # RCT duplo-cego, desfecho duro, efeito DISRUPTIVO (RRR enorme) = landmark
@@ -1835,8 +1871,19 @@ def nota_estatistica(a):
         s = min(s, 6); fl.append("I² ≥80% sem investigação")
     # OBSERVACIONAL — dado de entrada
     if a["pergunta"] in ("etiologia", "prognostico", "diagnostico"):
-        if not a.get("qualidade_entrada", True):
-            s = min(s, 5); fl.append("garbage-in (dado de entrada ruim)")
+        _cq = coleta_padronizada(a)
+        if _cq is False:
+            s = min(s, 5)
+            fl.append("garbage-in: o artigo DECLARA coleta não padronizada (prontuário/"
+                      "faturamento sem protocolo)")
+        elif _cq is None:
+            # ⚠️ 22/Ago — NÃO CAPA. O artigo não descreveu a coleta, e silêncio não é prova de
+            # coleta ruim: quase nenhum observacional descreve codebook, porque não cabe no
+            # limite de palavras. Antes isto virava `false` e derrubava o rigor para 5.
+            # O delator DIZ que não foi verificado — o leitor decide o quanto isso pesa, que é
+            # o oposto de nós decidirmos por ele em silêncio.
+            fl.append("a qualidade da coleta NÃO foi descrita pelo artigo — não verificada, "
+                      "e por isso não descontada")
         if a.get("dicotomizou_continuo"):
             s = min(s, 7); fl.append("dicotomizou variável contínua")
     # flags informativas

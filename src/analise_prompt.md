@@ -42,7 +42,12 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
   "taxa_basal": <número: taxa basal/controle assumida (proporção); null se n/a>,
   "conclusao_nao_bate_desenho": <true se a CONCLUSÃO afirma além do que o desenho testou (ex.: testou ESTRATÉGIA mas conclui sobre a DROGA; ou infere causa de um observacional)>,
   "itt_falso": <true se houve exclusão pós-randomização ASSIMÉTRICA entre os braços (ex.: muito mais excluídos num braço), quebrando o intention-to-treat>,
-  "qualidade_entrada": <SÓ para etiologia/prognostico/diagnostico: true se a coleta foi PADRONIZADA (codebook/definições treinadas, medida por protocolo, laboratório próprio calibrado); false se dados raspados de prontuário sem padronização. Para intervencao/meta, use true>,
+  "qualidade_entrada": <SÓ para etiologia/prognostico/diagnostico. TRÊS valores, e o terceiro é obrigatório quando for o caso:
+      "padronizada"     — o artigo DESCREVE coleta padronizada: codebook, definições treinadas, medida por protocolo, laboratório próprio calibrado, exames por leitor cego (ex.: Framingham, UK Biobank, MESA).
+      "nao_padronizada" — o artigo DIZ que os dados vieram de prontuário/faturamento/registro administrativo sem padronização, ou descreve coleta claramente frágil.
+      "nao_informado"   — **o artigo NÃO diz.** Use este SEMPRE que não houver frase no texto sustentando um dos dois acima. NÃO deduza pelo desenho, pela revista nem pelo tamanho da amostra.
+    Para intervencao/meta, use "padronizada".
+    ⚠️ "nao_informado" NÃO é o mesmo que "nao_padronizada". A maioria dos artigos observacionais não descreve o codebook porque não cabe no limite de palavras — silêncio do artigo não é prova de coleta ruim, e marcar "nao_padronizada" nesse caso é condenar o estudo por algo que ninguém verificou.>,
   "follow_up_completo": <true se o seguimento foi completo e por tempo adequado ao curso da doença; false caso contrário>,
   "desenho_apropriado": <SÓ para etiologia/prognostico/diagnostico: true se o desenho é o apropriado para a pergunta (coorte prospectiva p/ etiologia/prognóstico; transversal cego com padrão-ouro p/ diagnóstico)>,
   "dicotomizou_continuo": <true SOMENTE se forçou uma variável contínua em categorias E NÃO a analisou também de forma contínua. Se há QUALQUER análise contínua ou gradiente dose-resposta da variável, use false. Tabelas por faixa etária NÃO contam como dicotomizar>,

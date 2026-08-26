@@ -109,7 +109,26 @@ SCHEMA_FATOS = {
         "open_label": _B, "poder_ok": _B, "desfecho_duro": _B, "extrapolavel": _B,
         "eventos_min_grupo": _INT, "eventos_nao_alcancados": _B, "parado_cedo_por_beneficio": _B,
         "efeito_grande": _B, "taxa_obs": _NUM, "taxa_esp": _NUM, "margem_ni": _NUM, "taxa_basal": _NUM,
-        "conclusao_nao_bate_desenho": _B, "itt_falso": _B, "qualidade_entrada": _B,
+        "conclusao_nao_bate_desenho": _B, "itt_falso": _B,
+        # ═══ 22/Ago/2026 — O CAMPO NÃO TINHA COMO DIZER "NÃO SEI" ═══
+        # Era `_B` (booleano puro) e OBRIGATÓRIO. O prompt oferecia só "padronizada" ou
+        # "raspada de prontuário" — e artigo observacional quase nunca descreve codebook nem
+        # calibração de laboratório, porque isso não cabe no limite de palavras. Diante do
+        # silêncio o modelo marcava `false`, e `false` capa o rigor em 5, que capa a nota.
+        #
+        # MEDIDO no acervo: **181 observacionais com `false`** (56 etiologia · 96 prognóstico ·
+        # 29 diagnóstico) — e é impossível saber quantos foram "o artigo disse que era ruim" e
+        # quantos foram "o artigo não disse nada", porque o campo não distinguia as duas coisas.
+        # Nos 255 retidos, `garbage-in` é o motivo nº 1: **55 artigos**.
+        #
+        # É a assinatura desta casa, invertida: em julho a ausência era lida como o caso
+        # FAVORÁVEL; aqui era lida como o DESFAVORÁVEL. Errado das duas formas — o certo é a
+        # ausência ter NOME (LEI 11). O vocabulário de 3 valores já existia no `relevancia_clinica`
+        # (`incerto`); faltava aqui.
+        #
+        # Palavras dele ao ver a lista dos retidos: *"está me dando agonia ler esta lista"*.
+        "qualidade_entrada": {"type": "string",
+                              "enum": ["padronizada", "nao_padronizada", "nao_informado"]},
         "follow_up_completo": _B, "desenho_apropriado": _B, "dicotomizou_continuo": _B,
         "contaminacao_incluidos": _B, "ni_mal_interpretada": _B, "i2_alto_sem_investigar": _B,
         "efeito_relevante_consistente": _B, "sem_evidencia_conflitante_melhor": _B,

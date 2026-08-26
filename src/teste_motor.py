@@ -142,8 +142,29 @@ def teste_rigor_conhece_o_desenho():
     checa("Framingham: coorte prospectiva impecável mantém rigor 8", r["trabalho"] == 8,
           f"veio {r['trabalho']}")
     # e os delatores continuam descendo A PARTIR do teto, não sendo apagados por ele
+    #
+    # ═══ 22/Ago — ONDE HAVIA UM CASO, AGORA HÁ DOIS ═══
+    # `qualidade_entrada` era booleano OBRIGATÓRIO, e o prompt só oferecia "padronizada" ou
+    # "raspada de prontuário". Artigo observacional quase nunca descreve codebook — não cabe no
+    # limite de palavras — então o silêncio virava `false`, e `false` capava o rigor em 5.
+    # Medido: 181 observacionais do acervo com `false`, e `garbage-in` era o motivo nº 1 dos 255
+    # retidos (55 artigos). Esta trava foi escrita quando os dois casos eram um só.
+    r = N.score(_bom(pergunta="etiologia", desenho="coorte",
+                     qualidade_entrada="nao_padronizada"))
+    checa("o artigo DECLARA coleta ruim → garbage-in ainda derruba a coorte",
+          r["trabalho"] <= 5, f"veio {r['trabalho']}")
+    r = N.score(_bom(pergunta="etiologia", desenho="coorte",
+                     qualidade_entrada="nao_informado"))
+    checa("o artigo NÃO DIZ → não desconta (silêncio não é prova de coleta ruim)",
+          r["trabalho"] > 5, f"veio {r['trabalho']}")
+    checa("mas o delator AVISA que não foi verificado",
+          any("NÃO foi descrita" in str(d) for d in (r.get("flags") or [])),
+          f"flags: {r.get('flags')}")
+    # o booleano ANTIGO `False` conta como "não informado": foi produzido por um prompt que não
+    # oferecia "não sei". Tratá-lo como declaração seria dar valor de prova a uma resposta forçada.
     r = N.score(_bom(pergunta="etiologia", desenho="coorte", qualidade_entrada=False))
-    checa("garbage-in ainda derruba a coorte", r["trabalho"] <= 5, f"veio {r['trabalho']}")
+    checa("o `False` velho é lido como 'não informado'", r["trabalho"] > 5,
+          f"veio {r['trabalho']} — 942 pacotes no disco têm o formato antigo")
 
 
 # ══════════════ N · O REUSO DE STAGING NÃO PODE IGNORAR A PASTA (o erro fatídico, 03/Ago) ══════════════
