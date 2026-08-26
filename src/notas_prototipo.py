@@ -2135,10 +2135,32 @@ def score(a):
         #     · 6  — a fronteira da PUBLICAÇÃO (19/Ago)
         # Se a nota, provada por método, estava do lado de cima, o desconto para na fronteira
         # e o delator DIZ quanto teria sido descontado. Entre as fronteiras vale integral.
+        # ═══ 22/Ago — A TERCEIRA FRONTEIRA: 8, E SÓ PARA QUEM PROVOU O MÉTODO ═══
+        #
+        # Ele, olhando o EXCEL: *"como um estudo que avalia uma galera que racha o peito e no
+        # outro braço coloca stent poderia ser cego?"* — e está certo: não dá. Por isso o teto
+        # de desenho do EXCEL é 8, e **8 é o gabarito que ELE mesmo marcou em 11/Ago**, junto
+        # com NOBLE 7 e ISAR-REACT 5 em 7. A calibração dos ensaios abertos foi feita sabendo
+        # que ninguém cega esternotomia contra punção femoral.
+        #
+        # Só que o EXCEL saía em 7, não 8. O que tirava o ponto era o desconto de indústria
+        # (Abbott), aplicado por inteiro porque a nota parava em 8 — abaixo do piso 9.
+        #
+        # A REGRA (decisão dele, 22/Ago): **quando o RIGOR é ≥9, o desconto de independência
+        # não rebaixa a nota — vira ressalva declarada.** É a mesma frase de 06/Ago, agora com
+        # o critério explícito: o que protege o artigo não é a nota que ele tirou, é o MÉTODO
+        # ter se provado. Um ensaio patrocinado e mal feito (rigor <9) leva o desconto inteiro.
+        #
+        # POR QUE ISTO NÃO AFROUXA A LEI 10: quase todo ensaio de fase 3 em cardiologia é
+        # patrocinado (EXCEL/Abbott, NOBLE/Biosensors, PLATO/AstraZeneca). Um desconto que
+        # quase todos levam não separa ninguém — só empurra o acervo inteiro um degrau para
+        # baixo. O que separa é o rigor, e é ele que passa a mandar aqui.
         _antes = aplic
         aplic = max(0, int(round(aplic - _desc)))
-        _piso = next((p for p in (PISO_INDEPENDENCIA, PISO_PUBLICACAO)
-                      if _antes >= p > aplic), None)
+        _metodo_provado = isinstance(s, int) and s >= 9   # `s` = nota_estatistica (o RIGOR)
+        _fronteiras = ((PISO_INDEPENDENCIA, 8, PISO_PUBLICACAO) if _metodo_provado
+                       else (PISO_INDEPENDENCIA, PISO_PUBLICACAO))
+        _piso = next((p for p in _fronteiras if _antes >= p > aplic), None)
         if _piso is not None:
             aplic = _piso
             _fronteira = ("muda conduta" if _piso == PISO_INDEPENDENCIA else "publicação")

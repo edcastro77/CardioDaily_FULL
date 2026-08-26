@@ -3342,13 +3342,49 @@ def teste_independencia_nao_cruza_o_nove():
           any("ressalva declarada" in f for f in pago.get("flags", [])),
           "o leitor tem de ver que houve indústria, mesmo sem a nota cair")
 
-    # ── ABAIXO de 9 o desconto continua inteiro: a regra de 05/Ago não virou letra morta ──
-    b8 = {**base, "open_label": True}          # open-label → teto 8
+    # ═══════════════════════════════════════════════════════════════════════════════════
+    # ⚠️ 22/Ago/2026 — O QUE ESTAVA ESCRITO AQUI FOI REVOGADO, E VALE SABER O QUÊ.
+    #
+    # Este bloco afirmava: *"ABAIXO de 9 o desconto continua inteiro: a regra de 05/Ago não
+    # virou letra morta"*, e testava exatamente `{**base, "open_label": True}` — que é o
+    # EXCEL: teto 8 por não dar para cegar, rigor 9, patrocínio Abbott. A trava exigia que o
+    # desconto derrubasse 8 → 7.
+    #
+    # Ele, lendo a nota do EXCEL: *"não tem como o EXCEL — estudo que muda a cardiologia —
+    # não estar com nota 9... ou eu tô muito doido"*, e depois: *"como um estudo que avalia
+    # uma galera que racha o peito e no outro braço coloca stent poderia ser cego?"*
+    #
+    # Eu propus tirar o teto de open-label. **Estava errado** — o gabarito dele de 11/Ago já
+    # dizia EXCEL 8, NOBLE 7, ISAR-REACT 5 7, todos open-label. O teto 8 é a calibração dele.
+    # O que faltava era outra coisa: o desconto de indústria descia inteiro logo abaixo do
+    # piso 9, e levava o 8 dele para 7.
+    #
+    # A DECISÃO (dele, 22/Ago, com a revogação declarada): **rigor ≥9 → o desconto de
+    # independência não rebaixa; vira ressalva declarada.** É a mesma frase de 06/Ago
+    # (*"financiamento é ressalva declarada, não rebaixamento de categoria"*) — que nunca foi
+    # limitada ao 9; fui eu que a implementei só ali.
+    #
+    # O QUE **NÃO** FOI REVOGADO: patrocinado E mal feito continua levando o desconto inteiro.
+    # O que passou a mandar é o RIGOR, não a altura da nota. Medido antes de valer: mesmo
+    # `fatos`, motor de ontem contra o de hoje, 1011 artigos — **22 mudam, todos 7→8, nenhum
+    # desce**. Gabarito dos 7 fixtures: 7/7 continuam batendo.
+    # ═══════════════════════════════════════════════════════════════════════════════════
+    b8 = {**base, "open_label": True}          # open-label → teto 8, rigor 9 (o caso do EXCEL)
     s_lim = N.score({**b8, "financiamento_papel": "público"})
     s_pag = N.score({**b8, "financiamento_papel": "indústria envolvida"})
-    checa("abaixo de 9 o desconto de indústria continua descontando",
-          s_pag["aplic"] < s_lim["aplic"],
-          f"público={s_lim['aplic']} vs indústria={s_pag['aplic']} — o piso virou anistia geral")
+    checa("EXCEL: rigor 9 protege — indústria NÃO derruba o 8 para 7",
+          s_pag["aplic"] == s_lim["aplic"] == 8,
+          f"público={s_lim['aplic']} vs indústria={s_pag['aplic']}")
+
+    # ── e o que sobra da regra de 05/Ago: RIGOR ABAIXO DE 9 leva o desconto inteiro ──
+    # Sem isto a revogação viraria "indústria não pesa nunca", que NÃO foi o que ele decidiu.
+    b8f = {**b8, "itt_falso": True, "base_qualidade": 7}     # mesmo teto 8, rigor derrubado
+    f_lim = N.score({**b8f, "financiamento_papel": "público"})
+    f_pag = N.score({**b8f, "financiamento_papel": "indústria envolvida"})
+    checa("mas rigor <9 continua descontando inteiro (patrocinado E mal feito)",
+          f_pag["aplic"] < f_lim["aplic"],
+          f"rigor {f_pag['trabalho']} · público={f_lim['aplic']} vs indústria={f_pag['aplic']}"
+          " — a revogação virou anistia geral")
 
 
 def teste_independencia_editorial():
@@ -3805,15 +3841,32 @@ def teste_independencia_nao_cruza_o_portao_da_publicacao():
     checa("e o delator DIZ que o desconto foi contido, e em qual fronteira",
           any("piso" in f and "publicação" in f for f in r["flags"]), " | ".join(r["flags"]))
 
-    # ── O CONTROLE: ENTRE as fronteiras o desconto continua valendo INTEIRO ──
-    # Sem isto a regra vira "indústria não desconta nunca", que é o oposto do que ele pediu em
-    # 05/Ago. `nao_avaliavel` capa em 8: o desconto tem de levar a 7, sem piso nenhum no meio.
-    entre = dict(base, relevancia_clinica={"classificacao": "nao_avaliavel",
-                                           "desfecho_primario": "desfecho composto"})
-    r2 = N.score(entre)
-    checa("entre as fronteiras (8→7) o desconto vale integral",
-          r2["aplic"] == 7, f"veio {r2['aplic']} — o desconto sumiu, virou 'indústria não pesa'")
-    return "o desconto de indústria não cruza 9 nem 6 — e entre eles vale inteiro"
+    # ── O CONTROLE: o desconto NÃO pode virar "indústria não pesa nunca" ──
+    #
+    # ⚠️ 22/Ago — ESTE BLOCO AFIRMAVA *"entre as fronteiras (8→7) o desconto vale integral"*,
+    # e foi REVOGADO por decisão dele no mesmo dia: o que protege o artigo passou a ser o
+    # RIGOR ≥9, em qualquer altura da escala — não a nota ter chegado a 9. O caso que forçou a
+    # revisão foi o EXCEL (teto 8 porque não dá para cegar esternotomia contra stent, rigor 9,
+    # patrocínio Abbott): a regra velha o mandava para 7, e o gabarito dele diz 8.
+    #
+    # O CONTROLE CONTINUA EXISTINDO — mudou só o critério. Aqui o rigor é derrubado de
+    # propósito (ITT falso), e aí sim o desconto tem de levar 8 → 7, sem piso no meio.
+    # Sem esta metade, "financiamento é ressalva" viraria "financiamento não importa", que é o
+    # oposto do que ele pediu em 05/Ago e que continua valendo para quem NÃO provou o método.
+    # ⚠️ a 1ª versão desta checagem fixava `== 7`, e o fixture derrubou o rigor para 7 — o que
+    # já leva a nota a 7 ANTES do desconto, que então desce para 6. O desconto tinha aplicado
+    # certinho; errada era a asserção, que media o NÚMERO em vez do EFEITO. Trava que crava
+    # número quebra quando outra regra mexe na conta, e manda procurar defeito onde não há.
+    entre = dict(base, itt_falso=True, base_qualidade=7,
+                 relevancia_clinica={"classificacao": "nao_avaliavel",
+                                     "desfecho_primario": "desfecho composto"})
+    e_lim = N.score({**entre, "financiamento_papel": "público"})
+    e_pag = N.score(entre)
+    checa("rigor <9: o desconto de indústria continua descontando",
+          e_pag["aplic"] < e_lim["aplic"],
+          f"rigor {e_pag['trabalho']} · público={e_lim['aplic']} vs indústria={e_pag['aplic']}"
+          " — o desconto sumiu para todo mundo")
+    return "o desconto não cruza 9 nem 6, e rigor ≥9 o transforma em ressalva declarada"
 
 
 def teste_f8_so_e_fatal_se_a_troca_foi_silenciosa():
@@ -4601,6 +4654,81 @@ def teste_recusa_pela_regua_nao_e_a_mesma_coisa_que_bug_meu():
     vneg = C.validar(dict(base, nota_aplicabilidade=-1), checar_arquivos=False)
     checa("nota negativa continua inválida", any("inválida" in str(x) for x in vneg),
           "alargar a faixa não é abrir a porteira")
+
+def teste_o_desconto_de_industria_nao_rebaixa_quem_provou_o_metodo():
+    """A TERCEIRA fronteira: 8, e só para rigor ≥9.
+
+    ═══ 22/Ago/2026 — O EXCEL, E COMO EU QUASE REVOGUEI O GABARITO DELE ═══
+
+    Ele, olhando a nota do EXCEL: *"não tem como o EXCEL — estudo que muda a cardiologia — não
+    estar com nota 9... ou eu tô muito doido"*, e em seguida: *"como um estudo que avalia uma
+    galera que racha o peito e no outro braço coloca stent poderia ser cego?"*
+
+    A segunda pergunta está certa como física, e eu peguei essa razão e propus tirar o teto de
+    open-label. **Ele concordou — e a proposta contradizia o gabarito que ele mesmo marcou.**
+    Só descobri porque fui abrir o arquivo antes de codar:
+
+        EXCEL          gabarito 8   (open-label, rigor 9)
+        NOBLE          gabarito 7   (open-label)
+        ISAR-REACT 5   gabarito 7   (open-label)
+
+    A calibração inteira dos ensaios abertos foi feita em 11/Ago com estes três, sabendo que
+    ninguém cega esternotomia contra punção femoral. Teto 8 não é castigo por não terem cegado
+    — é quanta certeza aquele desenho consegue entregar quando o composto inclui IAM julgado.
+    Tirá-lo teria levado o EXCEL a 10 e quebrado os três gabaritos.
+
+    **O que faltava era outra coisa:** o EXCEL saía em 7, não 8, porque o desconto de indústria
+    (Abbott) descia inteiro — a nota parava em 8, abaixo do piso 9 de 06/Ago.
+
+    A REGRA (decisão dele, 22/Ago): **rigor ≥9 → o desconto de independência não rebaixa.**
+    Mesma frase de 06/Ago, agora com o critério explícito: o que protege o artigo não é a nota
+    que tirou, é o MÉTODO ter se provado. Patrocinado e mal feito leva o desconto inteiro.
+
+    MEDIDO — mesmo `fatos`, motor de ontem contra o de agora, 1011 artigos únicos:
+        **22 mudam, TODOS de 7 → 8. Nenhum desce.**
+    """
+    import notas_prototipo as N
+
+    def caso(**kw):
+        base = dict(pergunta="intervencao", desenho="rct", desfecho_duro=True,
+                    extrapolavel=True, poder_ok=True, base_qualidade=9,
+                    efeito_relevante_consistente=True, beneficio_supera_risco=True,
+                    tipo_documento="original")
+        base.update(kw)
+        return N.score(base)
+
+    # ── 1) o caso do EXCEL: open-label (teto 8) + rigor 9 + indústria → FICA em 8 ──
+    r = caso(open_label=True, financiamento_papel="indústria envolvida")
+    checa("EXCEL: teto 8 por open-label", r["teto_desenho"] == 8, f"veio {r['teto_desenho']}")
+    checa("rigor 9 (o método se provou)", r["trabalho"] >= 9, f"veio {r['trabalho']}")
+    checa("indústria NÃO derruba para 7", r["aplic"] == 8, f"veio {r['aplic']}")
+    checa("e o delator DIZ que o desconto não foi aplicado por inteiro",
+          any("não aplicado por inteiro" in str(f).lower() or
+              "NÃO aplicado por inteiro" in str(f) for f in (r.get("flags") or [])),
+          f"flags: {r.get('flags')}")
+
+    # ── 2) patrocinado E mal feito continua levando o desconto inteiro ──
+    r = caso(open_label=True, financiamento_papel="indústria envolvida",
+             base_qualidade=7, itt_falso=True)
+    checa("rigor <9 → desconto INTEIRO (a régua não afrouxou)", r["aplic"] < 8,
+          f"veio {r['aplic']} com rigor {r['trabalho']}")
+
+    # ── 3) as fronteiras antigas continuam de pé ──
+    r = caso(financiamento_papel="indústria envolvida")          # cegado → teto 10
+    checa("a fronteira do 'muda conduta' (9) sobrevive", r["aplic"] >= 9, f"veio {r['aplic']}")
+    checa("PISO_INDEPENDENCIA continua 9", N.PISO_INDEPENDENCIA == 9, "")
+    checa("PISO_PUBLICACAO continua 6 (= a porta da LEI 10)", N.PISO_PUBLICACAO == 6, "")
+
+    # ── 4) O GABARITO DELE É A TRAVA MAIOR — nenhuma regra nova pode revogá-lo ──
+    # É o que teria pegado a minha proposta de tirar o teto de open-label, se eu tivesse codado.
+    from notas_prototipo import FIXTURES
+    for nome, fx in FIXTURES.items():
+        a = dict(fx)
+        gab = a.pop("gabarito")
+        calc = N.score(a)["aplic"]
+        bate = (str(calc) == str(gab)) or (isinstance(gab, str) and "-" in gab and
+                                           int(gab.split("-")[0]) <= calc <= int(gab.split("-")[1]))
+        checa(f"gabarito do Dr. Eduardo: {nome} = {gab}", bate, f"o motor deu {calc}")
 
 
 if __name__ == "__main__":

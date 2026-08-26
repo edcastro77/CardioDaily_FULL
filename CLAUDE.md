@@ -238,6 +238,47 @@ declarada, não rebaixamento de categoria** — o leitor vê que o ensaio é bom
 Abaixo de 9 o desconto vale INTEIRO, como ele definiu em 05/Ago.
 Trava: `teste_independencia_nao_cruza_o_nove` (`PISO_INDEPENDENCIA = 9`).
 
+**⚠️ REVOGADO EM 22/Ago/2026 — O QUE PROTEGE É O RIGOR, NÃO A ALTURA DA NOTA**
+
+A frase *"abaixo de 9 o desconto vale INTEIRO"* (linha acima) **não vale mais**. Quem a
+derrubou foi o EXCEL.
+
+Ele, lendo a nota: *"não tem como o EXCEL — estudo que muda a cardiologia — não estar com nota
+9... ou eu tô muito doido"*. E logo depois: *"como um estudo que avalia uma galera que racha o
+peito e no outro braço coloca stent poderia ser cego?"*
+
+**Eu propus a coisa errada primeiro.** Peguei a razão dele sobre o cegamento e propus tirar o
+teto 8 do open-label — sem ter olhado que o **gabarito dele de 11/Ago já dizia EXCEL 8, NOBLE 7,
+ISAR-REACT 5 = 7**, todos open-label. A calibração dos ensaios abertos foi feita por ele sabendo
+que ninguém cega esternotomia contra punção femoral. Teto 8 não é castigo por não cegar — é
+quanta certeza o desenho entrega quando o composto inclui IAM julgado, que é exatamente a
+controvérsia que fez a EACTS sair da diretriz da ESC em 2019. **Ele concordou com a minha
+proposta**, e ela teria quebrado três gabaritos dele. Só não quebrou porque fui abrir o arquivo
+antes de codar.
+
+O que faltava era outra coisa: o EXCEL fecha em 8 pelo desenho, e o desconto de indústria
+(Abbott) descia inteiro, levando a 7.
+
+**A REGRA NOVA:** o desconto de independência **não rebaixa quem tem `nota_trabalho_estatistico`
+≥ 9** — vira ressalva declarada, em qualquer altura da escala. É a MESMA frase de 06/Ago
+(*"ressalva declarada, não rebaixamento de categoria"*), que nunca foi limitada ao 9; fui eu que
+a implementei só ali. **Rigor <9 continua levando o desconto INTEIRO** — patrocinado e mal feito
+paga.
+
+**Por que não afrouxa a LEI 10:** quase todo ensaio de fase 3 em cardiologia é patrocinado
+(EXCEL/Abbott, NOBLE/Biosensors, PLATO/AstraZeneca). Um desconto que quase todos levam não
+separa ninguém — só empurra o acervo inteiro um degrau para baixo. O que separa é o rigor.
+
+**MEDIDO ANTES DE VALER** — mesmo `fatos`, motor de ontem contra o de hoje, 1011 artigos únicos:
+**22 mudam, TODOS de 7 → 8, nenhum desce.** Nenhum cruza a porta de publicação (já publicavam
+com 7); o que muda é a CATEGORIA editorial. Gabarito: 7/7 continuam batendo.
+
+Travas: `teste_o_desconto_de_industria_nao_rebaixa_quem_provou_o_metodo` — que carrega **o
+gabarito dele inteiro dentro**, para nenhuma regra nova poder revogá-lo em silêncio — mais
+`teste_independencia_nao_cruza_o_nove` e `..._o_portao_da_publicacao`, reescritas com a
+revogação declarada no corpo.
+
+
 **A TELA DA CHAVE 2 MOSTRAVA DUAS ORDENS DIFERENTES (06/Ago)**
 
 A contagem do topo listava `ARTIGOS_ORIGINAIS · META · GUIDELINES · REVISOES`; o menu logo abaixo
