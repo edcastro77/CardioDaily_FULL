@@ -129,7 +129,11 @@ def teto_desenho(a):
 
     if q == "intervencao":
 
-        if d == "rct":
+        # 26/Ago — `pool_pre_especificado` percorre o MESMO caminho do RCT, por decisão dele:
+        # dados individuais, randomização intacta, plano escrito antes, comitê de adjudicação.
+        # "Se o desenho entrega isso, não há razão para capar — quem derruba depois é o rigor
+        # e o MCID, como em qualquer RCT."  Pool POST-HOC continua sendo `meta` (a Escada).
+        if d in ("rct", "pool_pre_especificado"):
             # Nível B (teto 8): sem cegamento, OU poder limítrofe — MAS parada precoce por
             # benefício não conta como "poder ruim" (o benefício foi esmagador). US Carvedilol.
             # ═══ 19/Ago — O CEGAMENTO EXISTE PARA PROTEGER O DESFECHO, NÃO POR SI ═══
@@ -222,6 +226,23 @@ def falhas_fatais(a):
     porque limiar medido não depende do humor do modelo."""
     achadas = [f for f in (a.get("falhas_fatais") or []) if f in FALHAS_FATAIS]
     n = a.get("qualidade_nhlbi") or {}
+
+    # ═══ 26/Ago — FALHA DE META COBRADA DE QUEM NÃO É META ═══
+    # O FINE-HEART (pool pré-especificado de FIDELIO + FIGARO + FINEARTS) saiu com **nota 3**,
+    # e a conta era esta: o extrator declarou `falhas_fatais: ["F5"]` — *"meta sem
+    # heterogeneidade nem viés de publicação avaliados"* — e o NHLBI reprovou em
+    # `busca_sistematica_abrangente` e `vies_publicacao_avaliado`.
+    #
+    # **São critérios de revisão sistemática cobrados de uma análise que não faz busca.**
+    # Não há literatura a garimpar: são os ensaios do próprio programa, com dados individuais.
+    # Viés de publicação exige um universo de estudos publicados por terceiros; aqui esse
+    # universo não existe. Cobrar isso é reprovar o artigo por não ter feito o que não cabia.
+    #
+    # A linha do F5 abaixo já testa `desenho == "meta"` e por isso não dispararia sozinha — mas
+    # a lista DECLARADA pelo extrator entra por cima, e foi ela que zerou a nota. Duas fontes
+    # para o mesmo fato, e a que não sabe do desenho ganhando: é a LEI 9 outra vez.
+    if a.get("desenho") == "pool_pre_especificado":
+        achadas = [f for f in achadas if f != "F5"]
 
     def _num(chave):
         v = n.get(chave)
@@ -737,6 +758,14 @@ def contagem_nhlbi(a):
     teto=10 significa 'não capa' — ou porque o estudo cumpre tudo, ou porque não há dado suficiente."""
     n = a.get("qualidade_nhlbi") or {}
     inst = n.get("instrumento")
+    # 26/Ago — pool pré-especificado é ensaio randomizado agrupado, não revisão sistemática.
+    # O extrator marcou `systematic_review` no FINE-HEART e o checklist cobrou
+    # `busca_sistematica_abrangente` e `vies_publicacao_avaliado` — de uma análise que não faz
+    # busca e não tem universo de estudos alheios. O prompt passou a dizer isto (bloco 2), mas
+    # os fatos JÁ EXTRAÍDOS têm o rótulo velho, e re-extrair 1000 artigos para corrigir um
+    # rótulo é queimar dinheiro. Aqui o desenho manda, que é a fonte canônica.
+    if a.get("desenho") == "pool_pre_especificado":
+        inst = "controlled_intervention"
     campos = _CRITERIOS_NHLBI.get(inst)
     if not campos:
         return 0, 0, 0, 10, []
@@ -1750,6 +1779,11 @@ def teto_externa(a):
 # desenho permite medir. Os delatores continuam descendo A PARTIR daqui.
 _TETO_RIGOR_DESENHO = {
     "rct": 10,                        # o único que pode chegar a 10 (duplo-cego + desfecho duro + efeito grande)
+    # 26/Ago — pool pré-especificado do MESMO programa: dados individuais, randomização
+    # preservada, plano escrito antes. Não é `meta` (aquela garimpa estudos de outros grupos,
+    # e por isso teto 9). Aqui o rigor pode chegar a 10, como no RCT — quem derruba depois é
+    # o delator, não o rótulo.
+    "pool_pre_especificado": 10,
     "meta": 9,
     # coorte = 8 e NÃO 7: o piso 8 do Framingham é gabarito do Dr. Eduardo — coorte PROSPECTIVA com
     # coleta impecável (codebook, lab calibrado, follow-up) tem estatística de primeira. Quem derruba

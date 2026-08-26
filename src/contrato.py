@@ -200,6 +200,10 @@ def validar(ficha, checar_arquivos=True):
     #
     # NÃO é apagar nada: o pacote fica no STAGING com o `_REVISAR_publicacao.txt` dizendo a
     # contradição, e o Dr. Eduardo decide reclassificar ou aceitar.
+    # ⚠️ 26/Ago — `pool_pre_especificado` NÃO entra nesta lista, de propósito. Ele mora na
+    # trilha de artigo ORIGINAL por decisão dele, e acusá-lo de "caixa errada" prenderia o
+    # FINE-HEART em REVISAO_HUMANA para sempre. A lista é de desenhos que denunciam pasta
+    # errada; um pool pré-especificado está na pasta CERTA.
     _DESENHO_DE_OUTRO_TIPO = {
         "meta": "meta-análise", "meta_analise": "meta-análise",
         "revisao_sistematica": "revisão sistemática", "revisao": "revisão",

@@ -85,6 +85,10 @@ def decidir_entregaveis(nota, tipo=None):
 # errada (o classificador acerta 91,9%); os fatos vêm da leitura do artigo.
 _PROMPT_POR_DESENHO = {
     "rct": "redator_original_prompt.md",
+    # 26/Ago — o pool pré-especificado escreve como ARTIGO ORIGINAL, decisão dele:
+    # *"este tem que ser analisado como artigo original"*. Se cair no `redator_meta_prompt`,
+    # o texto cobra PRISMA e viés de publicação de uma análise que não fez busca nenhuma.
+    "pool_pre_especificado": "redator_original_prompt.md",
     "coorte": "redator_original_prompt.md",
     "registro": "redator_original_prompt.md",
     "observacional_ajustado": "redator_original_prompt.md",

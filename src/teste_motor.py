@@ -4845,6 +4845,98 @@ def teste_titulo_curto_nao_e_titulo_quebrado():
     # ── 4) e o título longo de sempre não foi afetado ──
     checa("título normal passa", passa("Vericiguat in Patients with Heart Failure"), "")
 
+def teste_pool_pre_especificado_nao_e_meta_analise():
+    """FIDELIO + FIGARO + FINEARTS não foram garimpados na literatura — 26/Ago/2026.
+
+    Palavras dele, sobre o FINE-HEART: *"não é meta-análise, é uma análise pré-especificada de
+    um conjunto de 3 trials que fazem parte do mesmo projeto. Este tem que ser analisado como
+    artigo original."*
+
+    O enum de `desenho` só tinha `meta`, então o extrator chamava de meta o que não é — e a
+    consequência não foi um rótulo feio, foi **nota 3**:
+
+        FALHA FATAL F5: "meta sem heterogeneidade nem viés de publicação avaliados"
+        NHLBI: falhou em `busca_sistematica_abrangente`, `vies_publicacao_avaliado`
+
+    Critérios de revisão sistemática cobrados de uma análise que NÃO FAZ BUSCA. Não há
+    literatura a garimpar (são os ensaios do próprio programa) e não há universo de estudos
+    alheios em que caiba viés de publicação. Cobrar isso é reprovar o artigo por não ter feito
+    o que não cabia. Depois do conserto: **nota 6, rigor 9** — e o que segura passou a ser a
+    régua de verdade (ARR 0,16 %/ano abaixo do limiar de 1,0 %/ano que ele fixou).
+
+    DECISÃO DELE, 26/Ago: teto de desenho **10, igual ao RCT** — *"dados individuais,
+    randomizados, plano pré-especificado, comitê de adjudicação. Se o desenho entrega isso,
+    não há razão para capar — quem derruba depois é o rigor e o MCID."*
+    E pool POST-HOC (juntaram depois de ver o resultado) continua sendo `meta`, na Escada.
+    """
+    import notas_prototipo as N
+    import contrato as C
+    import analisador as A
+
+    # ── 1) o valor existe em TODOS os blocos que decidem por `desenho` (LEI 9) ──
+    import os as _os, json as _json
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    import analise as AN
+    enum = AN.SCHEMA_FATOS["properties"]["desenho"]["enum"]
+    checa("SCHEMA conhece pool_pre_especificado", "pool_pre_especificado" in enum, "")
+    prompt = open(_os.path.join(aqui, "analise_prompt.md"), encoding="utf-8").read()
+    checa("o PROMPT ensina a diferença (senão o campo nasce morto)",
+          "pool_pre_especificado" in prompt and "MESMO PROGRAMA" in prompt.upper(),
+          "schema sem prompt = campo que nunca é preenchido (o defeito de 06/Ago)")
+    checa("o redator é o de ARTIGO ORIGINAL",
+          A._PROMPT_POR_DESENHO.get("pool_pre_especificado") == "redator_original_prompt.md",
+          "no prompt da meta o texto cobraria PRISMA de quem não fez busca")
+    checa("teto de RIGOR = 10 (como o rct, não 9 como a meta)",
+          N._TETO_RIGOR_DESENHO.get("pool_pre_especificado") == 10, "")
+
+    def caso(**kw):
+        base = dict(pergunta="intervencao", desenho="pool_pre_especificado", desfecho_duro=True,
+                    extrapolavel=True, poder_ok=True, base_qualidade=9, open_label=False,
+                    tipo_documento="original", efeito_relevante_consistente=True,
+                    beneficio_supera_risco=True)
+        base.update(kw)
+        return N.score(base)
+
+    # ── 2) teto de DESENHO 10, e o motor é o ORIGINAL ──
+    r = caso()
+    checa("teto de desenho 10", r["teto_desenho"] == 10, f"veio {r['teto_desenho']}")
+    checa("motor ORIGINAL, não META", r["motor"] == "ORIGINAL", f"veio {r['motor']}")
+
+    # ── 3) a F5 declarada pelo extrator NÃO vale para quem não é meta ──
+    # Era a lista do extrator entrando por cima do desenho: duas fontes para o mesmo fato,
+    # e a que não sabia do desenho ganhando. LEI 9.
+    r = caso(falhas_fatais=["F5"])
+    checa("F5 (falha de meta) não conta no pool", "F5" not in (r.get("falhas_fatais") or []),
+          f"falhas: {r.get('falhas_fatais')} — o artigo é zerado por não ter feito busca")
+    # e continua contando numa meta de verdade
+    r = N.score(dict(pergunta="intervencao", desenho="meta", desfecho_duro=True,
+                     extrapolavel=True, tipo_documento="meta", falhas_fatais=["F5"]))
+    checa("mas F5 continua fatal numa META de verdade",
+          "F5" in (r.get("falhas_fatais") or []), "a régua da meta não pode ter afrouxado")
+
+    # ── 4) o NHLBI cobrado é o do ENSAIO, não o da revisão sistemática ──
+    r = caso(qualidade_nhlbi={"instrumento": "systematic_review",
+                              "busca_sistematica_abrangente": False,
+                              "vies_publicacao_avaliado": False,
+                              "randomizacao_adequada": True, "alocacao_sigilosa": True})
+    checa("não é reprovado por não ter feito busca sistemática",
+          not any("busca" in str(c) for c in (r.get("nhlbi") or {}).get("criterios_falhos", [])),
+          f"criterios_falhos: {(r.get('nhlbi') or {}).get('criterios_falhos')}")
+
+    # ── 5) o CONTRATO não acusa mais caixa errada ──
+    ficha = {"tipo_documento": "original", "desenho": "pool_pre_especificado",
+             "doc_id": "x", "doi": "10.1/x", "titulo": "Effects of Finerenone on Sudden Death",
+             "revista": "JACC", "data_publicacao": "2026-08-01",
+             "tema": "Cardiometabólica", "tema_secundario": "Não se aplica", "tema_origem": "llm",
+             "mesh_terms": ["Heart Failure"], "mesh_origem": "pubmed", "nota_aplicabilidade": 6}
+    checa("contrato NÃO acusa CAIXA ERRADA",
+          not any("CAIXA ERRADA" in str(x) for x in C.validar(ficha, checar_arquivos=False)),
+          "o FINE-HEART ficaria preso em _REVISAO_HUMANA para sempre")
+    # mas uma META de verdade na pasta de original continua sendo denunciada (LEI 8)
+    checa("e continua acusando quando o desenho é META mesmo",
+          any("CAIXA ERRADA" in str(x)
+              for x in C.validar(dict(ficha, desenho="meta"), checar_arquivos=False)), "")
+
 
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,

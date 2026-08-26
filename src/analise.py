@@ -98,7 +98,18 @@ SCHEMA_FATOS = {
         # e escrevia `rct` — corretamente, porque o desenho DESCRITO é um RCT. O motor então
         # dava o teto do RCT, 10, e saíam três protocolos com nota 8. O extrator não tinha a
         # palavra para dizer "isto ainda não aconteceu".
-        "desenho": {"type": "string", "enum": ["rct", "meta", "coorte", "registro",
+        # ═══ 26/Ago/2026 — `pool_pre_especificado`: a figura que faltava ═══
+        # Palavras dele, sobre o FINE-HEART: *"não é meta-análise, é uma análise
+        # pré-especificada de um conjunto de 3 trials que fazem parte do mesmo projeto.
+        # Este tem que ser analisado como artigo original."*
+        # O enum só tinha `meta`, então o extrator chamava de meta o que não é: FIDELIO +
+        # FIGARO + FINEARTS não foram GARIMPADOS na literatura — são o mesmo programa, com
+        # dados individuais e plano escrito ANTES. Não há busca, não há viés de publicação,
+        # não há heterogeneidade entre estudos alheios: há randomização preservada.
+        # ⚠️ Se o pool NÃO for pré-especificado (juntaram depois de ver os resultados), use
+        #    `meta` — decisão dele: aí a régua certa é a Escada, com Trim-and-Fill e degraus.
+        "desenho": {"type": "string", "enum": ["rct", "pool_pre_especificado", "meta",
+                                               "coorte", "registro",
                                                "observacional_ajustado", "transversal", "caso_controle",
                                                "antes_depois_sem_controle", "serie_de_casos",
                                                "protocolo",

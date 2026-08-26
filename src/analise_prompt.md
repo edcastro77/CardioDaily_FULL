@@ -10,7 +10,14 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
   "revista": "<revista>",
   "ano": "<ano>",
   "pergunta": "<um de: intervencao | etiologia | prognostico | diagnostico>  (intervencao = testa um TRATAMENTO; etiologia = fatores de risco/causa; prognostico = curso/desfecho; diagnostico = acurácia de teste)",
-  "desenho": "<um de: rct | meta | coorte | registro | observacional_ajustado | transversal | caso_controle | antes_depois_sem_controle | serie_de_casos | protocolo | pre_clinico | nao_classificavel>
+  "desenho": "<um de: rct | pool_pre_especificado | meta | coorte | registro | observacional_ajustado | transversal | caso_controle | antes_depois_sem_controle | serie_de_casos | protocolo | pre_clinico | nao_classificavel>",
+  // ⚠️ `pool_pre_especificado` vs `meta` — a diferença NÃO é o número de estudos:
+  //   pool_pre_especificado = análise AGRUPADA de ensaios do MESMO PROGRAMA, com
+  //     dados individuais dos participantes e plano de análise escrito ANTES de ver o
+  //     resultado (ex.: FINE-HEART = FIDELIO-DKD + FIGARO-DKD + FINEARTS-HF). Não há
+  //     busca na literatura, não há viés de publicação: a randomização está intacta.
+  //   meta = revisão SISTEMÁTICA com busca, garimpando estudos de OUTROS grupos.
+  //   Se juntaram os ensaios DEPOIS de ver os resultados (post-hoc), use `meta`.
      ⚠️ protocolo = o ensaio AINDA NÃO ACONTECEU. O artigo descreve como o estudo VAI ser feito:
         "Rationale and Design of…", "…: Design and Rationale", "Study Protocol", "Statistical Analysis Plan".
         O TESTE DECISIVO É UM SÓ: **o artigo reporta o resultado do desfecho primário?**
@@ -129,7 +136,7 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
   "qualidade_nhlbi": {
     "_": "CHECKLIST FORMAL por desenho (NHLBI/NIH). Responda APENAS os campos do instrumento do desenho deste artigo; os demais = null. Use true/false quando o artigo informa; null quando NÃO REPORTA (não confunda 'não reportado' com 'não fez').",
 
-    "instrumento": "<um de: controlled_intervention (rct) | systematic_review (meta) | observational_cohort (coorte/registro/observacional_ajustado/transversal) | case_control | before_after (antes_depois_sem_controle) | case_series (serie_de_casos) | nenhum (pre_clinico/nao_classificavel)>",
+    "instrumento": "<um de: controlled_intervention (rct E pool_pre_especificado — o pool é ensaio randomizado agrupado, NÃO revisão sistemática: não faz busca, não há viés de publicação a avaliar) | systematic_review (meta) | observational_cohort (coorte/registro/observacional_ajustado/transversal) | case_control | before_after (antes_depois_sem_controle) | case_series (serie_de_casos) | nenhum (pre_clinico/nao_classificavel)>",
 
     "// ── RCT — NHLBI Controlled Intervention (14 itens)": "",
     "randomizacao_adequada": "<true se sequência gerada AO ACASO (computador/tabela). false se alternância, data de admissão, prontuário, CEP — isso NÃO é randomização. null se não reporta>",
