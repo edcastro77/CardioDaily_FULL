@@ -4730,6 +4730,64 @@ def teste_o_desconto_de_industria_nao_rebaixa_quem_provou_o_metodo():
                                            int(gab.split("-")[0]) <= calc <= int(gab.split("-")[1]))
         checa(f"gabarito do Dr. Eduardo: {nome} = {gab}", bate, f"o motor deu {calc}")
 
+def teste_minirrevisao_processada_sai_da_fila():
+    """O estado é FÍSICO também na minirrevisão — 22/Ago/2026.
+
+    Pergunta dele: *"as minirrevisões que já foram processadas, por que não saem da pasta —
+    para uma pasta de minirrevisões já processadas?"*
+
+    Porque esta trilha nasceu fora da regra que o resto do projeto adotou. O
+    `rodar_em_blocos.py` diz, no cabeçalho: *"NÃO usa 'pular por marcador' (que sempre dá
+    problema). O estado é FÍSICO: o que está na fila ainda falta; o que saiu da fila, acabou."*
+
+    A minirrevisão fazia o oposto: pulava por `_OK` na pasta de SAÍDA e deixava o PDF na fila
+    para sempre. MEDIDO em 22/Ago: **107 PDFs na pasta, 100 já processados, 7 realmente
+    pendentes** — e ele não tinha como ver isso abrindo a pasta.
+
+    Dois problemas, e o segundo é o grave:
+      · a pasta mente sobre o que falta;
+      · marcador é o MESMO mecanismo do erro fatídico de 03/Ago (staging com `_OK`
+        reaproveitado com o prompt errado, e a correção manual dele indo para o lixo num
+        `continue`). Lá o projeto trocou por estado físico; aqui tinha ficado como estava.
+
+    O `_OK` continua, como cinto de segurança de quem rodar apontando para um arquivo só —
+    mas quem manda é o disco, e o ramo que pula TAMBÉM move.
+    """
+    import ast as _ast
+    import os as _os
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    fonte = open(_os.path.join(aqui, "minirevisao.py"), encoding="utf-8").read()
+    arv = _ast.parse(fonte)
+
+    checa("existe _tirar_da_fila na minirrevisão",
+          any(isinstance(n, _ast.FunctionDef) and n.name == "_tirar_da_fila"
+              for n in _ast.walk(arv)),
+          "sem ela o PDF processado fica na fila para sempre")
+
+    fn = next((n for n in _ast.walk(arv)
+               if isinstance(n, _ast.FunctionDef) and n.name == "processar_pdf"), None)
+    checa("processar_pdf existe", fn is not None, "")
+    if fn:
+        chamadas = [n for n in _ast.walk(fn) if isinstance(n, _ast.Call)
+                    and getattr(n.func, "id", "") == "_tirar_da_fila"]
+        # DUAS: uma no ramo que pula (`_OK` já existe) e uma no fim do processamento.
+        # Sem a do ramo que pula, os 100 já feitos nunca sairiam — só os novos.
+        checa("o PDF sai da fila NOS DOIS caminhos (já feito · acabou de fazer)",
+              len(chamadas) >= 2, f"achei {len(chamadas)} chamada(s)")
+
+    checa("a varredura NÃO desce em _FEITAS",
+          "FILA_FORA" in fonte and "_FEITAS" in fonte,
+          "senão o próximo run reencontra tudo e a pasta nunca esvazia")
+    tf = next((n for n in _ast.walk(arv)
+               if isinstance(n, _ast.FunctionDef) and n.name == "_tirar_da_fila"), None)
+    if tf:
+        corpo = _ast.dump(tf)
+        # LEI 12: confere destino e tamanho ANTES de mover. `ARTIGOS/` não está no git.
+        checa("confere se o destino já existe antes de mover", "exists" in corpo, "")
+        checa("confere o tamanho da origem (não move arquivo de 0 byte)",
+              "getsize" in corpo, "foi assim que um gabarito dele morreu em 20/Ago")
+        checa("MOVE, não copia nem apaga", "move" in corpo and "remove" not in corpo, "")
+
 
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,

@@ -353,13 +353,56 @@ ul.mini{{padding-left:18px;color:var(--muted);font-size:13.5px}}ul.mini li{{marg
     return os.path.join(dst, base + "_card.html")
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# 22/Ago/2026 — O PDF PROCESSADO SAI DA FILA, COMO NO RESTO DO SISTEMA
+#
+# Pergunta dele: *"as minirrevisões que já foram processadas, por que não saem da pasta —
+# para uma pasta de minirrevisões já processadas?"*
+#
+# Porque esta trilha nasceu fora da regra que o resto do projeto adotou. O
+# `rodar_em_blocos.py` diz, no cabeçalho: *"NÃO usa 'pular por marcador' (que sempre dá
+# problema). O estado é FÍSICO: o que está na fila ainda falta; o que saiu da fila, acabou."*
+#
+# A minirrevisão fazia o oposto: pulava por `_OK` na pasta de SAÍDA e deixava os 107 PDFs
+# para sempre em `CLASSIFICADOS/MINIRREVISOES`. Efeitos, os dois ruins:
+#   · ele abre a pasta e não consegue ver o que falta — 107 hoje, 107 amanhã;
+#   · marcador é o mecanismo que causou o erro fatídico de 03/Ago (staging com `_OK`
+#     reaproveitado com o prompt errado). Aqui era o mesmo mecanismo, só que sem trava.
+#
+# Agora: processou → o PDF vai para `MINIRREVISOES/_FEITAS/`. O `_OK` continua existindo
+# como cinto de segurança para quem rodar apontando direto para um arquivo, mas quem manda
+# é o disco.
+FILA_FORA = ("_FEITAS",)
+
+
+def _tirar_da_fila(pdf):
+    """Move o PDF processado para `_FEITAS/`, ao lado da pasta de origem. LEI 12: confere antes."""
+    origem_dir = os.path.dirname(os.path.abspath(pdf))
+    if os.path.basename(origem_dir) in FILA_FORA:
+        return
+    destino_dir = os.path.join(origem_dir, "_FEITAS")
+    os.makedirs(destino_dir, exist_ok=True)
+    alvo = os.path.join(destino_dir, os.path.basename(pdf))
+    try:
+        if os.path.exists(alvo):
+            print("    (já existe em _FEITAS — não mexi)"); return
+        if os.path.getsize(pdf) < 1024:
+            print("    (origem suspeita, <1 KB — não mexi)"); return
+        shutil.move(pdf, alvo)
+        print("    ↪ saiu da fila → _FEITAS/")
+    except Exception as e:
+        print(f"    (aviso: não moveu — {type(e).__name__}: {e})")
+
+
 def processar_pdf(pdf, saida_base):
     """Processa 1 PDF de minirevisão → pasta própria em saida_base. Faixa 0 fica retido (sem fluxograma).
     NÃO sobe no Supabase (é ferramenta standalone, como o Pesquisador). Devolve (faixa, sobe)."""
     base = os.path.splitext(os.path.basename(pdf))[0]
     dst = os.path.join(saida_base, base); os.makedirs(dst, exist_ok=True)
-    if os.path.exists(os.path.join(dst, "_OK")):        # retomável: pula os já feitos
-        print(f"  ⏭️  {base[:54]} já processado"); return None, None
+    if os.path.exists(os.path.join(dst, "_OK")):        # cinto de segurança: já foi feito
+        print(f"  ⏭️  {base[:54]} já processado")
+        _tirar_da_fila(pdf)                             # ← e agora ele SAI da fila de vez
+        return None, None
     print(f"\n▶ {base[:60]}")
     r = analisar(pdf)
     json.dump(r, open(os.path.join(dst, base + "_minirev.json"), "w"), ensure_ascii=False, indent=2)
@@ -373,6 +416,7 @@ def processar_pdf(pdf, saida_base):
         card = montar_card(dst, base, r)             # ENTREGÁVEL LEGÍVEL (md + html) — o que se lê
         print(f"    card: {os.path.basename(card)}")
     open(os.path.join(dst, "_OK"), "w").write("")
+    _tirar_da_fila(pdf)          # 22/Ago — o estado é FÍSICO: processou, saiu da fila
     return faixa, sobe
 
 
@@ -395,7 +439,9 @@ def _pdfs(caminho):
     if os.path.isfile(caminho):
         return [caminho]
     achados = []
-    for root, _, files in os.walk(caminho):
+    for root, dirs, files in os.walk(caminho):
+        # 22/Ago — não desce em `_FEITAS`: o que já foi processado saiu da fila.
+        dirs[:] = [d for d in dirs if d not in FILA_FORA]
         for f in sorted(files):
             if f.lower().endswith(".pdf") and not f.startswith("._"):
                 achados.append(os.path.join(root, f))
