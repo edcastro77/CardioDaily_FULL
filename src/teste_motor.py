@@ -4937,6 +4937,84 @@ def teste_pool_pre_especificado_nao_e_meta_analise():
           any("CAIXA ERRADA" in str(x)
               for x in C.validar(dict(ficha, desenho="meta"), checar_arquivos=False)), "")
 
+def teste_a_meta_de_dados_individuais_e_reconhecida():
+    """`eh_ipd` nunca foi verdadeiro em produção — o campo morava em dois lugares (26/Ago/2026).
+
+    Ele, explicando por que o NEJM publica tão pouca meta-análise: *"a única que eu vi foi a que
+    pegou os dados reais dos pacientes para fazer uma única tabela — aumenta muito o poder de
+    excluir que os dados possam ter sido afetados por alguma interferência (lei dos grandes
+    números: maior amostra, maior precisão)"*. E a distinção: *"em meta-análises os autores em
+    geral analisam RESULTADO versus RESULTADO — eles não podem juntar tudo num pacote só
+    porque não têm a tabela."*
+
+    ═══ MEDIDO NO DISCO, e é o defeito que mais custou desta conversa ═══
+        tipo_meta NO TOPO dos fatos       : dados_agregados 46 · rede 4 · **ipd 4** · None 44
+        tipo_meta DENTRO de qualidade_meta: None 98
+
+    O extrator grava no TOPO (é onde o schema o declara). O motor procurava DENTRO de
+    `qualidade_meta`. Um nome, dois lugares — e **`eh_ipd` nunca foi verdadeiro, nenhuma vez**.
+    As 4 metas de dados individuais do acervo foram julgadas como meta de resultados, cobradas
+    de funnel plot e Trim-and-Fill que não lhes cabem: numa IPD os ensaios entraram no acordo
+    ANTES de o resultado existir, não há gaveta de onde puxar estudo faltante.
+
+    A régua da IPD existe no código desde 04/Ago (`"eliminado POR DESENHO"`) e nunca rodou.
+
+    ⚠️ E HAVIA UMA PISTA: a checagem da meta em REDE já lia `m.get("tipo_meta") or
+    a.get("tipo_meta")` — os dois lugares. Alguém (eu) esbarrou no problema, consertou ALI, e
+    não varreu os outros dois pontos. LEI 9 inteira numa linha.
+
+    MEDIDO depois do conserto, 1072 artigos únicos: **2 mudam** (7→8 no NEJM Beta-Blockers
+    after MI, 3→4 no JACC Quality of Life). Cirúrgico.
+    """
+    import notas_prototipo as N
+
+    # ── 1) LEITURA ÚNICA: o campo é lido pela função, nunca solto ──
+    import os as _os, re as _re
+    fonte = open(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                               "notas_prototipo.py"), encoding="utf-8").read()
+    corpo = fonte[fonte.index("def tipo_meta_de(a):"):]
+    corpo = corpo[corpo.index('"""', corpo.index('"""') + 3):]      # depois do docstring
+    soltas = [l for l in fonte.splitlines()
+              if 'get("tipo_meta")' in l
+              and "def tipo_meta_de" not in l
+              and 'm.get("tipo_meta") or a.get("tipo_meta")' not in l
+              and l.strip().startswith(("m =", "return str(m.get"))]
+    checa("nenhuma leitura solta de tipo_meta fora da função canônica",
+          len([l for l in fonte.splitlines()
+               if 'get("tipo_meta")' in l]) <= 2,
+          "voltou a haver duas fontes para o mesmo campo")
+
+    # ── 2) o campo é achado NOS DOIS níveis (fatos velhos e novos) ──
+    checa("acha no TOPO (é onde o extrator grava)",
+          N.eh_ipd({"tipo_meta": "ipd"}), "os 4 IPD do acervo estão assim")
+    checa("acha DENTRO de qualidade_meta (onde o motor procurava)",
+          N.eh_ipd({"qualidade_meta": {"tipo_meta": "ipd"}}), "")
+    checa("prospectiva também conta como IPD",
+          N.eh_ipd({"tipo_meta": "prospectiva"}), "combinam antes de o resultado existir")
+    checa("dados_agregados NÃO é IPD", not N.eh_ipd({"tipo_meta": "dados_agregados"}),
+          "aqui há estimativa alheia a somar — o GIGO que capa a meta em 8/9")
+    checa("sem o campo, não é IPD", not N.eh_ipd({}), "silêncio não vira prêmio (LEI 11)")
+
+    # ── 3) o TETO: a IPD chega a 10, a meta comum não ──
+    def teto(tm):
+        f = {"pergunta": "intervencao", "desenho": "meta", "tipo_meta": tm,
+             "desfecho_duro": True, "extrapolavel": True}
+        return N.teto_desenho(f), N.teto_rigor(f)
+    td_i, tr_i = teto("ipd")
+    td_a, tr_a = teto("dados_agregados")
+    checa("IPD: teto de desenho 10", td_i == 10, f"veio {td_i}")
+    checa("IPD: teto de rigor 10", tr_i == 10, f"veio {tr_i}")
+    checa("meta comum continua capada", td_a < 10 and tr_a < 10,
+          f"desenho {td_a} · rigor {tr_a} — o GIGO da meta de estimativas não foi revogado")
+
+    # ── 4) Trim-and-Fill não é falha fatal numa IPD ──
+    base = {"desenho": "meta", "qualidade_meta": {"trim_and_fill_perdeu_significancia": True}}
+    checa("M2 é fatal na meta de resultados",
+          "M2" in N.falhas_fatais_meta(dict(base, tipo_meta="dados_agregados")), "")
+    checa("M2 NÃO é fatal na IPD",
+          "M2" not in N.falhas_fatais_meta(dict(base, tipo_meta="ipd")),
+          "Trim-and-Fill estima estudos não publicados; na IPD não há gaveta")
+
 
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,

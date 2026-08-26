@@ -156,6 +156,11 @@ def teto_desenho(a):
             if not a.get("poder_ok", True) and not a.get("parado_cedo_por_beneficio"):
                 return 8
             return 10               # Nível A: RCT duro, cegado (ou cegamento irrelevante), poder ok
+        # 26/Ago — a meta de DADOS INDIVIDUAIS chega a 10, decisão dele: não soma estimativa
+        # alheia, refaz a análise com os pacientes. O teto 8 da meta existe pelo GIGO, e aqui
+        # não há GIGO a propagar.
+        if d == "meta" and eh_ipd(a):
+            return 10
         return _TETO_INTERVENCAO.get(d, 6)
 
     # etiologia / prognóstico / diagnóstico
@@ -176,6 +181,52 @@ def teto_desenho(a):
             teto = 7
 
     return teto
+
+
+def eh_ipd(a):
+    """A meta tem os DADOS INDIVIDUAIS do paciente (ou foi prospectivamente planejada)?
+
+    ═══ 26/Ago/2026 — POR QUE ISTO VIROU TETO, E NÃO SÓ UM DOMÍNIO ═══
+    Palavras dele: *"o NEJM quase nunca publica meta-análise, e a única que eu vi foi a que
+    pegou os dados reais dos pacientes para fazer uma única tabela — aumenta muito o poder de
+    excluir que os dados possam ter sido afetados por alguma interferência (lei dos grandes
+    números: maior amostra, maior precisão dos efeitos)."*
+
+    E a distinção que faltava, dita por ele: *"em meta-análises os autores em geral analisam
+    RESULTADO versus RESULTADO — eles não podem juntar tudo num pacote só porque não têm a
+    tabela."* Quem tem a tabela refaz a análise do zero, com todo mundo junto.
+
+    O teto 8 da meta (e o 9 de rigor) nasceu do GIGO: somar estimativas alheias propaga o erro
+    de cada uma. **Numa IPD não há estimativa alheia a somar** — há pacientes. Por isso ele
+    decidiu, em 26/Ago, que a IPD chega a 10, como um ensaio grande.
+
+    ⚠️ A Escada JÁ sabia disto no domínio `vies_publicacao` ("eliminado POR DESENHO") desde
+    04/Ago. Eu quase criei um valor novo no enum de `desenho` para dizer a mesma coisa — e
+    teria virado a segunda fonte de verdade que a LEI 9 persegue. A resposta já estava aqui.
+    """
+    return tipo_meta_de(a) in ("ipd", "prospectiva")
+
+
+def tipo_meta_de(a):
+    """O `tipo_meta`, venha de onde vier. A ÚNICA leitura desse campo no motor.
+
+    ⚠️ 26/Ago — MEDIDO NO DISCO, e é o defeito que mais custou desta conversa:
+        tipo_meta NO TOPO dos fatos       : dados_agregados 46 · rede 4 · **ipd 4** · None 44
+        tipo_meta DENTRO de qualidade_meta: None 98
+
+    O extrator grava no TOPO (é onde o schema o declara, `analise.py:256`); o motor procurava
+    DENTRO de `qualidade_meta`. Um nome, dois lugares — e o `eh_ipd` **nunca foi verdadeiro em
+    produção, nenhuma vez**. As 4 metas de dados individuais do acervo foram julgadas como
+    meta de resultados, cobradas de funnel plot e Trim-and-Fill que não lhes cabiam.
+
+    A régua da IPD existe no código desde 04/Ago e nunca rodou.
+
+    E havia uma PISTA: a linha da meta em rede já lia `m.get("tipo_meta") or a.get("tipo_meta")`
+    — os dois lugares. Alguém (eu) esbarrou no problema, consertou ALI, e não varreu os outros
+    dois pontos. É a LEI 9 inteira em uma linha.
+    """
+    m = a.get("qualidade_meta") or {}
+    return str(m.get("tipo_meta") or a.get("tipo_meta") or "").strip().lower()
 
 
 def _mortalidade_total(a):
@@ -835,7 +886,7 @@ def dominios_meta(a):
     #                        existir. Isso é melhor do que qualquer funnel plot pode provar.
     #   HETEROGENEIDADE .... a clínica deixa de ser defeito: com dado de paciente dá para TESTAR
     #                        interação de verdade, que é a razão de a IPD existir.
-    eh_ipd = (m.get("tipo_meta") or "").strip().lower() in ("ipd", "prospectiva")
+    eh_ipd_ = eh_ipd(a)          # 26/Ago: leitura única (ver `tipo_meta_de`)
 
     # a) PICO — pergunta focada e elegibilidade pré-definida
     d["pico"] = 10 if (q.get("pergunta_focada") and q.get("elegibilidade_predefinida")) else \
@@ -843,7 +894,7 @@ def dominios_meta(a):
 
     # b) BUSCA — bases, protocolo registrado, duplicata, literatura cinzenta
     bases = _n(m.get("n_bases"), 0) or 0
-    if eh_ipd:
+    if eh_ipd_:
         # colaboração prospectiva: "achar todos" está resolvido por desenho. O que ainda vale
         # perguntar é se havia protocolo ANTES (impede troca de desfecho) e revisão em duplicata.
         b = 9 if m.get("protocolo_registrado") else 6
@@ -906,7 +957,7 @@ def dominios_meta(a):
     if m.get("intervalo_predicao_cruza_nulo"):
         d["heterogeneidade"] = min(d["heterogeneidade"], 6)
     # heterogeneidade CLÍNICA não aparece no I²: populações/doses/tempos diferentes demais para somar
-    if m.get("heterogeneidade_clinica_relevante") and not eh_ipd:
+    if m.get("heterogeneidade_clinica_relevante") and not eh_ipd_:
         d["heterogeneidade"] = min(d["heterogeneidade"], 5)
     # DOMINÂNCIA: se um estudo carrega a maior parte do peso, a meta É aquele estudo
     peso = _n(m.get("peso_maior_estudo_pct"))
@@ -916,7 +967,7 @@ def dominios_meta(a):
     # e) VIÉS DE PUBLICAÇÃO — funnel/Egger/Begg feito?
     # 04/Ago: a Cochrane (cap. 13) diz para NÃO testar assimetria de funnel com k<10 — o teste não tem
     # poder e o resultado engana. Cobrar um teste que não deveria existir é punir quem fez certo.
-    if eh_ipd:
+    if eh_ipd_:
         d["vies_publicacao"] = 10                # eliminado POR DESENHO: os ensaios entraram antes
                                                  # de o resultado existir. Nenhum funnel prova tanto.
     elif m.get("teste_funnel_indicado") is False or (k is not None and k < 10):
@@ -993,7 +1044,11 @@ def falhas_fatais_meta(a):
     f = []
     if m.get("mistura_ecr_observacional_no_primario"):
         f.append("M1")
-    if m.get("trim_and_fill_perdeu_significancia"):
+    # 26/Ago — Trim-and-Fill estima estudos NÃO PUBLICADOS a partir da assimetria do funnel.
+    # Numa IPD os ensaios entraram no acordo ANTES de o resultado existir: não há gaveta de
+    # onde puxar estudo faltante. Cobrar M2 aqui é a mesma família do F5 no pool — critério de
+    # um desenho aplicado a outro.
+    if m.get("trim_and_fill_perdeu_significancia") and not eh_ipd(a):
         f.append("M2")
     return f
 
@@ -1161,7 +1216,7 @@ def nota_meta(a):
     #   meta de rede ............. depende da transitividade       → teto 8 se não avaliada
     if (m.get("desenhos_incluidos") or a.get("desenhos_incluidos")) == "observacionais":
         s = min(s, 7)
-    if (m.get("tipo_meta") or a.get("tipo_meta")) == "rede" and not m.get("transitividade_avaliada"):
+    if tipo_meta_de(a) == "rede" and not m.get("transitividade_avaliada"):
         s = min(s, 8)
 
     # ═══ 04/Ago — OS TETOS CLÁSSICOS VIRARAM DOMÍNIO ═══
@@ -1801,6 +1856,10 @@ _TETO_RIGOR_DESENHO = {
 
 def teto_rigor(a):
     """Quanto de rigor estatístico o DESENHO permite, antes de qualquer delator."""
+    # 26/Ago — a meta de DADOS INDIVIDUAIS não soma estimativas alheias: refaz a análise com
+    # os pacientes. O 9 da meta existe pelo GIGO, e aqui não há GIGO. Decisão dele.
+    if a.get("desenho") == "meta" and eh_ipd(a):
+        return 10
     return _TETO_RIGOR_DESENHO.get(a.get("desenho"), 6)
 
 
