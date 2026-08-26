@@ -73,13 +73,38 @@ RAMPA = [(10, 3), (20, 3), (30, None)]   # (tamanho do bloco, blocos bons para s
 # ═══════════════════════════════════════════════════════════════════════════════════════
 RETIDOS = "_RETIDOS_PELA_REGUA"
 DEFEITO = "_DEFEITO"
+# 26/Ago — duas recusas que não são nem régua nem defeito, achadas no 1º run real:
+FORA   = "_FORA_DO_ESCOPO"      # o tripé não fechou: não é artigo de cardiologia
+CAIXA  = "_REVISAO_HUMANA"      # extrator discorda da caixa (LEI 8) — só você resolve
 
 # ⚠️ `_DEFEITO` NÃO está aqui, de propósito: é o que faz o artigo voltar sozinho.
 # `_RECUSADOS` continua na lista porque a pasta antiga ainda existe no disco de quem não
 # migrou — mas ninguém escreve nela nunca mais (ver `_destino_da_recusa`).
 # (MINIRREVISOES é a trilha da minirevisão/opinião: condutas+fluxograma via minirevisao.py,
 #  não sobe no Supabase — por isso nunca foi fila do publicador.)
-FILA_FORA = ("_PUBLICADOS", "_RECUSADOS", RETIDOS, "MINIRREVISOES")
+FILA_FORA = ("_PUBLICADOS", "_RECUSADOS", RETIDOS, FORA, CAIXA, "MINIRREVISOES")
+
+
+_DERIVADOS = ("_ACRI.txt", "_analise.md", "_analise.pdf", "_analise.html", "_visual.png",
+              "_audio.mp3", "_roteiro_audio.txt", "_CANONICO.md", "_gancho_abertura.txt",
+              "_card.png", "_REVISAR_publicacao.txt")
+
+
+def _invalidar_staging(pasta):
+    """Apaga o `_OK` e os derivados — os FATOS ficam (já foram pagos).
+
+    O analisador só REFAZ se o `_OK` sumir. Sem isto, "fica na fila" vira "bate na mesma porta
+    para sempre": foi o que aconteceu no 1º run real depois de 22/Ago.
+    """
+    try:
+        for suf in _DERIVADOS:
+            for alvo in glob.glob(os.path.join(pasta, "*" + suf)):
+                os.remove(alvo)
+        ok = os.path.join(pasta, "_OK")
+        if os.path.exists(ok):
+            os.remove(ok)
+    except Exception as e:
+        print(f"      (aviso: não consegui limpar o staging — {type(e).__name__}: {e})")
 
 
 def _destino_da_recusa(violacoes, nota):
@@ -90,6 +115,26 @@ def _destino_da_recusa(violacoes, nota):
     nota 8 e cair por erro de schema. Quem separa é a VIOLAÇÃO, não o número.
     """
     v = " · ".join(str(x) for x in (violacoes or []))
+
+    # ⚠️ ESTES DOIS VÊM PRIMEIRO, e não é detalhe: a 1ª versão os pôs DEPOIS do bloco de
+    # defeito, e o `CAIXA ERRADA` nunca era alcançado — o artigo da Circulation tinha também
+    # selos `ausente:`, caía em DEFEITO, e voltava à fila para ser julgado pelo motor errado
+    # outra vez. Ordem de teste É regra de negócio.
+    # ═══ 26/Ago — DUAS RECUSAS QUE NÃO SÃO NEM RÉGUA NEM DEFEITO ═══
+    # Achadas no primeiro run real depois do conserto de 22/Ago: 7 artigos ficaram em LAÇO,
+    # recusados e recusados de novo, sem ninguém conseguir tirá-los de lá.
+    if "fora do escopo" in v.lower() or "não pertence ao acervo" in v.lower() \
+            or "tripé não fechou" in v.lower():
+        # O tripé (onde se aplica · que natureza tem · QUEM LÊ) não fechou com leitor
+        # cardiológico. Não é a régua reprovando o método, nem programa quebrado: é o artigo
+        # não sendo do acervo. Devolvê-lo à fila é fazê-lo bater na mesma porta toda semana.
+        return FORA, "o tripé não fechou — não há leitor cardiológico"
+    if "CAIXA ERRADA" in v:
+        # LEI 8: o classificador pôs numa trilha e o extrator, lendo o texto inteiro, diz outra.
+        # Reanalisar na MESMA pasta usa o prompt e o motor errados de novo — por definição.
+        # Quem resolve é reclassificar, e é decisão que precisa de olho humano.
+        return CAIXA, "o extrator discorda da caixa — reclassifique antes (LEI 8)"
+
     marcas_de_defeito = (
         "INVERSÃO FE",          # o redator trocou ICFEr por ICFEp — texto nosso, não do artigo
         "NameError", "TypeError", "AttributeError", "KeyError",
@@ -291,7 +336,7 @@ def main(classificados, tam_bloco=20, maximo=0, rampa=False, so_pasta="", so_art
     if total == 0:
         print("Fila vazia — nada a fazer (tudo já concluído, ou pasta sem PDF).")
         return
-    pub_ok = pub_rec = pub_def = 0
+    pub_ok = pub_rec = pub_def = pub_fora = pub_caixa = 0
     falhou = []                      # 03/Ago: as falhas rolavam a tela e sumiam. Agora viram lista no fim.
 
     # ── a fila é consumida em blocos de tamanho VARIÁVEL (a rampa) ──
@@ -355,19 +400,34 @@ def main(classificados, tam_bloco=20, maximo=0, rampa=False, so_pasta="", so_art
                 else:
                     # 22/Ago — o `else` cego virou uma PERGUNTA: foi a régua ou fomos nós?
                     destino, motivo = _destino_da_recusa(viol, nota)
+                    _porque = " · ".join(str(x)[:130] for x in (viol or []))
                     if destino == DEFEITO:
-                        # NÃO sai da fila: o próximo run tenta de novo, com o bug corrigido.
+                        # ⚠️ 26/Ago — SEM ESTA LINHA O ARTIGO ENTRA EM LAÇO INFINITO.
+                        # Em 22/Ago eu fiz o defeito MANTER o PDF na fila (certo), mas não
+                        # invalidei o staging. Resultado no 1º run real: `reusado (staging
+                        # pronto)` → o analisador não refaz → o texto errado continua → o
+                        # portão recusa igual → volta para a fila. 7 artigos rodaram assim,
+                        # inclusive o VICTORIA e o STEP-HFpEF, sem uma única nova tentativa.
+                        # Manter na fila só serve se a próxima passagem REFIZER de verdade.
+                        _invalidar_staging(pasta)
                         os.makedirs(os.path.join(classificados, DEFEITO), exist_ok=True)
                         with open(os.path.join(classificados, DEFEITO, "_o_que_falhou.txt"),
                                   "a", encoding="utf-8") as f:
-                            f.write(f"{os.path.basename(pdf)}\n   nota {nota} · "
-                                    f"{' · '.join(str(x)[:110] for x in (viol or []))}\n\n")
-                        print(f"      🔧 {motivo} — FICA NA FILA para o próximo run")
+                            f.write(f"{os.path.basename(pdf)}\n   nota {nota} · {_porque}\n\n")
+                        print(f"      🔧 {motivo} — o pacote foi APAGADO; o próximo run REFAZ")
+                        print(f"         ↳ {_porque[:150]}")
                         pub_def += 1
                     else:
-                        _tirar_da_fila(pdf, classificados, RETIDOS)
-                        print(f"      ⚖️  {motivo} — vai para {RETIDOS} (aparece na Chave 3)")
-                        pub_rec += 1
+                        _tirar_da_fila(pdf, classificados, destino)
+                        _rot = {RETIDOS: "aparece na Chave 3",
+                                FORA:    "não é do acervo — não volta sozinho",
+                                CAIXA:   "precisa do seu olho: mova para a pasta certa"}[destino]
+                        print(f"      {'⚖️ ' if destino == RETIDOS else '📤'} {motivo}"
+                              f" → {destino} ({_rot})")
+                        print(f"         ↳ {_porque[:150]}")
+                        if destino == RETIDOS: pub_rec += 1
+                        elif destino == FORA:  pub_fora += 1
+                        else:                  pub_caixa += 1
             except Exception as e:
                 print(f"   ⚠️  publicação falhou (fica na fila p/ refazer): "
                       f"{os.path.basename(pasta)[:40]} — {type(e).__name__}: {e}")
