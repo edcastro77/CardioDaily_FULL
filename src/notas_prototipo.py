@@ -1979,6 +1979,28 @@ def nota_estatistica(a):
                       "e por isso não descontada")
         if a.get("dicotomizou_continuo"):
             s = min(s, 7); fl.append("dicotomizou variável contínua")
+    # ═══ 26/Ago — O POOL MISTURA POPULAÇÕES DE PROPÓSITO, E ISSO SE DIZ ═══
+    # Ele, sobre o FINE-HEART: *"os 3 trabalhos pegam populações um pouco diferentes — em um é
+    # renal crônico com diabetes, no outro sem diabetes... vamos misturar e ver se os efeitos
+    # se mantêm."*
+    # Numa meta comum, heterogeneidade alta é problema: sinal de que se somou o que não soma.
+    # Aqui a variação de população **É A PERGUNTA** — e penalizar seria reprovar o artigo pela
+    # pergunta que ele faz. Decisão dele: NÃO CAPA, mas o delator DIZ, porque quem decide se
+    # aquele agrupado cabe no paciente da frente é o leitor, não nós.
+    if a.get("desenho") == "pool_pre_especificado":
+        _pop = (a.get("pool_populacoes") or "").strip()
+        _cons = a.get("pool_efeito_consistente")
+        _msg = "análise agrupada de ensaios do mesmo programa"
+        if _pop:
+            _msg += f", com populações diferentes de propósito: {_pop}"
+        if _cons is True:
+            _msg += " — e o efeito SE MANTEVE em todos (é o que o agrupamento veio provar)"
+        elif _cons is False:
+            _msg += " — ⚠️ o efeito NÃO se manteve em todos: 'depende da população' é outra resposta"
+        else:
+            _msg += " — o artigo não diz se o efeito se manteve em todos"
+        fl.append(_msg)
+
     # flags informativas
     # ⚠️ 19/Ago — esta linha dizia "→ teto desenho 8" SEMPRE que o ensaio era open-label, mesmo
     # depois de a exceção de mortalidade total ter deixado o teto em 10. O DINAMIT saía com

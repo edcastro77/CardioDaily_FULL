@@ -4923,6 +4923,28 @@ def teste_pool_pre_especificado_nao_e_meta_analise():
           not any("busca" in str(c) for c in (r.get("nhlbi") or {}).get("criterios_falhos", [])),
           f"criterios_falhos: {(r.get('nhlbi') or {}).get('criterios_falhos')}")
 
+    # ── 4b) A MISTURA DE POPULAÇÕES É A PERGUNTA, NÃO O DEFEITO (26/Ago) ──
+    # Ele: *"no FINE-ARTS os 3 trabalhos pegam populações um pouco diferentes — em um é renal
+    # crônico com diabetes, no outro sem diabetes... vamos misturar e ver se os efeitos se
+    # mantêm."*  Numa meta comum, heterogeneidade alta é problema. Aqui é o experimento.
+    # Decisão dele: NÃO capa — mas o delator DIZ, porque quem decide se aquele agrupado cabe
+    # no paciente da frente é o leitor.
+    for rot, kw, esperado in (
+            ("efeito se manteve", dict(pool_efeito_consistente=True), "SE MANTEVE"),
+            ("um ensaio destoou", dict(pool_efeito_consistente=False), "NÃO se manteve"),
+            ("o artigo não diz", {}, "não diz")):
+        r = caso(pool_populacoes="DRC com diabetes, DRC sem diabetes e ICFEp", **kw)
+        d = [f for f in (r.get("flags") or []) if "agrupada" in f]
+        checa(f"pool · o delator diz o caso '{rot}'",
+              bool(d) and esperado in d[0], f"flags: {d or r.get('flags')}")
+        checa(f"pool · '{rot}' NÃO capa a nota", r["teto_desenho"] == 10,
+              f"teto {r['teto_desenho']} — penalizar seria reprovar pela pergunta que o estudo faz")
+    # e o campo só existe onde faz sentido
+    r = N.score(dict(pergunta="intervencao", desenho="rct", desfecho_duro=True, poder_ok=True,
+                     tipo_documento="original", pool_populacoes="isto não deveria ser lido"))
+    checa("o delator do pool NÃO aparece num RCT comum",
+          not any("agrupada" in str(f) for f in (r.get("flags") or [])), "")
+
     # ── 5) o CONTRATO não acusa mais caixa errada ──
     ficha = {"tipo_documento": "original", "desenho": "pool_pre_especificado",
              "doc_id": "x", "doi": "10.1/x", "titulo": "Effects of Finerenone on Sudden Death",

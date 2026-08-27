@@ -47,6 +47,8 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, com EXATAMENTE 
   "taxa_esp": <número: taxa ESPERADA/assumida no cálculo amostral; null se n/a>,
   "margem_ni": <número: margem de não-inferioridade em pontos de proporção (ex.: 0.007); null se não for estudo de NI>,
   "taxa_basal": <número: taxa basal/controle assumida (proporção); null se n/a>,
+  "pool_populacoes": "<SÓ p/ pool_pre_especificado: uma frase com QUAIS populações foram agrupadas (ex.: 'DRC com diabetes, DRC sem diabetes e ICFEp/ICFElr'). null nos outros desenhos. NÃO é defeito — é o que o estudo veio testar; o leitor precisa saber o que foi misturado para decidir se cabe no paciente dele>",
+  "pool_efeito_consistente": <SÓ p/ pool_pre_especificado: true se o efeito SE MANTEVE em todos os ensaios do programa (sem interação significativa entre ensaio e tratamento); false se um deles destoou; null se o artigo não reporta. null nos outros desenhos>,
   "conclusao_nao_bate_desenho": <true se a CONCLUSÃO afirma além do que o desenho testou (ex.: testou ESTRATÉGIA mas conclui sobre a DROGA; ou infere causa de um observacional)>,
   "itt_falso": <true se houve exclusão pós-randomização ASSIMÉTRICA entre os braços (ex.: muito mais excluídos num braço), quebrando o intention-to-treat>,
   "qualidade_entrada": <SÓ para etiologia/prognostico/diagnostico. TRÊS valores, e o terceiro é obrigatório quando for o caso:

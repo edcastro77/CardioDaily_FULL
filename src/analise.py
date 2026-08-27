@@ -121,6 +121,21 @@ SCHEMA_FATOS = {
         "eventos_min_grupo": _INT, "eventos_nao_alcancados": _B, "parado_cedo_por_beneficio": _B,
         "efeito_grande": _B, "taxa_obs": _NUM, "taxa_esp": _NUM, "margem_ni": _NUM, "taxa_basal": _NUM,
         "conclusao_nao_bate_desenho": _B, "itt_falso": _B,
+        # ═══ 26/Ago — SÓ para pool_pre_especificado: as populações e a consistência ═══
+        # Ele: *"no FINE-ARTS os 3 trabalhos pegam populações um pouco diferentes (em um é
+        # renal crônico com diabetes, no outro sem diabetes) — vamos misturar e ver se os
+        # efeitos se mantêm."* A variação de população NÃO é defeito aqui: **é a pergunta.**
+        # Por isso não capa a nota (decisão dele) — mas o leitor tem de SABER o que foi
+        # misturado, porque é ele quem decide se aquilo cabe no paciente da frente dele.
+        "pool_populacoes": {"type": ["string", "null"],
+                            "description": "SÓ p/ pool_pre_especificado: uma frase dizendo QUAIS "
+                                           "populações foram agrupadas (ex.: 'DRC com diabetes, "
+                                           "DRC sem diabetes e ICFEp/ICFElr'). null nos outros."},
+        "pool_efeito_consistente": {"type": ["boolean", "null"],
+                            "description": "SÓ p/ pool_pre_especificado: true se o efeito se "
+                                           "MANTEVE em todos os ensaios do programa (sem "
+                                           "interação significativa); false se um destoou; "
+                                           "null se o artigo não reporta. null nos outros."},
         # ═══ 22/Ago/2026 — O CAMPO NÃO TINHA COMO DIZER "NÃO SEI" ═══
         # Era `_B` (booleano puro) e OBRIGATÓRIO. O prompt oferecia só "padronizada" ou
         # "raspada de prontuário" — e artigo observacional quase nunca descreve codebook nem
