@@ -59,6 +59,53 @@ def _key():
     return ""
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════
+# 29/Ago/2026 — O SELO VIROU CAMINHO, E O PLAYER TENTOU TOCÁ-LO
+#
+#   MediaFileStorageError: Error opening 'nao_gerado: nota 6 (a porta do audio e 8)'
+#
+# Desde 03/Ago o portão nunca manda campo VAZIO ao banco: o vazio ganha NOME (LEI 11).
+#     nao_gerado: …    não atingiu a porta por nota (áudio só ≥8, visual ≥7). LEGÍTIMO.
+#     nao_se_aplica: … o TIPO não tem esse conceito. LEGÍTIMO.
+#     ausente: …       a peça DEVIA existir e não veio. DEFEITO.
+#
+# Só que o painel testava `if a.get("caminho_audio"):` — **qualquer string não-vazia**. E o
+# selo é uma string não-vazia. O player recebeu uma legenda e tentou abrir um arquivo com
+# aquele nome.
+#
+# MEDIDO no banco: **554 de 830 `caminho_audio` são selo** (a porta do áudio é 8) e **307 de
+# 830 `caminho_visual_abstract`** (a porta do visual é 7). O PDF só não quebrava porque está
+# 830 de 830 com URL de verdade — sorte, não desenho.
+#
+# ⚠️ E o infográfico tinha um defeito MAIS SILENCIOSO que o áudio: virava um link
+# `[🖼️ Infográfico](nao_gerado: nota 6…)` que clica e não vai a lugar nenhum. Sem exceção,
+# sem traceback, sem aviso. O áudio pelo menos GRITOU.
+#
+# É a mesma família de tudo que consertamos esta semana: a ausência tem nome, e quem lê o
+# campo precisa saber ler o nome. Dar nome ao vazio (LEI 11) só resolve metade — a outra
+# metade é o leitor entender que aquilo é nome, não conteúdo.
+# ═══════════════════════════════════════════════════════════════════════════════════
+_SELOS = ("nao_gerado:", "não_gerado:", "nao_se_aplica:", "não_se_aplica:", "ausente:")
+
+
+def midia(valor):
+    """(url, legenda) — `url` só quando é mídia DE VERDADE.
+
+    Devolve (None, "por que não tem") quando o campo carrega um selo, para a tela poder
+    DIZER o motivo em vez de tentar tocar uma frase.
+    """
+    v = str(valor or "").strip()
+    if not v:
+        return None, "não informado"
+    baixo = v.lower()
+    if any(baixo.startswith(sel) for sel in _SELOS):
+        # o selo já vem legível: "nao_gerado: nota 6 (a porta do audio e 8)"
+        return None, v.split(":", 1)[1].strip() if ":" in v else v
+    if not (v.startswith("http://") or v.startswith("https://") or os.path.exists(v)):
+        return None, f"⚠️ caminho inválido: {v[:60]}"
+    return v, ""
+
+
 def _verdade(x):
     return str(x).strip().lower() in ("true", "1", "t", "yes")
 
@@ -568,15 +615,25 @@ if lista:
             st.markdown(f"**Muda conduta:** {_mc}")
         if a.get("mcid_avaliacao"):
             st.markdown(f"**MCID:** {a['mcid_avaliacao']}")
-        links = []
-        if a.get("caminho_pdf"):
-            links.append(f"[📄 PDF]({a['caminho_pdf']})")
-        if a.get("caminho_visual_abstract"):
-            links.append(f"[🖼️ Infográfico]({a['caminho_visual_abstract']})")
+        links, faltando = [], []
+        for rot, campo in (("📄 PDF", "caminho_pdf"),
+                           ("🖼️ Infográfico", "caminho_visual_abstract")):
+            url, porque = midia(a.get(campo))
+            if url:
+                links.append(f"[{rot}]({url})")
+            else:
+                faltando.append(f"{rot.split(' ',1)[1]}: {porque}")
         if links:
             st.markdown(" · ".join(links))
-        if a.get("caminho_audio"):
-            st.audio(a["caminho_audio"])          # OUVIR aqui mesmo
+        _au, _porque_au = midia(a.get("caminho_audio"))
+        if _au:
+            st.audio(_au)                          # OUVIR aqui mesmo
+        else:
+            faltando.append(f"áudio: {_porque_au}")
+        if faltando:
+            # NÃO é erro: é a porta da nota funcionando. Mas o curador precisa saber por quê,
+            # senão fica procurando um arquivo que o sistema decidiu, com razão, não gerar.
+            st.caption("sem mídia — " + " · ".join(faltando))
 
         # ── O PACOTE NO DISCO: card para postar, ACRI para copiar ──
         _pk = _do_disco(a)

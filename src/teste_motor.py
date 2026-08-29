@@ -5097,6 +5097,89 @@ def teste_o_painel_abre_mostrando_o_que_publicou():
           "nenhum filtro escondendo" in adm,
           "silêncio quando está tudo certo faz o dono duvidar do que vê")
 
+def teste_o_selo_nao_e_um_caminho_de_arquivo():
+    """O player tentou tocar uma legenda — 29/Ago/2026.
+
+        MediaFileStorageError: Error opening 'nao_gerado: nota 6 (a porta do audio e 8)'
+
+    Desde 03/Ago o portão nunca manda campo VAZIO ao banco: o vazio ganha NOME (LEI 11).
+    `nao_gerado:` (não atingiu a porta da nota) · `nao_se_aplica:` (o tipo não tem esse
+    conceito) · `ausente:` (a peça devia existir e não veio — DEFEITO).
+
+    Só que o painel testava `if a.get("caminho_audio"):` — **qualquer string não-vazia**. O
+    selo é uma string não-vazia. `st.audio()` recebeu uma frase e tentou abrir um arquivo com
+    aquele nome.
+
+    MEDIDO no banco: **554 de 830 `caminho_audio` são selo** (a porta do áudio é 8) e **307
+    de 830 `caminho_visual_abstract`** (a porta do visual é 7). O PDF só não quebrava porque
+    está 830/830 com URL de verdade — sorte, não desenho.
+
+    ⚠️ E o INFOGRÁFICO tinha um defeito mais silencioso: virava um link
+    `[🖼️ Infográfico](nao_gerado: nota 6…)` que clica e não vai a lugar nenhum. Sem exceção,
+    sem traceback. O áudio pelo menos GRITOU.
+
+    A lição de forma: dar nome ao vazio (LEI 11) resolve METADE. A outra metade é quem lê o
+    campo entender que aquilo é NOME, não conteúdo. Um selo lido como valor é tão ruim quanto
+    um NULL — só falha mais tarde e mais feio.
+    """
+    import ast as _ast
+    import os as _os
+    import types as _types
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    fonte = open(_os.path.join(aqui, "administrador.py"), encoding="utf-8").read()
+
+    fn = next((n for n in _ast.parse(fonte).body
+               if isinstance(n, _ast.FunctionDef) and n.name == "midia"), None)
+    checa("administrador.midia existe", fn is not None,
+          "sem ela, qualquer string não-vazia vira caminho de arquivo")
+    if not fn:
+        return
+    mod = _types.ModuleType("_adm")
+    mod.__dict__.update(os=_os, _SELOS=("nao_gerado:", "não_gerado:", "nao_se_aplica:",
+                                        "não_se_aplica:", "ausente:"))
+    exec(compile(_ast.Module(body=[fn], type_ignores=[]), "<adm>", "exec"), mod.__dict__)
+    midia = mod.midia
+
+    # ── 1) URL de verdade TOCA ──
+    u, _ = midia("https://xyz.supabase.co/storage/v1/object/public/podcasts/a.mp3")
+    checa("URL http passa como mídia", bool(u), "")
+
+    # ── 2) os TRÊS selos NÃO tocam, e devolvem a legenda legível ──
+    for v, esperado in (("nao_gerado: nota 6 (a porta do audio e 8)", "porta do audio"),
+                        ("nao_se_aplica: diretriz não tem visual", "diretriz"),
+                        ("ausente: bloco A do ACRI vazio", "ACRI")):
+        u, leg = midia(v)
+        checa(f"selo não vira caminho: {v[:26]}…", u is None, "o player vai tentar abrir isso")
+        checa(f"  e a legenda diz o motivo ({esperado})", esperado in leg, f"veio {leg!r}")
+
+    # ── 3) vazio e caminho quebrado também não tocam ──
+    for v, rot in ((None, "None"), ("", "vazio"), ("/nao/existe.mp3", "caminho inexistente")):
+        u, leg = midia(v)
+        checa(f"{rot} não vira mídia", u is None and bool(leg), f"veio {u!r}")
+
+    # ── 4) NENHUM uso solto sobrou no painel ──
+    # Era o formato do defeito: `if a.get("caminho_X"):` seguido de st.audio/link.
+    #
+    # ⚠️ a 1ª versão desta checagem usou REGEX no arquivo inteiro e acusou o MEU PRÓPRIO
+    # comentário, que cita o código defeituoso para explicá-lo. É o 2º falso-positivo do mesmo
+    # formato em uma semana (o "CUSTO ZERO" do ensaio seco, 22/Ago). Trava que não distingue o
+    # que o programa FAZ do que o programador ESCREVEU obriga a apagar a explicação para ficar
+    # verde — e explicação apagada é como o defeito volta. Agora lê a ÁRVORE, não o texto.
+    soltos = []
+    for no in _ast.walk(_ast.parse(fonte)):
+        if not isinstance(no, _ast.If):
+            continue
+        t = no.test
+        if (isinstance(t, _ast.Call) and isinstance(t.func, _ast.Attribute)
+                and t.func.attr == "get" and t.args
+                and isinstance(t.args[0], _ast.Constant)
+                and str(t.args[0].value).startswith("caminho_")):
+            soltos.append(f"linha {no.lineno}: {t.args[0].value}")
+    checa("nenhum `if a.get(caminho_...)` solto no painel", not soltos,
+          f"achei {len(soltos)}: {soltos} — cada um é um selo esperando virar caminho")
+    checa("a tela DIZ quando não há mídia, e por quê", "sem mídia — " in fonte,
+          "o curador não pode ficar procurando arquivo que o sistema decidiu não gerar")
+
 
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,
