@@ -5037,6 +5037,66 @@ def teste_a_meta_de_dados_individuais_e_reconhecida():
           "M2" not in N.falhas_fatais_meta(dict(base, tipo_meta="ipd")),
           "Trim-and-Fill estima estudos não publicados; na IPD não há gaveta")
 
+def teste_o_painel_abre_mostrando_o_que_publicou():
+    """A Chave 3 abria escondendo 27 de 39, e não dizia — 29/Ago/2026.
+
+    Ele, no meio do congresso europeu: *"rodei os artigos publicados hoje pelo NEJM, mas não
+    aparecem no administrador."*
+
+    Apareciam. MEDIDO naquele dia: **39 artigos, notas 6→13 · 7→12 · 8→7 · 9→5**. O slider
+    abria em 8–10 e mostrava **12**. Dos 7 do NEJM, só o Prasugrel vs Ticagrelor (nota 8)
+    passava — ficaram fora o silent atherosclerosis, a anticoagulação na FA subclínica, o
+    eplontersen na amiloidose, o milvexian e a aspirina omitida na ICP primária.
+
+    O padrão 8–10 servia a UM uso — curar o envio diário. Ele estava fazendo OUTRO: conferir
+    o que acabou de rodar. Usos opostos, mesma tela, e nenhum aviso do que estava escondido.
+
+    Duas correções, e a segunda importa tanto quanto:
+      · **6 é a porta da publicação (LEI 10).** Se subiu ao Supabase, aparece por padrão.
+      · o aviso do que está escondido foi para o **TOPO**. Ele ficava DEPOIS da lista, e a
+        impressão já estava formada quando chegava — "não aparecem no administrador" é
+        exatamente isso acontecendo.
+
+    ⚠️ É o mesmo defeito de forma da Chave 18 ("70 falhas" que não eram) e da Chave 2 de
+    06/Ago (a contagem numa ordem, o menu em outra): a interface fazendo o certo parecer
+    errado, e o silêncio escondendo qual dos dois é.
+    MEDIDO depois: 37 de 39 aparecem (os 2 fora são nota 4 e 5 — diretrizes, que a LEI 10
+    deixa subir mas ficam abaixo do slider por serem exceção declarada).
+    """
+    import os as _os
+    import re as _re
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    adm = open(_os.path.join(aqui, "administrador.py"), encoding="utf-8").read()
+
+    # ── 1) o padrão do slider é a PORTA, não o gosto ──
+    m = _re.search(r'sb\.slider\("NAC \(nota\)",\s*(\d+),\s*(\d+),\s*\((\d+),\s*(\d+)\)\)', adm)
+    checa("o slider de nota existe", m is not None, "")
+    if m:
+        piso = int(m.group(3))
+        import contrato as C
+        # a MESMA porta que o contrato aplica — não um número parecido escrito à mão
+        ficha = {"doc_id": "x", "doi": "10.1/x", "titulo": "Titulo bom", "revista": "R",
+                 "tema": "Arritmias/Anticoagulantes", "tema_secundario": "Não se aplica",
+                 "tema_origem": "llm", "mesh_terms": ["Heart Failure"], "mesh_origem": "pubmed",
+                 "tipo_documento": "original"}
+        retido = any("< 6" in str(x) for x in
+                     C.validar(dict(ficha, nota_aplicabilidade=piso - 1), checar_arquivos=False))
+        passa = not any("< 6" in str(x) for x in
+                        C.validar(dict(ficha, nota_aplicabilidade=piso), checar_arquivos=False))
+        checa(f"o painel abre no piso da PUBLICAÇÃO (veio {piso})", retido and passa,
+              f"nota {piso-1} retida? {retido} · nota {piso} publica? {passa} — "
+              "se o painel abre acima da porta, ele esconde o que o sistema publicou")
+
+    # ── 2) o aviso do que está escondido vem ANTES da lista ──
+    i_aviso = adm.find("escondidos")
+    i_lista = adm.find('st.markdown("### Ver · ouvir · aprovar")')
+    checa("o aviso de filtro existe", i_aviso > 0, "")
+    checa("e vem ANTES da lista de artigos", 0 < i_aviso < i_lista,
+          "depois da lista, a impressão já está formada quando o aviso chega")
+    checa("quando NADA está escondido, a tela também diz",
+          "nenhum filtro escondendo" in adm,
+          "silêncio quando está tudo certo faz o dono duvidar do que vê")
+
 
 if __name__ == "__main__":
     testes = [teste_pre_clinico, teste_nao_classificavel, teste_desenho_importa,

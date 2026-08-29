@@ -186,7 +186,28 @@ if not artigos:
 # ---------- filtros ----------
 sb = st.sidebar
 sb.header("Filtros")
-nmin, nmax = sb.slider("NAC (nota)", 1, 10, (8, 10))          # padrão: os que você pede (>8)
+# ═══════════════════════════════════════════════════════════════════════════════════
+# 29/Ago/2026 — A CHAVE 3 ABRIA ESCONDENDO 27 DE 39, E NÃO DIZIA
+#
+# Ele, no meio do congresso europeu: *"rodei os artigos publicados hoje pelo NEJM, mas não
+# aparecem no administrador."*
+#
+# Apareciam. MEDIDO: 39 artigos daquele dia, notas 6→13 · 7→12 · 8→7 · 9→5. O slider abria
+# em 8–10 e mostrava **12**. Dos 7 do NEJM, só o Prasugrel vs Ticagrelor (nota 8) passava —
+# ficaram fora o silent atherosclerosis, a anticoagulação na FA subclínica, o eplontersen na
+# amiloidose, o milvexian, a aspirina omitida na ICP primária.
+#
+# O padrão 8–10 servia a UM uso — curar o envio diário. Ele estava fazendo OUTRO: conferir o
+# que acabou de rodar. Usos opostos, mesma tela, e nenhum aviso de que havia coisa escondida.
+#
+# **6 é a porta da publicação (LEI 10).** Se subiu ao Supabase, aparece por padrão. Quem quer
+# curar o envio move o slider — e agora a tela DIZ, no topo, o que está fora.
+#
+# ⚠️ Era o mesmo defeito de forma da Chave 18 ("70 falhas" que não eram) e da Chave 2 de
+# 06/Ago (a contagem numa ordem, o menu em outra): a interface fazendo o certo parecer errado,
+# e o silêncio escondendo qual dos dois é.
+# ═══════════════════════════════════════════════════════════════════════════════════
+nmin, nmax = sb.slider("NAC (nota)", 1, 10, (6, 10))   # 6 = a porta da LEI 10, não o gosto
 tipos = sorted({a.get("tipo_estudo", "") for a in artigos if a.get("tipo_estudo")})
 revistas = sorted({a.get("revista", "") for a in artigos if a.get("revista")})
 
@@ -355,8 +376,16 @@ if busca:
 if _d_ini or _d_fim:
     _ativos.append(f"publicado de {_d_ini or '—'} até {_d_fim or '—'}")
 
+# 29/Ago — o aviso vem ANTES da lista. Ele ficava depois, e a impressão já estava formada
+# quando chegava: "não aparecem no administrador" é exatamente isso acontecendo.
+_fora = len(artigos) - len(lista)
+if _fora:
+    st.warning(f"**{len(lista)} de {len(artigos)}** na tela — **{_fora} escondidos** por: "
+               + " · ".join(_ativos))
+else:
+    st.success(f"**{len(lista)} de {len(artigos)}** — nenhum filtro escondendo nada.")
 st.caption(f"**{len(lista)}** artigo(s) na tela · {len(artigos)} no banco"
-           + (f" · {len(artigos) - len(lista)} escondidos pelos filtros" if _ativos else ""))
+           + (f" · {_fora} escondidos pelos filtros" if _ativos else ""))
 if _ativos:
     st.caption("filtros ativos: " + " · ".join(_ativos))
 if not lista and _ativos:
