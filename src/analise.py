@@ -119,6 +119,11 @@ SCHEMA_FATOS = {
                           "enum": ["preservada", "levemente_reduzida", "reduzida", "nao_se_aplica"]},
         "open_label": _B, "poder_ok": _B, "desfecho_duro": _B, "extrapolavel": _B,
         "eventos_min_grupo": _INT, "eventos_nao_alcancados": _B, "parado_cedo_por_beneficio": _B,
+        # 29/Ago — o irmão gêmeo do `parado_cedo_por_beneficio`, que faltava desde sempre.
+        # Ver notas_prototipo.teto_desenho para o porquê. Sem o campo AQUI e no prompt, a
+        # regra do motor fica muda para sempre — foi assim que as palavras-chave da meta
+        # nasceram sem instrução em 05/Ago (LEI 9, bloco 4).
+        "parado_por_futilidade": _B,
         "efeito_grande": _B, "taxa_obs": _NUM, "taxa_esp": _NUM, "margem_ni": _NUM, "taxa_basal": _NUM,
         "conclusao_nao_bate_desenho": _B, "itt_falso": _B,
         # ═══ 26/Ago — SÓ para pool_pre_especificado: as populações e a consistência ═══

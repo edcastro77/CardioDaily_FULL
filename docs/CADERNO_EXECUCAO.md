@@ -2177,3 +2177,110 @@ modelo e o artigo.
 - Backfill: `scripts/backfill_tema.py` — **100 dos 117** têm pacote e o portão refaz; **17** foram
   arquivados e precisam do PDF de volta na fila (decisão dele)
 - **Ponto de revisão marcado: aos 800 artigos** (hoje 616), com 6 itens a medir
+
+---
+
+## PARTE 20 — PARADA POR FUTILIDADE É RESPOSTA, NÃO FRACASSO (29/Ago/2026)
+
+**O artigo:** LIBREXIA-ACS (NEJM, 29/Ago/2026) — milvexian após síndrome coronariana aguda,
+14.194 pacientes, HR 1,05 (IC95% 0,91–1,21; p=0,50). O Dr. Eduardo perguntou que nota o sistema
+tinha dado. **Nota 6, `muda_conduta: NÃO`.**
+
+**O trecho que ele mandou, e que virou a resposta inteira:**
+> *"On the basis of the results of the prespecified interim analysis, the data and safety
+> monitoring committee recommended halting the trial for futility."*
+
+**O defeito.** Parar por futilidade produz, MECANICAMENTE, os dois campos que o motor lia como
+"ensaio que ficou pelo caminho":
+
+| campo | valor | por quê |
+|---|---|---|
+| `poder_ok` | False | parou antes de completar o N planejado |
+| `eventos_nao_alcancados` | True | 749 dos 875 previstos = **85,6%** |
+
+E com eles: `teto_desenho` 8 · rigor teto 7 · **Rota 2 fechada** (`entregou = poder and not
+eventos_nao_alcancados`) → rótulo `incerto` → teto 7 → MCID → **6**.
+
+Só que futilidade é o OPOSTO de "ficou pelo caminho". O comitê parou porque o poder condicional
+caiu tanto que terminar não mudaria a resposta. **O ensaio não deixou de responder — ele parou
+PORQUE respondeu.** É a família de defeito que o CLAUDE.md persegue inteiro: a ausência lida como
+fracasso quando ela é a conclusão.
+
+**Agravante:** a exceção do BENEFÍCIO (`parado_cedo_por_beneficio`) estava escrita no
+`teto_desenho` desde sempre. A simétrica nunca existiu. `grep -i futil` no projeto inteiro,
+29/Ago: **uma única ocorrência**, num prompt v2 aposentado.
+
+**AS DECISÕES DO DR. EDUARDO (29/Ago), uma a uma:**
+
+| # | pergunta | decisão dele |
+|---|---|---|
+| 1 | futilidade neutraliza `poder_ok=False`? | **"sim, teto volta a 10"** |
+| 2 | abre a Rota 2 (nulo demonstrado)? | sim — e é o MESMO par de campos de 1 e 3 |
+| 3 | desconta rigor pelos eventos? | **"não desconta"** — mas *"me interessa saber com que rigor esta futilidade foi detectada!"* |
+| 4 | exige desfecho duro/adjudicação junto? | *"interessa se a pergunta foi respondida"* — sem exigência extra |
+| 5 | re-extrair o acervo? | sim, os candidatos |
+| — | confirmação da nota | **"confirmo o 9"** |
+
+**MEDIDO, mesmo `fatos`, só virando os campos:** `aplic 6 → 9`, `muda_conduta NÃO → SIM`.
+É o mesmo número do DINAMIT — e é o mesmo argumento: *"não adianta prescrever isto"* é tão
+acionável quanto *"prescreva"*.
+
+**A VARREDURA DA LEI 9 — os 6 blocos onde a regra mora:**
+
+| # | bloco | o que mudou |
+|---|---|---|
+| 1 | `analise_prompt.md` | campo `parado_por_futilidade` + `eventos_nao_alcancados` reescrito (só INSUFICIÊNCIA) |
+| 2 | `analise.py` · `SCHEMA_FATOS` | `"parado_por_futilidade": _B` (não-obrigatório, igual ao irmão) |
+| 3 | `notas_prototipo.teto_desenho` | `_parou_porque_respondeu` = benefício **ou** futilidade |
+| 4 | `notas_prototipo.nota_estatistica` | não desconta por eventos — **dentro do `else`** (ver abaixo) |
+| 5 | `notas_prototipo._nulo_esta_demonstrado` | `entregou` aceita a parada |
+| 6 | `teste_motor.teste_futilidade_e_resposta_nao_fracasso` | a trava, com 5 controles |
+
+**⚠️ ONDE A EXCEÇÃO PAROU, E POR QUÊ.** No bloco 4 ela ficou DENTRO do `else`, e não no `if` do
+`parado_cedo_por_beneficio`. Se subisse, levaria junto o piso `<30 eventos/grupo → teto 6` e o
+delator da taxa observada — e uma futilidade declarada em cima de 40 eventos viraria 9 sem
+ninguém olhar. A segunda metade da frase dele (*"com que rigor foi detectada"*) é exatamente o
+que esses delatores respondem. **Medido:** futilidade + 25 eventos/grupo → volta a 6.
+
+**COMPATIBILIDADE — a ausência NÃO promove.** O campo nasceu hoje; os fatos antigos têm `null`,
+e o motor trata `null` como "não houve futilidade". Medido: sem o campo, nota inalterada. A regra
+não mexeu em 274 RCTs em silêncio.
+
+**A RE-EXTRAÇÃO — 27 candidatos viraram 4, sem gastar um centavo de LLM.**
+Candidatos brutos (`poder_ok=False` + `eventos_nao_alcancados` + não parou por benefício): **27
+de 274** RCTs de intervenção. Em vez de re-extrair os 27, o PDF de cada um foi lido com
+`pdftotext` e varrido por `futility|futilidade|conditional power`:
+
+| | |
+|---|---|
+| a palavra ESTÁ no artigo | **3** — LIBREXIA (8×), Vagal Nerve Stimulation/JACC (2×), CMR-Guided ICD/JAMA (1×) |
+| não aparece no PDF inteiro | **24** — insuficiência de verdade, ficam como estão |
+
+**E o 24º é uma correção minha, dita duas vezes errada.** Chamei o CARRESS-HF
+(Ultrafiltration/NEJM 2012) primeiro de *"PDF sem texto extraível"* e depois de *"o PDF não está
+mais em `ARTIGOS/`"*. As duas erradas: extrai **41.417 caracteres**, e o arquivo existe — foi o
+Dr. Eduardo que o subiu em 19/Ago; eu tinha varrido só `ARTIGOS/`. Lido inteiro: `futility` 0 ·
+`conditional power` 0 · `interim analysis` 0. As duas ocorrências de "stopped" falam da
+ultrafiltração sendo interrompida em PACIENTES, não do ensaio. **Insuficiência de verdade.**
+
+Custo medido no `uso.jsonl` (1.120 artigos, `precos.custo_da_linha`): mediana **US$ 0,212**/artigo.
+**3 artigos = US$ 0,64**, contra US$ 5,71 dos 27. E o filtro é evidência mais forte que o palpite:
+ele lê o ARTIGO, não o que o extrator resolveu escrever no campo livre.
+
+⚠️ **A palavra aparecer não prova que o ensaio parou por futilidade** — pode ser uma frase de
+métodos ("uma análise interina de futilidade estava prevista"). Quem decide é a re-extração. O
+grep serve para não pagar pelos 24 que certamente não mudam.
+
+**TERRA ARRASADA:** o carimbo `extrator` mudou (o prompt de extração mudou de verdade — a
+definição de `eventos_nao_alcancados` é outra). Medido: a fila tem **3 PDFs**, os 3 com pacote no
+STAGING → 3 pacotes refeitos. Não há surpresa escondida.
+
+**PARQUEADO — a régua da taxa de eventos esperada.** No mesmo dia ele levantou outra coisa:
+*"trials de síndrome isquêmica aguda têm média de 9 a 10% de eventos ao ano. se teve 5%, será que
+recrutaram mesmo pacientes de síndrome coronariana aguda?"* No LIBREXIA os autores **planejaram**
+5,0% e observaram 5,1% — o delator `taxa_obs < 0,7 × taxa_esp` não dispara porque elas batem. A
+pergunta dele é outra e o motor não a faz em lugar nenhum: **`taxa_esp` contra a LITERATURA**. Ele
+foi buscar a diretriz americana de SCA para montar a linha temporal das taxas dos trials que a
+sustentam. **A régua é clínica e é dele. Nada implementado até ele voltar com o número.**
+
+Bateria: **90 travas, 90 passam** (nova: `teste_futilidade_e_resposta_nao_fracasso`).

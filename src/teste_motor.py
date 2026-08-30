@@ -3776,6 +3776,102 @@ def teste_o_nulo_conclusivo_vale_como_resposta():
     return "nulo com poder e N entregues = resposta · sem eles, continua inconclusivo"
 
 
+def teste_futilidade_e_resposta_nao_fracasso():
+    """29/Ago — O IRMÃO GÊMEO QUE FALTAVA: PARADA POR FUTILIDADE (LIBREXIA-ACS).
+
+    O Dr. Eduardo mandou o trecho do NEJM:
+      *"On the basis of the results of the prespecified interim analysis, the data and safety
+       monitoring committee recommended halting the trial for futility."*
+
+    O motor tinha a exceção do BENEFÍCIO escrita desde sempre, e a SIMÉTRICA nunca existiu —
+    `futil` não aparecia uma única vez no projeto (grep de 29/Ago). Parar por futilidade produz,
+    mecanicamente, os dois campos que o motor lia como "ensaio que ficou pelo caminho":
+
+        poder_ok               False
+        eventos_nao_alcancados True     (749 dos 875 previstos = 85,6%)
+
+    Resultado medido antes do conserto: **nota 6, `muda_conduta: NÃO`** — sobre um ensaio de
+    14.194 pacientes que respondeu a pergunta. A ausência lida como fracasso quando ela é a
+    conclusão: a mesma família de defeito que este arquivo persegue inteiro.
+
+    Decisões dele, 29/Ago, uma a uma:
+      1) futilidade neutraliza o `poder_ok=False` → **"sim, teto volta a 10"**
+      2) e abre a Rota 2 (é o MESMO par de campos — a regra estava escrita em três lugares)
+      3) e NÃO desconta rigor pelos eventos: *"se esta é uma resposta plausível, eu quero saber
+         e incorporar à minha prática. me interessa saber com que rigor esta futilidade foi
+         detectada!"*
+      confirmação: *"confirmo o 9"*
+
+    ⚠️ E É A SEGUNDA METADE DA FRASE DELE QUE ESTA TRAVA MAIS PROTEGE. "Com que rigor foi
+    detectada" é exatamente o que os delatores de rigor respondem — e eles têm de continuar
+    de pé. Por isso a exceção mora DENTRO do `else`, e não no `if` do `parado_cedo_por_beneficio`:
+    lá em cima ela levaria junto o piso `<30 eventos/grupo` e o delator da taxa observada.
+    Uma futilidade declarada em cima de 40 eventos NÃO pode virar 9.
+    """
+    librexia = _bom(pergunta="intervencao", desenho="rct",
+                    open_label=False, poder_ok=False, desfecho_duro=True, extrapolavel=True,
+                    eventos_nao_alcancados=True, eventos_min_grupo=365,
+                    parado_cedo_por_beneficio=False, parado_por_futilidade=True,
+                    taxa_obs=0.051, taxa_esp=0.05, taxa_basal=0.05,
+                    beneficio_supera_risco=False,   # ← é ISTO que o estudo veio dizer
+                    itt_falso=False, falhas_fatais=[],
+                    financiamento_papel="indústria envolvida",
+                    qualidade_nhlbi={"instrumento": "controlled_intervention",
+                                     "participantes_cegados": True,
+                                     "avaliadores_desfecho_cegados": True},
+                    relevancia_clinica={"classificacao": "incerto",
+                                        "desfecho_primario": "Morte CV, IAM ou AVC isquêmico",
+                                        "tipo_desfecho": "composto",
+                                        "efeito_excede_limiar": False,
+                                        "ic_sustenta_relevancia": False,
+                                        "ic_exclui_beneficio_relevante": False})
+    r = N.score(librexia)
+    checa("LIBREXIA: parada por futilidade é resposta — vale 9 ou 10",
+          r["aplic"] >= 9, f"veio {r['aplic']}")
+    checa("LIBREXIA: e a bicondicional acompanha — a conduta que muda é NÃO fazer",
+          r["muda_conduta"] == "SIM", f"veio {r['muda_conduta']}")
+    checa("LIBREXIA: futilidade neutraliza poder_ok=False (decisão 1: teto volta a 10)",
+          r["teto_desenho"] == 10, f"teto_desenho {r['teto_desenho']}")
+    checa("LIBREXIA: os eventos que faltaram NÃO descontam rigor (decisão 3)",
+          not any("não alcançou os eventos previstos" in f for f in r["flags"]),
+          " | ".join(r["flags"]))
+
+    # ── OS CONTROLES. Sem eles a exceção vira peneira, e este é o erro que eu já cometi ──
+    # em 04/Ago: aplicar uma regra nos quatro motores sem varrer o que ela significaria em
+    # cada um. A trava confere onde a exceção PARA, não só onde ela vale.
+
+    # 1 · SEM O CAMPO, NADA MUDA. O campo nasceu hoje; os 27 candidatos do acervo têm `null`.
+    #     Se a ausência promovesse, a regra teria mexido em 274 RCTs em silêncio.
+    ausente = {k: v for k, v in librexia.items() if k != "parado_por_futilidade"}
+    checa("sem o campo (fatos antigos), a nota NÃO muda sozinha",
+          N.score(ausente)["aplic"] <= 7, f"veio {N.score(ausente)['aplic']}")
+
+    # 2 · NÃO VAZA para o ensaio que parou por outro motivo (verba, recrutamento, patrocinador).
+    negado = dict(librexia); negado["parado_por_futilidade"] = False
+    checa("futilidade=False continua inconclusivo (não vaza)",
+          N.score(negado)["aplic"] <= 7, f"veio {N.score(negado)['aplic']}")
+
+    # 3 · O PISO DE EVENTOS SOBREVIVE — futilidade declarada em cima de 25 eventos não vira 9.
+    #     É a segunda metade da frase dele: "com que rigor esta futilidade foi detectada".
+    magro = dict(librexia); magro["eventos_min_grupo"] = 25
+    r_magro = N.score(magro)
+    checa("futilidade com <30 eventos/grupo NÃO vira 9 — o piso de rigor segura",
+          r_magro["aplic"] <= 7, f"veio {r_magro['aplic']}")
+    checa("e o piso aparece no delator, para o leitor ver por quê",
+          any("<30 eventos/grupo" in f for f in r_magro["flags"]), " | ".join(r_magro["flags"]))
+
+    # 4 · O DELATOR DA TAXA OBSERVADA SOBREVIVE — é a porta por onde entra a desconfiança que
+    #     ele levantou no mesmo dia: *"trials de SCA têm 9 a 10% de eventos ao ano. se teve 5%,
+    #     será que recrutaram mesmo pacientes de síndrome coronariana aguda?"* A régua clínica
+    #     desse número ele foi buscar na diretriz americana; o que NÃO pode é a futilidade
+    #     calar o delator que já existe.
+    raso = dict(librexia); raso["taxa_esp"] = 0.10
+    checa("a taxa observada muito abaixo da esperada continua delatando sob futilidade",
+          any("taxa observada" in f for f in N.score(raso)["flags"]),
+          " | ".join(N.score(raso)["flags"]))
+    return "futilidade = resposta (9) · mas o rigor continua medindo COMO ela foi detectada"
+
+
 def teste_as_duas_gemeas_dano_e_nao_inferioridade():
     """19/Ago — APPRAISE-2 e VALIANT reprovaram por FALTA DE PALAVRA, não por régua.
 

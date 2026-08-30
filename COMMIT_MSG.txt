@@ -1,56 +1,108 @@
-OCR, A RÉGUA DO NULO CONCLUSIVO, E O TEMA ENTRA NO PORTÃO (19-21/Ago/2026)
+PARADA POR FUTILIDADE É RESPOSTA, NÃO FRACASSO (29/Ago/2026)
 
-Dois dias. Cinco defeitos meus, três leis novas, e uma proposta minha que a
-medição derrubou.
+O LIBREXIA-ACS (NEJM, 29/Ago/2026) — milvexian após SCA, 14.194 pacientes,
+HR 1,05 (IC95% 0,91–1,21; p=0,50) — saiu com NOTA 6 e `muda_conduta: NÃO`.
+O Dr. Eduardo mandou o trecho que explica tudo:
 
-═══ 19/Ago · O PDF QUE PARECIA LEGÍVEL E NÃO ERA ═══
-Dos 100 marcos da IC, 5 eram scan. O V-HeFT trazia 257 caracteres por página —
-só o carimbo "Downloaded from nejm.org" — e passava no `if texto.strip()`.
-A cascata decidia em cima de carimbo, sem nada quebrar.
-· src/ocr_pdf.py: densidade (<400 char/pág) + repetição (<35% linhas distintas)
-· ligado nos 5 pontos que abrem PDF (LEI 9); prova: 5/5 detectados, 0 falso-positivo
-  em 6 PDFs normais (0,02-0,06s vs 21,8s do scan)
-· TextoIlegivel para ANTES do LLM — o SAVE Trial tinha sido analisado e pago
-  para sair nota 0 em cima de 1.557 caracteres de carimbo
+  "On the basis of the results of the prespecified interim analysis, the data
+   and safety monitoring committee recommended halting the trial for futility."
 
-═══ 19/Ago · O LOTE REPROVOU 27 MARCOS DA CARDIOLOGIA ═══
-Medido: 15 dos 27 estavam exatamente em 5, todos com o mesmo delator final —
-`independência editorial -1.0`. Eu tinha escrito em 06/Ago que o desconto não
-cruza o 9, e não apliquei no 6, que é a fronteira que decide se o artigo EXISTE.
-· PISO_PUBLICACAO=6 · o desconto não cruza fronteira de CATEGORIA
-· `_nulo_esta_demonstrado` ganha a rota METODOLÓGICA (régua dele, sobre o DINAMIT):
-  quem autoriza o crédito do nulo não é a largura do IC, é o ensaio ter poder e
-  ter ENTREGUE o N que calculou. "Não faça" é conduta.
-· `dano_demonstrado` e `nao_inferioridade_demonstrada` (APPRAISE-2, VALIANT)
-· 4 circularidades: taxa_obs punindo quem recalculou a amostra; open-label num
-  desfecho de morte total; MCID punindo o nulo por ser nulo; benefício<risco
-· DINAMIT 5 → 9/10 MUDA CONDUTA. Acervo: 279 reavaliados, 20 sobem, 0 descem.
+O DEFEITO. Parar por futilidade produz, MECANICAMENTE, os dois campos que o
+motor lia como "ensaio que ficou pelo caminho":
 
-═══ 20-21/Ago · O TEMA ENTRA NO PORTÃO ═══
-117 de 616 linhas com tema NULL. O portão não falhou: eu construí a máquina de
-temas em 17/Ago e a rodei por um script que dá PATCH direto em `artigos` —
-um SEGUNDO PORTÃO, a LEI 5 que ele já tinha me dito ("não pode ter dois portões").
-· o TRIPÉ (arquitetura dele): onde se aplica · que natureza tem · QUEM VAI LER —
-  três campos obrigatórios ANTES do tema, e o tema tem de combinar com eles
-· gabarito cego de 40 que ele marcou a mão: MeSH 80% → tripé 92% (meta: 90%)
-· ficha_site._decidir_tema no portão · contrato RETÉM sem tema · marcar_temas
-  aposentado com guarda · Administrador busca em título+tema+keywords+MeSH
-· Supabase: 117→2 sem tema · 284→0 sem 2º tema · 290→0 sem mesh_terms
+    poder_ok               False    (parou antes do N planejado)
+    eventos_nao_alcancados True     (749 dos 875 previstos = 85,6%)
 
-═══ A PROPOSTA MINHA QUE A MEDIÇÃO DERRUBOU ═══
-Recomendei trocar o mapa manual pela árvore oficial da NLM. Ele aprovou —
-"mesmo que custe". Medi contra o gabarito:
-    árvore decidindo 60% · manual+árvore 65% · MAPA MANUAL 70%
-Piorou. A árvore organiza por ANATOMIA e não sabe que choque cardiogênico é do
-intensivista. Eu argumentei por AUTORIDADE (é da NLM, é oficial) e não por
-medição. Desligada da decisão, mantida para a BUSCA — onde ela leva "tempestade
-elétrica" de 1.114 para 5.947 artigos.
+E com eles: teto_desenho 8 · rigor teto 7 · Rota 2 FECHADA (`entregou = poder
+and not eventos_nao_alcancados`) → rótulo `incerto` → teto 7 → MCID → 6.
 
-═══ LEIS NOVAS ═══
-· LEI 11 — a lista vem antes do código, e o vazio tem de ter NOME. NULL não é
-  resposta; "Não se aplica" é.
-· LEI 12 — nada destrutivo sem conferir antes. Nasceu de eu ter copiado um
-  upload de 0 byte por cima do gabarito que ele marcou a mão.
-· docs/CHECKLIST_DECISOES.md — as regras de tema ditadas por ele, caso a caso
+Só que futilidade é o OPOSTO de "ficou pelo caminho". O comitê parou porque o
+poder condicional caiu tanto que terminar não mudaria a resposta. O ensaio não
+deixou de responder — ele parou PORQUE respondeu. É a família de defeito que o
+CLAUDE.md persegue inteiro: a ausência lida como fracasso quando ela é a
+conclusão.
 
-Bateria: 77 travas, 77 passam.
+AGRAVANTE: a exceção do BENEFÍCIO (`parado_cedo_por_beneficio`) estava escrita
+no `teto_desenho` desde sempre. A simétrica nunca existiu. `grep -i futil` no
+projeto inteiro, 29/Ago: UMA ocorrência, num prompt v2 aposentado.
+
+AS DECISÕES DO DR. EDUARDO (29/Ago), uma a uma:
+  1) futilidade neutraliza poder_ok=False?      "sim, teto volta a 10"
+  2) abre a Rota 2 (nulo demonstrado)?          sim — é o MESMO par de campos
+  3) desconta rigor pelos eventos?              "não desconta — se esta é uma
+     resposta plausível eu quero saber e incorporar à minha prática. me
+     interessa saber COM QUE RIGOR esta futilidade foi detectada!"
+  4) exige desfecho duro/adjudicação junto?     "interessa se a pergunta foi
+     respondida" — sem exigência extra
+  confirmação:                                  "confirmo o 9"
+
+MEDIDO, mesmos fatos, só virando os campos: aplic 6 → 9, muda_conduta → SIM.
+É o mesmo número do DINAMIT, e é o mesmo argumento: "não adianta prescrever
+isto" é tão acionável quanto "prescreva".
+
+A VARREDURA DA LEI 9 — os 6 blocos onde a regra mora:
+  1 analise_prompt.md ............ campo `parado_por_futilidade` +
+                                   `eventos_nao_alcancados` reescrito (só
+                                   INSUFICIÊNCIA; parada do DSMB não conta)
+  2 analise.py · SCHEMA_FATOS .... "parado_por_futilidade": _B (não-obrigatório,
+                                   igual ao irmão)
+  3 teto_desenho ................. `_parou_porque_respondeu` = benefício OU
+                                   futilidade
+  4 nota_estatistica ............. não desconta pelos eventos
+  5 _nulo_esta_demonstrado ....... `entregou` aceita a parada
+  6 teste_motor .................. teste_futilidade_e_resposta_nao_fracasso,
+                                   com 5 controles
+
+ONDE A EXCEÇÃO PAROU, E POR QUÊ. No bloco 4 ela ficou DENTRO do `else`, e não
+no `if` do `parado_cedo_por_beneficio`. Se subisse um nível levaria junto o piso
+`<30 eventos/grupo → teto 6` e o delator da taxa observada — e uma futilidade
+declarada em cima de 40 eventos viraria 9 sem ninguém olhar. A segunda metade da
+frase dele ("com que rigor foi detectada") é exatamente o que esses delatores
+respondem. MEDIDO: futilidade + 25 eventos/grupo → volta a 6.
+
+A AUSÊNCIA NÃO PROMOVE. O campo nasceu hoje; os fatos antigos têm null, e o
+motor trata null como "não houve futilidade". Medido: sem o campo, nota
+inalterada. A regra não mexeu em 274 RCTs em silêncio.
+
+A RE-EXTRAÇÃO — 27 CANDIDATOS VIRARAM 3, SEM GASTAR UM CENTAVO DE LLM.
+Candidatos brutos (poder_ok=False + eventos_nao_alcancados + não parou por
+benefício): 27 de 274 RCTs de intervenção. Em vez de re-extrair os 27
+(US$ 5,71), o PDF de cada um foi LIDO com pdftotext e varrido por
+`futility|futilidade|conditional power` — evidência mais forte que o palpite,
+porque lê o ARTIGO e não o que o extrator resolveu escrever no campo livre:
+
+     3  a palavra ESTÁ no artigo ... LIBREXIA (8x) · Vagal Nerve Stimulation/
+                                    JACC (2x) · CMR-Guided ICD/JAMA (1x)
+    24  não aparece no PDF inteiro . insuficiência de verdade, ficam como estão
+
+O 24º é o CARRESS-HF (Ultrafiltration/NEJM 2012), que eu tinha dado como
+"PDF sem texto extraível" e depois como "PDF não está mais em ARTIGOS/". As duas
+coisas estavam erradas: o PDF extrai 41.417 caracteres, e ele existe — foi o
+Dr. Eduardo que o subiu em 19/Ago. Lido inteiro: futility 0 · conditional power
+0 · interim analysis 0. As duas ocorrências de "stopped" falam da ultrafiltração
+sendo interrompida em pacientes individuais, não do ensaio.
+
+Custo medido no uso.jsonl (1.120 artigos, precos.custo_da_linha): mediana
+US$ 0,212/artigo → os 3 custam US$ 0,64.
+
+A palavra aparecer NÃO prova que o ensaio parou por futilidade — pode ser frase
+de métodos. Quem decide é a re-extração; o grep só evita pagar pelos 24.
+
+TERRA ARRASADA: o carimbo `extrator` mudou de verdade (a definição de
+`eventos_nao_alcancados` é outra). Medido: a fila tem 3 PDFs, os 3 com pacote no
+STAGING → 3 pacotes refeitos. Sem surpresa escondida.
+
+PARQUEADO — A RÉGUA DA TAXA DE EVENTOS ESPERADA. No mesmo dia ele levantou outra
+coisa: "trials de síndrome isquêmica aguda têm média de 9 a 10% de eventos ao
+ano. se teve 5%, será que recrutaram mesmo pacientes de SCA?" No LIBREXIA os
+autores PLANEJARAM 5,0% e observaram 5,1% — o delator `taxa_obs < 0,7 × taxa_esp`
+não dispara porque elas batem. A pergunta dele é outra, e o motor não a faz em
+lugar nenhum: `taxa_esp` contra a LITERATURA. Ele foi buscar a diretriz americana
+de SCA para montar a linha temporal. A régua é clínica e é dele — nada
+implementado até ele voltar com o número.
+
+NOVO: scripts/devolver_para_futilidade.py — devolve os 3 PDFs à fila, em dois
+tempos (ensaio sem --executar), conferindo tamanho da origem e recusando
+sobrescrever destino (LEI 12).
+
+Bateria: 90 travas, 90 passam.

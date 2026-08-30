@@ -153,7 +153,37 @@ def teto_desenho(a):
                                   "avaliadores_desfecho_cegados") is not False)
             if a.get("open_label") and not _cego_nao_muda:
                 return 8
-            if not a.get("poder_ok", True) and not a.get("parado_cedo_por_beneficio"):
+            # ═══ 29/Ago — O IRMÃO GÊMEO QUE FALTAVA: PARADA POR FUTILIDADE ═══
+            # A exceção do BENEFÍCIO está escrita aqui desde sempre. A simétrica — parada por
+            # FUTILIDADE em análise interina pré-especificada — nunca existiu, e `futil` não
+            # aparecia UMA vez no projeto inteiro (grep de 29/Ago: só num prompt v2 aposentado).
+            #
+            # O caso: LIBREXIA-ACS (NEJM, 29/Ago/2026, milvexian após SCA). O DSMB mandou parar
+            # por futilidade em 13/Nov/2025. Parar produz, MECANICAMENTE, os dois campos que o
+            # motor lia como "ensaio que ficou pelo caminho":
+            #       poder_ok               False
+            #       eventos_nao_alcancados True    (749 dos 875 previstos = 85,6%)
+            # E com eles a nota saiu 6, `muda_conduta: NÃO`, sobre um ensaio de 14.194 pacientes
+            # que respondeu a pergunta. É a família de defeito que este arquivo persegue inteiro:
+            # **a ausência lida como fracasso quando ela é a conclusão.**
+            #
+            # Futilidade NÃO é recrutamento fraco. É o comitê dizendo, com regra escrita antes,
+            # que o poder condicional caiu tanto que terminar não mudaria a resposta. O ensaio
+            # não deixou de responder — ele parou PORQUE respondeu.
+            #
+            # Palavras do Dr. Eduardo, 29/Ago, decidindo os três pontos:
+            #   *"se esta é uma resposta plausível — eu quero saber e incorporar à minha prática!
+            #    me interessa saber com que rigor esta futilidade foi detectada."*
+            #   *"interessa se os resultados (positivos, negativos ou neutros — sempre possível
+            #    quando fazemos uma pergunta prática) foi respondida."*
+            #
+            # ⚠️ O PISO QUE SOBREVIVE: `eventos_min_grupo < 30 → teto 6` continua valendo em
+            # `nota_estatistica`. Uma futilidade declarada em cima de 40 eventos NÃO vira 10 por
+            # esta linha — o rigor a segura. A exceção diz "não foi fracasso"; ela não diz
+            # "foi bem medido". Quem responde a segunda pergunta é o rigor, como sempre.
+            _parou_porque_respondeu = (a.get("parado_cedo_por_beneficio")
+                                       or a.get("parado_por_futilidade"))
+            if not a.get("poder_ok", True) and not _parou_porque_respondeu:
                 return 8
             return 10               # Nível A: RCT duro, cegado (ou cegamento irrelevante), poder ok
         # 26/Ago — a meta de DADOS INDIVIDUAIS chega a 10, decisão dele: não soma estimativa
@@ -481,7 +511,14 @@ def _nulo_esta_demonstrado(rc, a):
     # é grande o bastante?"; aqui é "o NADA que o estudo achou é resposta ou é fracasso?".
     # Por isso a porta só abre quando não há efeito a promover.
     nulo = rc.get("efeito_excede_limiar") is False
-    entregou = poder and not a.get("eventos_nao_alcancados")
+    # ═══ 29/Ago — A FUTILIDADE É UMA FORMA DE ENTREGAR, NÃO DE FALHAR (LIBREXIA-ACS) ═══
+    # `entregou` perguntava "o ensaio chegou ao fim que planejou?". A parada por futilidade
+    # responde NÃO aos dois campos e SIM à pergunta que importa. Ver `teto_desenho` para o
+    # caso completo. Esta é a MESMA decisão dele escrita pela terceira vez no código — por
+    # isso as três linhas nasceram juntas e a trava confere as três (LEI 9).
+    _parou_porque_respondeu = (a.get("parado_cedo_por_beneficio")
+                               or a.get("parado_por_futilidade"))
+    entregou = (poder and not a.get("eventos_nao_alcancados")) or bool(_parou_porque_respondeu)
     duro = bool(a.get("desfecho_duro"))
     limpo = not a.get("itt_falso") and not a.get("falhas_fatais")
     return nulo and entregou and duro and limpo
@@ -1931,7 +1968,25 @@ def nota_estatistica(a):
         if ev is not None and ev < 30:
             s = min(s, 6); fl.append(f"<30 eventos/grupo (={ev})")
         if a.get("eventos_nao_alcancados"):
-            s = min(s, 7); fl.append("não alcançou os eventos previstos")
+            # ═══ 29/Ago — DECISÃO 3 DO DR. EDUARDO, E ONDE ELA PARA ═══
+            #   *"não desconta — se esta é uma resposta plausível, eu quero saber e incorporar
+            #    à minha prática. me interessa saber com que rigor esta futilidade foi detectada!"*
+            # Os eventos que faltaram são a CONSEQUÊNCIA de o DSMB ter mandado parar, não a
+            # causa de o ensaio não responder. Descontar aqui é punir o ensaio pelo próprio
+            # achado — a frase que o DINAMIT já tinha escrito neste arquivo em 19/Ago.
+            #
+            # ⚠️ E REPARE ONDE ESTA EXCEÇÃO **NÃO** ENTROU: ela fica AQUI dentro, e não no
+            # `if` de cima junto com o `parado_cedo_por_beneficio`. Se entrasse lá, levaria
+            # junto o piso `<30 eventos/grupo → teto 6` e o delator da taxa observada — e uma
+            # futilidade declarada em cima de 40 eventos viraria nota alta sem ninguém olhar.
+            # A segunda metade da frase dele ("com que rigor foi detectada") é exatamente o
+            # que esses dois delatores respondem. Eles continuam de pé.
+            if a.get("parado_por_futilidade"):
+                fl.append("parado por futilidade em análise interina pré-especificada — "
+                          "os eventos que faltaram são consequência da parada, não falha de "
+                          "poder (não penaliza)")
+            else:
+                s = min(s, 7); fl.append("não alcançou os eventos previstos")
         # ═══ 19/Ago — O DELATOR QUE PUNIA O ENSAIO POR TER FEITO A COISA CERTA ═══
         # O DINAMIT (NEJM 2004) levava "taxa observada <70% da esperada" e caía para rigor 7.
         # Mas os investigadores VIRAM a mortalidade vir menor que a esperada, RECALCULARAM a
