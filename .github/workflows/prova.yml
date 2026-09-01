@@ -1,0 +1,50 @@
+# PROVA DO MOTOR — o portão da Chave 8, rodando na nuvem a cada push.
+#
+# NÃO bloqueia nada (não há branch protection): acusa VERMELHO no GitHub quando
+# o motor reprova. Bloquear o push é decisão do dono, não deste arquivo.
+#
+# Provado em simulação local (01/Set/2026): checkout limpo do git + Python 3.11
+# + requirements.txt + streamlit → py_compile OK e APROVADO, 91 travas, ~7 s,
+# SEM nenhuma credencial — desde o `main()` de 01/Set, importar o administrador
+# não abre a UI nem toca a rede, e a bateria é 100% offline.
+#
+# Os secrets só entram no portão 3: o AppTest sobe a TELA de verdade, e a tela
+# lê a tabela `artigos`. São os mesmos secrets de radar.yml/auditoria-semanal.yml.
+# Por que streamlit à parte: o administrador importa streamlit, que não está
+# no requirements.txt (instalação manual, chaves/LEIA-ME.md).
+
+name: Prova do Motor
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  prova:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Dependências
+        run: pip install -r requirements.txt streamlit
+
+      - name: "Portão 1/2 · py_compile de todo o src (como a Chave 8)"
+        run: python -m py_compile src/*.py
+
+      - name: "Portão 2/3 · as travas do motor (teste_motor.py, 100% offline)"
+        run: python -u src/teste_motor.py
+
+      # A tela da Chave 3, provada sem navegador (AppTest). No CI não existe
+      # outputs/ (fora do git) — o índice do disco fica vazio e isso é esperado;
+      # o que a suíte cobra é o painel abrir, filtrar e não mentir sobre o banco.
+      - name: "Portão 3/3 · a tela do administrador (teste_administrador.py)"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python -u src/teste_administrador.py

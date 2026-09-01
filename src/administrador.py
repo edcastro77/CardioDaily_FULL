@@ -6,11 +6,18 @@ A aprovação grava a fila na tabela `agenda_envio` do Supabase (14/Ago/2026), l
 na nuvem — o envio NÃO depende deste Mac estar ligado, igual ao Radar.
 
 Roda no seu notebook:  streamlit run administrador.py
+
+01/Set/2026 — A TELA MUDOU DE FORMA, NÃO DE CONTEÚDO: as funções (buscar, passa, midia,
+indice_do_disco…) moram no topo do módulo e a UI inteira mora em `main()`, que só roda
+quando existe um runtime do Streamlit de verdade. `import administrador` (a bateria, as
+travas) deixa de abrir a tela e de fazer chamada de rede — antes, importar este arquivo
+disparava um GET no Supabase sem ninguém saber (descoberto ao simular o CI sem .env).
 """
 # 11/Ago — o `re as _re` estava importado na linha 256, e o filtro de data o usa na 173.
 # Compila perfeitamente; quebra com NameError na hora que o painel abre — o MESMO formato
 # do `_VOO` que custou 10 artigos pagos em 10/Ago. Import de módulo mora no topo, ponto.
 import os, csv, re as _re, datetime as dt
+import glob as _glob, os as _os
 import requests
 from supabase_chaves import cabecalhos
 import streamlit as st
@@ -115,8 +122,18 @@ def buscar():
     url, key = _url(), _key()
     if not url or not key:
         return None, "SUPABASE_URL / chave ausentes no .env"
+    # ═══ 01/Set — PAGINA EM BLOCOS DE 1000, porque o Supabase corta ali e NÃO AVISA ═══
+    # Medido em 01/Set: 882 linhas no banco, e o GET sem Range ainda devolvia todas —
+    # mas o teto do PostgREST é 1000. No artigo 1001, o painel passaria a esconder os
+    # de nota mais baixa EM SILÊNCIO, e o banner "X de Y" contaria um Y falso. É o
+    # mesmo desenho de blocos de 1000 que o painel aposentado já usava; a varredura
+    # de 01/Set conferiu os demais leitores de `artigos` — todos têm limit deliberado.
     try:
-        r = requests.get(f"{url}/rest/v1/artigos",
+        todos, _PASSO = [], 1000
+        for _inicio in range(0, 100_000, _PASSO):
+            _h = dict(cabecalhos(key))
+            _h["Range"] = f"{_inicio}-{_inicio + _PASSO - 1}"
+            r = requests.get(f"{url}/rest/v1/artigos",
                          params={"select": "doc_id,doi,titulo,revista,data_publicacao,tipo_estudo,doenca_principal,"
                                            "nota_aplicabilidade,nota_trabalho_estatistico,mcid_avaliacao,"
                                            "caminho_pdf,caminho_audio,caminho_visual_abstract,publicar_no_site,"
@@ -135,10 +152,17 @@ def buscar():
                                            # desconfiar do sistema todo — e desconfiança custa mais
                                            # caro que buraco, porque para a operação inteira.
                                            "tipo_documento,muda_conduta",
-                                 "order": "nota_aplicabilidade.desc"},
-                         headers=cabecalhos(key), timeout=40)
-        r.raise_for_status()
-        return r.json(), None
+                                 # doc_id como DESEMPATE: sem ele, artigos com a mesma nota
+                                 # podem trocar de lugar entre uma página e outra — e a
+                                 # paginação duplicaria uns e perderia outros.
+                                 "order": "nota_aplicabilidade.desc,doc_id.asc"},
+                         headers=_h, timeout=40)
+            r.raise_for_status()
+            pagina = r.json()
+            todos.extend(pagina)
+            if len(pagina) < _PASSO:
+                break
+        return todos, None
     except Exception as e:
         return None, f"{type(e).__name__}: {e}"
 
@@ -219,235 +243,6 @@ def desagendar(doc_id, data_envio):
         return False, f"{type(e).__name__}: {e}"
 
 
-st.set_page_config(page_title="CardioDaily — Administrador", page_icon="🫀", layout="wide")
-st.markdown(f"<h1 style='color:{AZUL};margin-bottom:0'>CardioDaily — Curadoria</h1>"
-            "<p style='color:#666;margin-top:2px'>ver · ouvir · aprovar — dados e fatos, sem firulas</p>",
-            unsafe_allow_html=True)
-
-artigos, erro = buscar()
-if erro:
-    st.error(f"Não consegui ler o Supabase: {erro}"); st.stop()
-if not artigos:
-    st.info("Nenhum artigo publicado ainda."); st.stop()
-
-# ---------- filtros ----------
-sb = st.sidebar
-sb.header("Filtros")
-# ═══════════════════════════════════════════════════════════════════════════════════
-# 29/Ago/2026 — A CHAVE 3 ABRIA ESCONDENDO 27 DE 39, E NÃO DIZIA
-#
-# Ele, no meio do congresso europeu: *"rodei os artigos publicados hoje pelo NEJM, mas não
-# aparecem no administrador."*
-#
-# Apareciam. MEDIDO: 39 artigos daquele dia, notas 6→13 · 7→12 · 8→7 · 9→5. O slider abria
-# em 8–10 e mostrava **12**. Dos 7 do NEJM, só o Prasugrel vs Ticagrelor (nota 8) passava —
-# ficaram fora o silent atherosclerosis, a anticoagulação na FA subclínica, o eplontersen na
-# amiloidose, o milvexian, a aspirina omitida na ICP primária.
-#
-# O padrão 8–10 servia a UM uso — curar o envio diário. Ele estava fazendo OUTRO: conferir o
-# que acabou de rodar. Usos opostos, mesma tela, e nenhum aviso de que havia coisa escondida.
-#
-# **6 é a porta da publicação (LEI 10).** Se subiu ao Supabase, aparece por padrão. Quem quer
-# curar o envio move o slider — e agora a tela DIZ, no topo, o que está fora.
-#
-# ⚠️ Era o mesmo defeito de forma da Chave 18 ("70 falhas" que não eram) e da Chave 2 de
-# 06/Ago (a contagem numa ordem, o menu em outra): a interface fazendo o certo parecer errado,
-# e o silêncio escondendo qual dos dois é.
-# ═══════════════════════════════════════════════════════════════════════════════════
-nmin, nmax = sb.slider("NAC (nota)", 1, 10, (6, 10))   # 6 = a porta da LEI 10, não o gosto
-tipos = sorted({a.get("tipo_estudo", "") for a in artigos if a.get("tipo_estudo")})
-revistas = sorted({a.get("revista", "") for a in artigos if a.get("revista")})
-
-# ═══ 20/Ago/2026 — O FILTRO "TEMA" LIA O VOCABULÁRIO ERRADO ═══
-#
-# Ele digitou "OBSTETRIC" na busca e voltou ZERO de 520: *"o administrador é inútil como ele
-# está funcionando hoje — ele não programa nada, não acha nada. A lista de temas está podre."*
-#
-# A causa, medida: este filtro lia `doenca_principal`, que é OUTRA lista — 8 rótulos criados
-# por regex de palavra-chave lá no `ficha_site._tema()`:
-#     Insuficiência Cardíaca 213 · Cardiologia Preventiva 149 · Coronária/DAC 106 ·
-#     Valvopatias 54 · Arritmias 50 · Outros 29 · Imagem Cardíaca 9 · Hipertensão 6
-# Não existe Cardio-Obstetrícia ali. Nem Miocardiopatias, nem Cardio-Oncologia, nem UTI.
-# **Duas listas de temas no mesmo sistema** — a LEI 9 na forma mais cara: a máquina de temas
-# de 17/Ago (13 temas, MeSH, tripé) nunca chegou à tela onde ele decide o que enviar.
-#
-# `doenca_principal` continua existindo porque o SITE usa (cardiodaily.ts → TEMAS) e mudá-lo
-# quebraria a vitrine. Mas quem manda na curadoria agora é `tema`.
-temas = sorted({t for a in artigos for t in (a.get("tema"), a.get("tema_secundario"))
-                if t and t != "Não se aplica"})
-f_tipo = sb.multiselect("Tipo", tipos)
-f_rev = sb.multiselect("Revista", revistas)
-f_tema = sb.multiselect("Tema", temas,
-                        help="Casa com o tema PRINCIPAL ou o SECUNDÁRIO — um artigo pertence "
-                             "legitimamente a dois, e o assinante de qualquer um dos dois recebe.")
-busca = sb.text_input("Busca (título · tema · palavras-chave · MeSH)",
-                      help="Procura em tudo, não só no título. É o que faz 'obstetric' e "
-                           "'amiloidose' acharem o que o título não diz.")
-
-# ── a fila do que ficou SEM TEMA: visível, não silenciosa (LEI 11) ──
-_sem = [a for a in artigos if not a.get("tema") or a.get("tema") == "Sem tema"]
-if _sem:
-    sb.divider()
-    sb.caption(f"⚠️ {len(_sem)} artigo(s) sem tema")
-    _SO_SEM_TEMA = sb.checkbox("Ver só os SEM TEMA", key="so_sem_tema")
-
-# ═══ 11/Ago/2026 — FILTRO DE DATA DE PUBLICAÇÃO ═══
-#
-#   *"fica aparecendo artigos de 1999 na curadoria atual"* · *"preciso de filtro de data —
-#    data de inicio das buscas e final"*
-#
-# DUAS DATAS EXISTEM, e elas respondem perguntas diferentes. Medido antes de escolher:
-#     data_publicacao   1951-01-01 → 2026-10-01   "o que saiu na literatura nesta janela"
-#     created_at        2026-08-05 → 2026-08-11   "o que entrou na minha fila" — 6 dias só,
-#                                                 porque o banco foi refeito
-# Decisão dele: **data de publicação**. É a que produz o artigo de 1999 que o incomodou.
-# Dos 449 artigos, 418 são de 2026 e 20 são anteriores a 2024 (os clássicos: RALES,
-# MERIT-HF, PLATO, FAME).
-#
-# Decisão dele sobre o PADRÃO: **vazio, mostra tudo**. Nada é escondido sem ele mandar.
-# Um filtro que já vem ligado é uma armadilha de memória: um dia ele procura um artigo,
-# não acha, e a causa é uma régua que ele não lembra que existe. É o mesmo princípio das
-# duas fontes de verdade que nos custou o dia de hoje, na versão interface.
-def _dia(a):
-    """A data de publicação como texto AAAA-MM-DD, ou '' se não der para ler."""
-    return str(a.get("data_publicacao") or "")[:10]
-
-
-_dias = sorted(d for d in {_dia(a) for a in artigos} if len(d) == 10)
-sb.markdown("---")
-sb.markdown("**Data de publicação**")
-if _dias:
-    _d_ini = sb.text_input("De (AAAA-MM-DD)", value="", placeholder=_dias[0],
-                           help="Deixe vazio para não limitar. O mais antigo no banco é "
-                                f"{_dias[0]}.")
-    _d_fim = sb.text_input("Até (AAAA-MM-DD)", value="", placeholder=_dias[-1],
-                           help="Deixe vazio para não limitar. O mais recente no banco é "
-                                f"{_dias[-1]}.")
-    # Atalhos, porque digitar data à mão em painel é fricção — mas nenhum vem marcado.
-    _atalho = sb.radio("atalhos", ["—", "90 dias", "12 meses", "só 2026"],
-                       horizontal=True, label_visibility="collapsed")
-    if _atalho != "—":
-        _hoje = dt.date.today()
-        _de = {"90 dias": _hoje - dt.timedelta(days=90),
-               "12 meses": _hoje - dt.timedelta(days=365),
-               "só 2026": dt.date(2026, 1, 1)}[_atalho]
-        _d_ini, _d_fim = _de.isoformat(), ""
-        sb.caption(f"atalho ativo: de {_d_ini} em diante")
-else:
-    _d_ini = _d_fim = ""
-
-# As datas digitadas erradas não podem filtrar em silêncio: um "2026/08" que não casa com
-# nada esvaziaria a tela sem dizer por quê — o defeito do dia inteiro, de novo.
-_ruins = [r for r in ((_d_ini, "De"), (_d_fim, "Até"))
-          if r[0] and not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", r[0])]
-for _v, _q in _ruins:
-    sb.error(f"«{_q}»: `{_v}` não é uma data AAAA-MM-DD — este campo está sendo IGNORADO.")
-if [r for r in _ruins if r[1] == "De"]:
-    _d_ini = ""
-if [r for r in _ruins if r[1] == "Até"]:
-    _d_fim = ""
-
-# Janela invertida (fim antes do início) não devolve NADA, e a tela vazia não explica por quê.
-# Medido na bancada: com "de 2026-08-01 até 2026-07-01" sobrava 1 artigo de 7 — o único sem
-# data no metadado. Ele olharia para uma lista de um item e não teria como saber a causa.
-if _d_ini and _d_fim and _d_fim < _d_ini:
-    sb.error(f"A data final (`{_d_fim}`) é ANTERIOR à inicial (`{_d_ini}`) — "
-             f"nenhuma publicação cabe nessa janela.")
-
-
-def passa(a, so_sem_tema=False, nota_min=1, nota_max=10):
-    n = a.get("nota_aplicabilidade") or 0
-    # nmin/nmax nascem do slider do Streamlit; a REGRA de filtro não pode depender da TELA,
-    # senão deixa de ser testável fora dela (mesmo motivo do `st.session_state`, 21/Ago).
-    if not (nota_min <= n <= nota_max):
-        return False
-    if f_tipo and a.get("tipo_estudo") not in f_tipo:
-        return False
-    if f_rev and a.get("revista") not in f_rev:
-        return False
-    # ── TEMA: casa com o PRINCIPAL ou o SECUNDÁRIO ──
-    # Um artigo pertence legitimamente a dois temas, e o assinante de QUALQUER um dos dois
-    # recebe. Foi ele quem apontou isso, olhando o septo/QRS na amiloidose: *"mas no caso 40
-    # cabe as duas coisas — isso não é um erro."* Filtrar só pelo principal esconderia do
-    # curador metade do que o assinante vai receber.
-    if f_tema and not ({a.get("tema"), a.get("tema_secundario")} & set(f_tema)):
-        return False
-    # ⚠️ 21/Ago — aqui eu tinha escrito `st.session_state.get("_so_sem_tema")`, e isso QUEBROU a
-    # bateria: a trava `teste_o_filtro_de_data...` extrai esta função e a roda ISOLADA, sem o
-    # Streamlit. `NameError: name 'st' is not defined`, e a bateria inteira parou.
-    # A lição é de desenho, não de sintaxe: **a regra de filtro não pode depender do estado da
-    # TELA.** Se ela depende, deixa de ser testável fora dela — e trava que não roda é trava que
-    # dá aprovado por ausência (o defeito de 06/Ago). A preferência vira PARÂMETRO, com padrão.
-    if so_sem_tema and a.get("tema") not in (None, "", "Sem tema"):
-        return False
-
-    # ── BUSCA: em TUDO, não só no título ──
-    # Ele digitou "OBSTETRIC" e voltou zero de 520. O título quase nunca diz o assunto pelo
-    # nome que se procura — "Experiences of Racism and Risk of Preeclampsia" é cardio-obstetrícia
-    # e não tem a palavra. Quem sabe são as keywords, os descritores MeSH e o tema.
-    if busca:
-        _b = busca.lower()
-        _onde = " ".join(str(x) for x in (
-            a.get("titulo") or "", a.get("tema") or "", a.get("tema_secundario") or "",
-            a.get("revista") or "",
-            " ".join(a.get("keywords") or []), " ".join(a.get("mesh_terms") or []))).lower()
-        if _b not in _onde:
-            return False
-    # Data: comparação de texto AAAA-MM-DD, que ordena igual à data. Artigo SEM data legível
-    # nunca é escondido por este filtro — sumir por falta de dado seria punir o artigo pelo
-    # defeito do metadado.
-    d = _dia(a)
-    if len(d) == 10:
-        if _d_ini and d < _d_ini:
-            return False
-        if _d_fim and d > _d_fim:
-            return False
-    return True
-
-
-lista = [a for a in artigos if passa(a, _SO_SEM_TEMA, nmin, nmax)]
-
-# O painel DIZ quando está escondendo coisa, e por quê. Um contador que só mostra o total
-# filtrado deixa a pergunta "cadê o artigo?" sem resposta na própria tela.
-_ativos = []
-if (nmin, nmax) != (1, 10):
-    _ativos.append(f"nota {nmin}–{nmax}")
-if f_tipo:
-    _ativos.append(f"tipo: {', '.join(f_tipo)}")
-if f_rev:
-    _ativos.append(f"revista: {len(f_rev)} selecionada(s)")
-if f_tema:
-    _ativos.append(f"tema: {', '.join(f_tema)}")
-if busca:
-    _ativos.append(f"nome contém «{busca}»")
-if _d_ini or _d_fim:
-    _ativos.append(f"publicado de {_d_ini or '—'} até {_d_fim or '—'}")
-
-# 29/Ago — o aviso vem ANTES da lista. Ele ficava depois, e a impressão já estava formada
-# quando chegava: "não aparecem no administrador" é exatamente isso acontecendo.
-_fora = len(artigos) - len(lista)
-if _fora:
-    st.warning(f"**{len(lista)} de {len(artigos)}** na tela — **{_fora} escondidos** por: "
-               + " · ".join(_ativos))
-else:
-    st.success(f"**{len(lista)} de {len(artigos)}** — nenhum filtro escondendo nada.")
-st.caption(f"**{len(lista)}** artigo(s) na tela · {len(artigos)} no banco"
-           + (f" · {_fora} escondidos pelos filtros" if _ativos else ""))
-if _ativos:
-    st.caption("filtros ativos: " + " · ".join(_ativos))
-if not lista and _ativos:
-    st.warning("Nenhum artigo passa nos filtros atuais — não é que o banco esteja vazio. "
-               "Limpe um filtro na barra lateral.")
-
-# ---------- a TABELA de revisão ----------
-st.markdown("### Tabela de revisão")
-st.dataframe(
-    [{"Revista": a.get("revista", ""), "Data": (a.get("data_publicacao") or "")[:10],
-      "Nome": a.get("titulo", ""), "NAC": a.get("nota_aplicabilidade"),
-      "Rigor": a.get("nota_trabalho_estatistico"), "MCID": (a.get("mcid_avaliacao") or "")[:60]} for a in lista],
-    use_container_width=True, hide_index=True)
-
-# ---------- ver · ouvir · aprovar (um por vez) ----------
 # ═══════════════════════════════════════════════════════════════════════════════════
 # 07/Ago — O CARD E O ACRI VÊM PARA CÁ (pedido do Dr. Eduardo)
 #
@@ -463,8 +258,6 @@ st.dataframe(
 # e o card é peça de trabalho dele — não vai para o site nem para o assinante. Fica no
 # disco, aparece aqui, ele baixa e posta.
 # ═══════════════════════════════════════════════════════════════════════════════════
-import glob as _glob, os as _os
-
 _OUT     = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "outputs")
 _STAGING = _os.path.join(_OUT, "STAGING")
 _ARQUIVO = _os.path.join(_OUT, "ARQUIVO")          # AAAA-MM/<pacote>/
@@ -569,152 +362,415 @@ def _do_disco(artigo):
     return {}
 
 
-st.markdown("### Ver · ouvir · aprovar")
-if lista:
-    rotulo = {f"[{a.get('nota_aplicabilidade')}] {a.get('titulo','')[:80]} · {a.get('revista','')}": a for a in lista}
-    escolha = st.selectbox("Escolha o artigo", list(rotulo.keys()))
-    a = rotulo[escolha]
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        st.markdown(f"**{a.get('titulo','')}**")
-        # ⚠️ o tema mostrado é `tema` (os 13, do tripé), não `doenca_principal` (os 8 antigos,
-        # feitos por regex). Foi por olhar o vocabulário errado que a busca devolvia zero em
-        # 20/Ago. `doenca_principal` continua existindo porque o SITE usa; a curadoria não.
-        _t2 = a.get("tema_secundario")
-        _temas = a.get("tema") or "—"
-        if _t2 and _t2 not in ("Não se aplica", "nao_se_aplica"):
-            _temas += f" + {_t2}"
-        st.caption(f"{a.get('revista','')} · {(a.get('data_publicacao') or '')[:10]} · {_temas}")
-        st.markdown(f"**NAC {a.get('nota_aplicabilidade')}/10** · "
-                    f"Rigor {a.get('nota_trabalho_estatistico')}/10")
+def _dia(a):
+    """A data de publicação como texto AAAA-MM-DD, ou '' se não der para ler."""
+    return str(a.get("data_publicacao") or "")[:10]
 
-        # ═══ 22/Ago — A TELA PRECISA EXPLICAR O NÚMERO, NÃO SÓ EXIBIR ═══
-        # Ele viu "nota 5" e reagiu: *"5 não sobe!"* — e está certo: pela LEI 10, meta, revisão
-        # e artigo original abaixo de 6 ficam retidos. Medido no banco: as 18 linhas <6 são
-        # TODAS diretriz, a única exceção, criada por ele em 05/Ago. Zero violação.
-        # Só que a tela mostrava o 5 pelado. Número sem critério faz o dono desconfiar do
-        # sistema inteiro — e desconfiança para a operação, o que é pior que qualquer buraco.
-        _tipo = str(a.get("tipo_documento") or "").strip().lower()
-        _mc = str(a.get("muda_conduta") or "").strip()
-        _n = a.get("nota_aplicabilidade") or 0
-        if _tipo == "diretriz":
-            st.info(
-                f"**DIRETRIZ · {_mc or 'sem recomendação registrada'}**  \n"
-                "Diretriz sobe em QUALQUER nota — decisão sua, 05/Ago: *“não teremos nenhum "
-                "impedimento para subir; mesmo com as limitações, é o que tem para hoje.”*  \n"
-                "Não existe “outra diretriz de fibrilação atrial”: existe **a** diretriz. Se "
-                "ela é fraca, o médico precisa saber que é fraca **e mesmo assim precisa dela**. "
-                "A nota aqui responde *“confie quanto?”*, não *“publica ou não?”*."
-                + ("  \n⚠️ Esta é a razão de você estar vendo um número abaixo de 6."
-                   if _n < 6 else ""))
-        elif _n < 6:
-            # não deveria existir: o contrato retém. Se aparecer, é buraco e a tela GRITA.
-            st.error(f"⛔ **{_tipo or 'tipo desconhecido'} com nota {_n}** — pela LEI 10 isto "
-                     "deveria estar RETIDO. Só diretriz sobe abaixo de 6. Me mostre esta tela.")
-        elif _mc:
-            st.markdown(f"**Muda conduta:** {_mc}")
-        if a.get("mcid_avaliacao"):
-            st.markdown(f"**MCID:** {a['mcid_avaliacao']}")
-        links, faltando = [], []
-        for rot, campo in (("📄 PDF", "caminho_pdf"),
-                           ("🖼️ Infográfico", "caminho_visual_abstract")):
-            url, porque = midia(a.get(campo))
-            if url:
-                links.append(f"[{rot}]({url})")
-            else:
-                faltando.append(f"{rot.split(' ',1)[1]}: {porque}")
-        if links:
-            st.markdown(" · ".join(links))
-        _au, _porque_au = midia(a.get("caminho_audio"))
-        if _au:
-            st.audio(_au)                          # OUVIR aqui mesmo
-        else:
-            faltando.append(f"áudio: {_porque_au}")
-        if faltando:
-            # NÃO é erro: é a porta da nota funcionando. Mas o curador precisa saber por quê,
-            # senão fica procurando um arquivo que o sistema decidiu, com razão, não gerar.
-            st.caption("sem mídia — " + " · ".join(faltando))
 
-        # ── O PACOTE NO DISCO: card para postar, ACRI para copiar ──
-        _pk = _do_disco(a)
-        if not _pk:
-            st.warning(f"⚠️ Não achei o pacote deste artigo no disco (procurei em STAGING e "
-                       f"ARQUIVO).\n\ndoi=`{a.get('doi') or '—'}` · doc_id=`{a.get('doc_id') or '—'}`")
-        elif not _pk.get("acri"):
-            # 11/Ago — o silêncio aqui era metade do problema. Sem ACRI e sem mensagem, a tela
-            # fica idêntica à de "o índice não funciona", e não há como distinguir uma da outra.
-            # São coisas MUITO diferentes: uma é defeito, a outra é a LEI 10 fazendo o trabalho.
-            st.info(f"Este artigo não tem ACRI no pacote — o card só é gerado com nota ≥ 6.\n\n"
-                    f"Pasta: `{_os.path.basename(_pk['pasta'])}`")
-        else:
-            try:
-                _txt = open(_pk["acri"], encoding="utf-8").read()
-            except Exception as _e:
-                _txt = ""
-                st.error(f"O ACRI existe mas não consegui ler: {type(_e).__name__}")
-            if _txt:
-                with st.expander("📋 ACRI — copiar para o WhatsApp", expanded=True):
-                    # `st.code` porque ele traz o botão de copiar no canto, e é isso que
-                    # ele faz com o ACRI: copia e cola no grupo.
-                    st.code(_txt, language=None)
-        # O CARD não é mostrado — decisão dele em 07/Ago: *"não precisa ser o card, pode ser
-        # só o txt"*. Uma imagem de 1080×1350 em cada artigo empurra a tela toda para baixo e
-        # ele já viu o card quando gerou. Fica só o botão, para quando for postar.
-        if _pk.get("card"):
-            try:
-                with open(_pk["card"], "rb") as _f:
-                    st.download_button("⬇️ Baixar o card (1080×1350)", _f.read(),
-                                       file_name=_os.path.basename(_pk["card"]),
-                                       mime="image/png")
-            except Exception:
-                pass
-    with c2:
-        data = st.date_input("Enviar em", dt.date.today())
-        if st.button("✅ Aprovar e agendar", use_container_width=True):
-            # 14/Ago — grava no Supabase, e SÓ diz "agendado" se o banco confirmar.
-            # A versão anterior escrevia no CSV e imprimia "Agendado para <data>" sem
-            # conferir nada. Foi assim que ele aprovou para os dias 12 e 13, leu a mensagem
-            # de sucesso, e nada chegou. Mensagem de sucesso tem que custar uma confirmação.
-            ok, erro = agendar(a, data)
-            if ok:
-                st.success(f"✅ Agendado para {data} — sai às 07:00, sem você precisar clicar.")
-                st.rerun()
-            else:
-                st.error(f"🔴 NÃO agendei — o Supabase recusou: {erro}\n\n"
-                         f"O artigo NÃO vai sair. Tente de novo.")
+def passa(a, so_sem_tema=False, nota_min=1, nota_max=10,
+          f_tipo=(), f_rev=(), f_tema=(), busca="", d_ini="", d_fim=""):
+    # nmin/nmax nascem do slider do Streamlit; a REGRA de filtro não pode depender da TELA,
+    # senão deixa de ser testável fora dela (mesmo motivo do `st.session_state`, 21/Ago).
+    #
+    # ═══ 01/Set — A PARAMETRIZAÇÃO FICOU COMPLETA ═══
+    # Até hoje só a nota e o "sem tema" eram parâmetros; f_tipo/f_rev/f_tema/busca e as
+    # datas vinham de GLOBAIS criadas pelo corpo da UI. Quando a UI virou `main()`, essas
+    # globais deixaram de existir no import — e a meia-parametrização era exatamente a
+    # meia-lição de 21/Ago. Agora a função é pura: tudo que a regra usa entra pela porta.
+    n = a.get("nota_aplicabilidade") or 0
+    if not (nota_min <= n <= nota_max):
+        return False
+    if f_tipo and a.get("tipo_estudo") not in f_tipo:
+        return False
+    if f_rev and a.get("revista") not in f_rev:
+        return False
+    # ── TEMA: casa com o PRINCIPAL ou o SECUNDÁRIO ──
+    # Um artigo pertence legitimamente a dois temas, e o assinante de QUALQUER um dos dois
+    # recebe. Foi ele quem apontou isso, olhando o septo/QRS na amiloidose: *"mas no caso 40
+    # cabe as duas coisas — isso não é um erro."* Filtrar só pelo principal esconderia do
+    # curador metade do que o assinante vai receber.
+    if f_tema and not ({a.get("tema"), a.get("tema_secundario")} & set(f_tema)):
+        return False
+    # ⚠️ 21/Ago — aqui eu tinha escrito `st.session_state.get("_so_sem_tema")`, e isso QUEBROU a
+    # bateria: a trava `teste_o_filtro_de_data...` extrai esta função e a roda ISOLADA, sem o
+    # Streamlit. `NameError: name 'st' is not defined`, e a bateria inteira parou.
+    # A lição é de desenho, não de sintaxe: **a regra de filtro não pode depender do estado da
+    # TELA.** Se ela depende, deixa de ser testável fora dela — e trava que não roda é trava que
+    # dá aprovado por ausência (o defeito de 06/Ago). A preferência vira PARÂMETRO, com padrão.
+    if so_sem_tema and a.get("tema") not in (None, "", "Sem tema"):
+        return False
 
-# ---------- a FILA ----------
-st.markdown("### Fila de envio — tabela `agenda_envio` no Supabase")
-st.caption("Sai automaticamente às 07:00, pela nuvem. Não depende do seu Mac estar ligado.")
-ag = ler_agenda()
-if ag:
-    _hoje = dt.date.today().isoformat()
-    _pend = [l for l in ag if not l.get("enviado_em")]
-    _fut = [l for l in _pend if l["data_envio"] >= _hoje]
-    _atrasados = [l for l in _pend if l["data_envio"] < _hoje]
+    # ── BUSCA: em TUDO, não só no título ──
+    # Ele digitou "OBSTETRIC" e voltou zero de 520. O título quase nunca diz o assunto pelo
+    # nome que se procura — "Experiences of Racism and Risk of Preeclampsia" é cardio-obstetrícia
+    # e não tem a palavra. Quem sabe são as keywords, os descritores MeSH e o tema.
+    if busca:
+        _b = busca.lower()
+        _onde = " ".join(str(x) for x in (
+            a.get("titulo") or "", a.get("tema") or "", a.get("tema_secundario") or "",
+            a.get("revista") or "",
+            " ".join(a.get("keywords") or []), " ".join(a.get("mesh_terms") or []))).lower()
+        if _b not in _onde:
+            return False
+    # Data: comparação de texto AAAA-MM-DD, que ordena igual à data. Artigo SEM data legível
+    # nunca é escondido por este filtro — sumir por falta de dado seria punir o artigo pelo
+    # defeito do metadado.
+    d = _dia(a)
+    if len(d) == 10:
+        if d_ini and d < d_ini:
+            return False
+        if d_fim and d > d_fim:
+            return False
+    return True
 
-    if _atrasados:
-        # 14/Ago — os dias 12 e 13 passaram em branco e NADA avisou. O silêncio era idêntico
-        # a "está tudo funcionando". Agora a fila atrasada aparece em vermelho, no topo.
-        st.error(f"⚠️ {len(_atrasados)} artigo(s) com data JÁ PASSADA e ainda não enviados. "
-                 f"Eles não saem sozinhos — a data precisa ser refeita para hoje ou depois.")
-        st.dataframe([{"Era para sair em": l["data_envio"], "Nome": l["nome"][:80],
-                       "Revista": l.get("revista", "")} for l in _atrasados],
-                     use_container_width=True, hide_index=True)
 
-    st.markdown(f"**Programado ({len(_fut)})**")
-    if _fut:
-        st.dataframe([{"Sai em": l["data_envio"], "Nome": l["nome"][:80],
-                       "Revista": l.get("revista", "")} for l in _fut],
-                     use_container_width=True, hide_index=True)
+def main():
+    """A TELA — só roda com um runtime do Streamlit (streamlit run / AppTest)."""
+    st.set_page_config(page_title="CardioDaily — Administrador", page_icon="🫀", layout="wide")
+    st.markdown(f"<h1 style='color:{AZUL};margin-bottom:0'>CardioDaily — Curadoria</h1>"
+                "<p style='color:#666;margin-top:2px'>ver · ouvir · aprovar — dados e fatos, sem firulas</p>",
+                unsafe_allow_html=True)
+
+    artigos, erro = buscar()
+    if erro:
+        st.error(f"Não consegui ler o Supabase: {erro}"); st.stop()
+    if not artigos:
+        st.info("Nenhum artigo publicado ainda."); st.stop()
+
+    # ---------- filtros ----------
+    sb = st.sidebar
+    sb.header("Filtros")
+    # ═══════════════════════════════════════════════════════════════════════════════════
+    # 29/Ago/2026 — A CHAVE 3 ABRIA ESCONDENDO 27 DE 39, E NÃO DIZIA
+    #
+    # Ele, no meio do congresso europeu: *"rodei os artigos publicados hoje pelo NEJM, mas não
+    # aparecem no administrador."*
+    #
+    # Apareciam. MEDIDO: 39 artigos daquele dia, notas 6→13 · 7→12 · 8→7 · 9→5. O slider abria
+    # em 8–10 e mostrava **12**. Dos 7 do NEJM, só o Prasugrel vs Ticagrelor (nota 8) passava —
+    # ficaram fora o silent atherosclerosis, a anticoagulação na FA subclínica, o eplontersen na
+    # amiloidose, o milvexian, a aspirina omitida na ICP primária.
+    #
+    # O padrão 8–10 servia a UM uso — curar o envio diário. Ele estava fazendo OUTRO: conferir o
+    # que acabou de rodar. Usos opostos, mesma tela, e nenhum aviso de que havia coisa escondida.
+    #
+    # **6 é a porta da publicação (LEI 10).** Se subiu ao Supabase, aparece por padrão. Quem quer
+    # curar o envio move o slider — e agora a tela DIZ, no topo, o que está fora.
+    #
+    # ⚠️ Era o mesmo defeito de forma da Chave 18 ("70 falhas" que não eram) e da Chave 2 de
+    # 06/Ago (a contagem numa ordem, o menu em outra): a interface fazendo o certo parecer errado,
+    # e o silêncio escondendo qual dos dois é.
+    # ═══════════════════════════════════════════════════════════════════════════════════
+    nmin, nmax = sb.slider("NAC (nota)", 1, 10, (6, 10))   # 6 = a porta da LEI 10, não o gosto
+    tipos = sorted({a.get("tipo_estudo", "") for a in artigos if a.get("tipo_estudo")})
+    revistas = sorted({a.get("revista", "") for a in artigos if a.get("revista")})
+
+    # ═══ 20/Ago/2026 — O FILTRO "TEMA" LIA O VOCABULÁRIO ERRADO ═══
+    #
+    # Ele digitou "OBSTETRIC" na busca e voltou ZERO de 520: *"o administrador é inútil como ele
+    # está funcionando hoje — ele não programa nada, não acha nada. A lista de temas está podre."*
+    #
+    # A causa, medida: este filtro lia `doenca_principal`, que é OUTRA lista — 8 rótulos criados
+    # por regex de palavra-chave lá no `ficha_site._tema()`:
+    #     Insuficiência Cardíaca 213 · Cardiologia Preventiva 149 · Coronária/DAC 106 ·
+    #     Valvopatias 54 · Arritmias 50 · Outros 29 · Imagem Cardíaca 9 · Hipertensão 6
+    # Não existe Cardio-Obstetrícia ali. Nem Miocardiopatias, nem Cardio-Oncologia, nem UTI.
+    # **Duas listas de temas no mesmo sistema** — a LEI 9 na forma mais cara: a máquina de temas
+    # de 17/Ago (13 temas, MeSH, tripé) nunca chegou à tela onde ele decide o que enviar.
+    #
+    # `doenca_principal` continua existindo porque o SITE usa (cardiodaily.ts → TEMAS) e mudá-lo
+    # quebraria a vitrine. Mas quem manda na curadoria agora é `tema`.
+    temas = sorted({t for a in artigos for t in (a.get("tema"), a.get("tema_secundario"))
+                    if t and t != "Não se aplica"})
+    f_tipo = sb.multiselect("Tipo", tipos)
+    f_rev = sb.multiselect("Revista", revistas)
+    f_tema = sb.multiselect("Tema", temas,
+                            help="Casa com o tema PRINCIPAL ou o SECUNDÁRIO — um artigo pertence "
+                                 "legitimamente a dois, e o assinante de qualquer um dos dois recebe.")
+    busca = sb.text_input("Busca (título · tema · palavras-chave · MeSH)",
+                          help="Procura em tudo, não só no título. É o que faz 'obstetric' e "
+                               "'amiloidose' acharem o que o título não diz.")
+
+    # ── a fila do que ficou SEM TEMA: visível, não silenciosa (LEI 11) ──
+    # 01/Set — `_SO_SEM_TEMA` nasce False SEMPRE: antes ela só existia se houvesse artigo sem
+    # tema, e o dia em que a fila zerasse o painel morreria de NameError na linha do filtro.
+    _SO_SEM_TEMA = False
+    _sem = [a for a in artigos if not a.get("tema") or a.get("tema") == "Sem tema"]
+    if _sem:
+        sb.divider()
+        sb.caption(f"⚠️ {len(_sem)} artigo(s) sem tema")
+        _SO_SEM_TEMA = sb.checkbox("Ver só os SEM TEMA", key="so_sem_tema")
+
+    # ═══ 11/Ago/2026 — FILTRO DE DATA DE PUBLICAÇÃO ═══
+    #
+    #   *"fica aparecendo artigos de 1999 na curadoria atual"* · *"preciso de filtro de data —
+    #    data de inicio das buscas e final"*
+    #
+    # DUAS DATAS EXISTEM, e elas respondem perguntas diferentes. Medido antes de escolher:
+    #     data_publicacao   1951-01-01 → 2026-10-01   "o que saiu na literatura nesta janela"
+    #     created_at        2026-08-05 → 2026-08-11   "o que entrou na minha fila" — 6 dias só,
+    #                                                 porque o banco foi refeito
+    # Decisão dele: **data de publicação**. É a que produz o artigo de 1999 que o incomodou.
+    # Dos 449 artigos, 418 são de 2026 e 20 são anteriores a 2024 (os clássicos: RALES,
+    # MERIT-HF, PLATO, FAME).
+    #
+    # Decisão dele sobre o PADRÃO: **vazio, mostra tudo**. Nada é escondido sem ele mandar.
+    # Um filtro que já vem ligado é uma armadilha de memória: um dia ele procura um artigo,
+    # não acha, e a causa é uma régua que ele não lembra que existe. É o mesmo princípio das
+    # duas fontes de verdade que nos custou o dia de hoje, na versão interface.
+    _dias = sorted(d for d in {_dia(a) for a in artigos} if len(d) == 10)
+    sb.markdown("---")
+    sb.markdown("**Data de publicação**")
+    if _dias:
+        _d_ini = sb.text_input("De (AAAA-MM-DD)", value="", placeholder=_dias[0],
+                               help="Deixe vazio para não limitar. O mais antigo no banco é "
+                                    f"{_dias[0]}.")
+        _d_fim = sb.text_input("Até (AAAA-MM-DD)", value="", placeholder=_dias[-1],
+                               help="Deixe vazio para não limitar. O mais recente no banco é "
+                                    f"{_dias[-1]}.")
+        # Atalhos, porque digitar data à mão em painel é fricção — mas nenhum vem marcado.
+        _atalho = sb.radio("atalhos", ["—", "90 dias", "12 meses", "só 2026"],
+                           horizontal=True, label_visibility="collapsed")
+        if _atalho != "—":
+            _hoje = dt.date.today()
+            _de = {"90 dias": _hoje - dt.timedelta(days=90),
+                   "12 meses": _hoje - dt.timedelta(days=365),
+                   "só 2026": dt.date(2026, 1, 1)}[_atalho]
+            _d_ini, _d_fim = _de.isoformat(), ""
+            sb.caption(f"atalho ativo: de {_d_ini} em diante")
     else:
-        st.caption("nada programado para hoje em diante.")
+        _d_ini = _d_fim = ""
 
-    _enviados = [l for l in ag if l.get("enviado_em")]
-    with st.expander(f"✅ já enviados ({len(_enviados)})"):
-        st.dataframe([{"Enviado em": (l.get("enviado_em") or "")[:16].replace("T", " "),
-                       "Data marcada": l["data_envio"], "Nome": l["nome"][:80]}
-                      for l in reversed(_enviados)],
-                     use_container_width=True, hide_index=True)
-else:
-    st.caption("fila vazia — aprove artigos acima para agendar.")
+    # As datas digitadas erradas não podem filtrar em silêncio: um "2026/08" que não casa com
+    # nada esvaziaria a tela sem dizer por quê — o defeito do dia inteiro, de novo.
+    _ruins = [r for r in ((_d_ini, "De"), (_d_fim, "Até"))
+              if r[0] and not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", r[0])]
+    for _v, _q in _ruins:
+        sb.error(f"«{_q}»: `{_v}` não é uma data AAAA-MM-DD — este campo está sendo IGNORADO.")
+    if [r for r in _ruins if r[1] == "De"]:
+        _d_ini = ""
+    if [r for r in _ruins if r[1] == "Até"]:
+        _d_fim = ""
+
+    # Janela invertida (fim antes do início) não devolve NADA, e a tela vazia não explica por quê.
+    # Medido na bancada: com "de 2026-08-01 até 2026-07-01" sobrava 1 artigo de 7 — o único sem
+    # data no metadado. Ele olharia para uma lista de um item e não teria como saber a causa.
+    if _d_ini and _d_fim and _d_fim < _d_ini:
+        sb.error(f"A data final (`{_d_fim}`) é ANTERIOR à inicial (`{_d_ini}`) — "
+                 f"nenhuma publicação cabe nessa janela.")
+
+    lista = [a for a in artigos
+             if passa(a, _SO_SEM_TEMA, nmin, nmax, f_tipo, f_rev, f_tema, busca, _d_ini, _d_fim)]
+
+    # O painel DIZ quando está escondendo coisa, e por quê. Um contador que só mostra o total
+    # filtrado deixa a pergunta "cadê o artigo?" sem resposta na própria tela.
+    _ativos = []
+    if (nmin, nmax) != (1, 10):
+        _ativos.append(f"nota {nmin}–{nmax}")
+    if f_tipo:
+        _ativos.append(f"tipo: {', '.join(f_tipo)}")
+    if f_rev:
+        _ativos.append(f"revista: {len(f_rev)} selecionada(s)")
+    if f_tema:
+        _ativos.append(f"tema: {', '.join(f_tema)}")
+    if busca:
+        _ativos.append(f"nome contém «{busca}»")
+    if _d_ini or _d_fim:
+        _ativos.append(f"publicado de {_d_ini or '—'} até {_d_fim or '—'}")
+
+    # 29/Ago — o aviso vem ANTES da lista. Ele ficava depois, e a impressão já estava formada
+    # quando chegava: "não aparecem no administrador" é exatamente isso acontecendo.
+    _fora = len(artigos) - len(lista)
+    if _fora:
+        st.warning(f"**{len(lista)} de {len(artigos)}** na tela — **{_fora} escondidos** por: "
+                   + " · ".join(_ativos))
+    else:
+        st.success(f"**{len(lista)} de {len(artigos)}** — nenhum filtro escondendo nada.")
+    st.caption(f"**{len(lista)}** artigo(s) na tela · {len(artigos)} no banco"
+               + (f" · {_fora} escondidos pelos filtros" if _ativos else ""))
+    if _ativos:
+        st.caption("filtros ativos: " + " · ".join(_ativos))
+    if not lista and _ativos:
+        st.warning("Nenhum artigo passa nos filtros atuais — não é que o banco esteja vazio. "
+                   "Limpe um filtro na barra lateral.")
+
+    # ---------- a TABELA de revisão ----------
+    st.markdown("### Tabela de revisão")
+    st.dataframe(
+        [{"Revista": a.get("revista", ""), "Data": (a.get("data_publicacao") or "")[:10],
+          "Nome": a.get("titulo", ""), "NAC": a.get("nota_aplicabilidade"),
+          "Rigor": a.get("nota_trabalho_estatistico"), "MCID": (a.get("mcid_avaliacao") or "")[:60]} for a in lista],
+        use_container_width=True, hide_index=True)
+
+    # ---------- ver · ouvir · aprovar (um por vez) ----------
+    st.markdown("### Ver · ouvir · aprovar")
+    if lista:
+        # 01/Set — o rótulo era a CHAVE do dict, e rótulo repetido COLAPSAVA: as partes
+        # 1 e 2 de "Mechanical Circulatory Support…" (iccl 2026.03.001/.002) têm a mesma
+        # nota, a mesma revista e o mesmo começo de título nos 80 caracteres — e uma
+        # delas ficava INAPROVÁVEL, invisível na lista. Achado pelo teste_administrador
+        # na primeira rodada (tela dizia 861, a lista oferecia 860). Rótulo repetido
+        # agora ganha o DOI para se distinguir; nenhum artigo some da curadoria.
+        rotulo = {}
+        for _a in lista:
+            _r = f"[{_a.get('nota_aplicabilidade')}] {_a.get('titulo','')[:80]} · {_a.get('revista','')}"
+            if _r in rotulo:
+                _r += f" · {_a.get('doi') or _a.get('doc_id')}"
+            rotulo[_r] = _a
+        escolha = st.selectbox("Escolha o artigo", list(rotulo.keys()))
+        a = rotulo[escolha]
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.markdown(f"**{a.get('titulo','')}**")
+            # ⚠️ o tema mostrado é `tema` (os 13, do tripé), não `doenca_principal` (os 8 antigos,
+            # feitos por regex). Foi por olhar o vocabulário errado que a busca devolvia zero em
+            # 20/Ago. `doenca_principal` continua existindo porque o SITE usa; a curadoria não.
+            _t2 = a.get("tema_secundario")
+            _temas = a.get("tema") or "—"
+            if _t2 and _t2 not in ("Não se aplica", "nao_se_aplica"):
+                _temas += f" + {_t2}"
+            st.caption(f"{a.get('revista','')} · {(a.get('data_publicacao') or '')[:10]} · {_temas}")
+            st.markdown(f"**NAC {a.get('nota_aplicabilidade')}/10** · "
+                        f"Rigor {a.get('nota_trabalho_estatistico')}/10")
+
+            # ═══ 22/Ago — A TELA PRECISA EXPLICAR O NÚMERO, NÃO SÓ EXIBIR ═══
+            # Ele viu "nota 5" e reagiu: *"5 não sobe!"* — e está certo: pela LEI 10, meta, revisão
+            # e artigo original abaixo de 6 ficam retidos. Medido no banco: as 18 linhas <6 são
+            # TODAS diretriz, a única exceção, criada por ele em 05/Ago. Zero violação.
+            # Só que a tela mostrava o 5 pelado. Número sem critério faz o dono desconfiar do
+            # sistema inteiro — e desconfiança para a operação, o que é pior que qualquer buraco.
+            _tipo = str(a.get("tipo_documento") or "").strip().lower()
+            _mc = str(a.get("muda_conduta") or "").strip()
+            _n = a.get("nota_aplicabilidade") or 0
+            if _tipo == "diretriz":
+                st.info(
+                    f"**DIRETRIZ · {_mc or 'sem recomendação registrada'}**  \n"
+                    "Diretriz sobe em QUALQUER nota — decisão sua, 05/Ago: *“não teremos nenhum "
+                    "impedimento para subir; mesmo com as limitações, é o que tem para hoje.”*  \n"
+                    "Não existe “outra diretriz de fibrilação atrial”: existe **a** diretriz. Se "
+                    "ela é fraca, o médico precisa saber que é fraca **e mesmo assim precisa dela**. "
+                    "A nota aqui responde *“confie quanto?”*, não *“publica ou não?”*."
+                    + ("  \n⚠️ Esta é a razão de você estar vendo um número abaixo de 6."
+                       if _n < 6 else ""))
+            elif _n < 6:
+                # não deveria existir: o contrato retém. Se aparecer, é buraco e a tela GRITA.
+                st.error(f"⛔ **{_tipo or 'tipo desconhecido'} com nota {_n}** — pela LEI 10 isto "
+                         "deveria estar RETIDO. Só diretriz sobe abaixo de 6. Me mostre esta tela.")
+            elif _mc:
+                st.markdown(f"**Muda conduta:** {_mc}")
+            if a.get("mcid_avaliacao"):
+                st.markdown(f"**MCID:** {a['mcid_avaliacao']}")
+            links, faltando = [], []
+            for rot, campo in (("📄 PDF", "caminho_pdf"),
+                               ("🖼️ Infográfico", "caminho_visual_abstract")):
+                url, porque = midia(a.get(campo))
+                if url:
+                    links.append(f"[{rot}]({url})")
+                else:
+                    faltando.append(f"{rot.split(' ',1)[1]}: {porque}")
+            if links:
+                st.markdown(" · ".join(links))
+            _au, _porque_au = midia(a.get("caminho_audio"))
+            if _au:
+                st.audio(_au)                          # OUVIR aqui mesmo
+            else:
+                faltando.append(f"áudio: {_porque_au}")
+            if faltando:
+                # NÃO é erro: é a porta da nota funcionando. Mas o curador precisa saber por quê,
+                # senão fica procurando um arquivo que o sistema decidiu, com razão, não gerar.
+                st.caption("sem mídia — " + " · ".join(faltando))
+
+            # ── O PACOTE NO DISCO: card para postar, ACRI para copiar ──
+            _pk = _do_disco(a)
+            if not _pk:
+                st.warning(f"⚠️ Não achei o pacote deste artigo no disco (procurei em STAGING e "
+                           f"ARQUIVO).\n\ndoi=`{a.get('doi') or '—'}` · doc_id=`{a.get('doc_id') or '—'}`")
+            elif not _pk.get("acri"):
+                # 11/Ago — o silêncio aqui era metade do problema. Sem ACRI e sem mensagem, a tela
+                # fica idêntica à de "o índice não funciona", e não há como distinguir uma da outra.
+                # São coisas MUITO diferentes: uma é defeito, a outra é a LEI 10 fazendo o trabalho.
+                st.info(f"Este artigo não tem ACRI no pacote — o card só é gerado com nota ≥ 6.\n\n"
+                        f"Pasta: `{_os.path.basename(_pk['pasta'])}`")
+            else:
+                try:
+                    _txt = open(_pk["acri"], encoding="utf-8").read()
+                except Exception as _e:
+                    _txt = ""
+                    st.error(f"O ACRI existe mas não consegui ler: {type(_e).__name__}")
+                if _txt:
+                    with st.expander("📋 ACRI — copiar para o WhatsApp", expanded=True):
+                        # `st.code` porque ele traz o botão de copiar no canto, e é isso que
+                        # ele faz com o ACRI: copia e cola no grupo.
+                        st.code(_txt, language=None)
+            # O CARD não é mostrado — decisão dele em 07/Ago: *"não precisa ser o card, pode ser
+            # só o txt"*. Uma imagem de 1080×1350 em cada artigo empurra a tela toda para baixo e
+            # ele já viu o card quando gerou. Fica só o botão, para quando for postar.
+            if _pk.get("card"):
+                try:
+                    with open(_pk["card"], "rb") as _f:
+                        st.download_button("⬇️ Baixar o card (1080×1350)", _f.read(),
+                                           file_name=_os.path.basename(_pk["card"]),
+                                           mime="image/png")
+                except Exception:
+                    pass
+        with c2:
+            data = st.date_input("Enviar em", dt.date.today())
+            if st.button("✅ Aprovar e agendar", use_container_width=True):
+                # 14/Ago — grava no Supabase, e SÓ diz "agendado" se o banco confirmar.
+                # A versão anterior escrevia no CSV e imprimia "Agendado para <data>" sem
+                # conferir nada. Foi assim que ele aprovou para os dias 12 e 13, leu a mensagem
+                # de sucesso, e nada chegou. Mensagem de sucesso tem que custar uma confirmação.
+                ok, erro = agendar(a, data)
+                if ok:
+                    st.success(f"✅ Agendado para {data} — sai às 07:00, sem você precisar clicar.")
+                    st.rerun()
+                else:
+                    st.error(f"🔴 NÃO agendei — o Supabase recusou: {erro}\n\n"
+                             f"O artigo NÃO vai sair. Tente de novo.")
+
+    # ---------- a FILA ----------
+    st.markdown("### Fila de envio — tabela `agenda_envio` no Supabase")
+    st.caption("Sai automaticamente às 07:00, pela nuvem. Não depende do seu Mac estar ligado.")
+    ag = ler_agenda()
+    if ag:
+        _hoje = dt.date.today().isoformat()
+        _pend = [l for l in ag if not l.get("enviado_em")]
+        _fut = [l for l in _pend if l["data_envio"] >= _hoje]
+        _atrasados = [l for l in _pend if l["data_envio"] < _hoje]
+
+        if _atrasados:
+            # 14/Ago — os dias 12 e 13 passaram em branco e NADA avisou. O silêncio era idêntico
+            # a "está tudo funcionando". Agora a fila atrasada aparece em vermelho, no topo.
+            st.error(f"⚠️ {len(_atrasados)} artigo(s) com data JÁ PASSADA e ainda não enviados. "
+                     f"Eles não saem sozinhos — a data precisa ser refeita para hoje ou depois.")
+            st.dataframe([{"Era para sair em": l["data_envio"], "Nome": l["nome"][:80],
+                           "Revista": l.get("revista", "")} for l in _atrasados],
+                         use_container_width=True, hide_index=True)
+
+        st.markdown(f"**Programado ({len(_fut)})**")
+        if _fut:
+            st.dataframe([{"Sai em": l["data_envio"], "Nome": l["nome"][:80],
+                           "Revista": l.get("revista", "")} for l in _fut],
+                         use_container_width=True, hide_index=True)
+        else:
+            st.caption("nada programado para hoje em diante.")
+
+        _enviados = [l for l in ag if l.get("enviado_em")]
+        with st.expander(f"✅ já enviados ({len(_enviados)})"):
+            st.dataframe([{"Enviado em": (l.get("enviado_em") or "")[:16].replace("T", " "),
+                           "Data marcada": l["data_envio"], "Nome": l["nome"][:80]}
+                          for l in reversed(_enviados)],
+                         use_container_width=True, hide_index=True)
+    else:
+        st.caption("fila vazia — aprove artigos acima para agendar.")
+
+
+# ═══ 01/Set — A TELA SÓ RODA QUANDO HÁ STREAMLIT DE VERDADE ═══
+# `streamlit run` e o AppTest têm ScriptRunContext; `import administrador` não tem.
+# Antes deste portão, importar o módulo executava o painel INTEIRO — inclusive o GET
+# no Supabase — e a bateria "sem rede" fazia chamada de rede sem ninguém saber
+# (descoberto em 01/Set, simulando o CI sem .env: TypeError no meio da trava).
+from streamlit.runtime.scriptrunner import get_script_run_ctx as _ctx_streamlit
+
+if _ctx_streamlit(suppress_warning=True) is not None:
+    main()

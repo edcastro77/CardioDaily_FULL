@@ -1721,6 +1721,15 @@ quais rodam sozinhos pelo Actions, e quais são legado do caminho antigo.
 
 ---
 
+**01/Set/2026 — a bateria virou 100% OFFLINE e ganhou uma irmã de tela.** O `import
+administrador` executava a UI e tocava o Supabase por dentro da bateria (descoberto simulando
+o CI sem `.env`); consertado com `main()` + ScriptRunContext. Nova suíte
+`teste_administrador.py` (AppTest, Chave 26) prova a TELA da Chave 3 sem navegador. A prova
+agora roda em três casas: skill `/prova`, Chave 8 e o workflow `prova.yml` a cada push.
+Detalhes na **PARTE 21**.
+
+---
+
 ## PARTE 15 — HISTÓRICO DE VERSÕES
 
 | Versão | Data | Mudanças |
@@ -1789,6 +1798,14 @@ Um visual abstract enviado ao grupo expôs dois erros do pipeline VELHO que moti
 **Onde a LEI 0 vive hoje:** `src/notas_prototipo.py` (determinístico, 7 fixtures de gabarito). O
 `article_analyzer.py` citado na PARTE 2 foi **aposentado** (Lei 4 — corrente modular). Os modelos também
 convergiram: um cliente unificado (`src/llm_client.py`, cadeia cross-provider, Claude 5 na frente).
+
+---
+
+**01/Set/2026 — dois defeitos reais na Chave 3, achados por prova e mortos no dia:** o
+`buscar()` não paginava (o Supabase corta em 1000 SEM avisar; banco a 118 artigos do corte
+silencioso) e rótulos iguais no selectbox colapsavam (um artigo ficou INAPROVÁVEL — as partes
+1 e 2 do mesmo tema). A tela agora tem suíte própria de AppTest (Chave 26) e a UI virou
+`main()` — importar o administrador não abre tela nem toca rede. Detalhes na **PARTE 21**.
 
 ---
 
@@ -2284,3 +2301,99 @@ foi buscar a diretriz americana de SCA para montar a linha temporal das taxas do
 sustentam. **A régua é clínica e é dele. Nada implementado até ele voltar com o número.**
 
 Bateria: **90 travas, 90 passam** (nova: `teste_futilidade_e_resposta_nao_fracasso`).
+
+---
+
+## PARTE 21 — O DIA EM QUE AS LEIS VIRARAM TRAVAS EXECUTÁVEIS (01/Set/2026)
+
+Auditoria completa da configuração do Claude Code sobre o projeto, seguida de oito passos
+aprovados um a um pelo Dr. Eduardo. Nenhuma regra de negócio mudou — o que mudou foi o quanto
+delas está AUTOMATICAMENTE cobrado.
+
+### 21.1 · A configuração tinha duas verdades (a LEI 9 dentro do próprio Claude)
+
+O `.claude/CLAUDE.md` (carregado em TODA sessão) dizia que a análise usava
+`ARTICLE_ANALYSIS_PROMPT_v2` (aposentado), TTS `onyx` (é `cedar`) e raiz `/Users/edcastro77/`
+(é `/Users/eduardocastro/projetos/`). Todo Claude abria o projeto lendo duas versões da
+verdade. **Reescrito**: agora aponta para o CLAUDE.md da raiz como fonte única e guarda só o
+que não está lá (IDs de infra). O agente `cardiodaily-marketing` tinha 2 caminhos mortos do
+home antigo — corrigidos (logo no iCloud, pesquisador em `projetos/PESQUISADOR`).
+
+### 21.2 · Hooks: LEI 5 e LEI 12 deixaram de depender de memória
+
+Quatro scripts em `.claude/hooks/` (versionados), ligados pelo `.claude/settings.json`:
+
+| trava | o que faz |
+|---|---|
+| `guarda_lei12.py` | `rm/cp/mv` sobre `saidas/outputs/ARTIGOS` (sem git): origem 0 bytes → NEGA (o caso do gabarito de 20/Ago); glob/sobrescrita → PERGUNTA |
+| `guarda_lei5.py` | SQL/REST de escrita na tabela `artigos` (Bash E MCP Supabase) → NEGA apontando o portão; migração em `artigos` → PERGUNTA |
+| `guarda_sagrados.py` | editar `notas_prototipo/contrato/publicador/classificador_ouro/teste_motor` → PERGUNTA citando a LEI 9; `.env*` → NEGA |
+| `compila_py.py` | todo `.py` editado passa por checagem de sintaxe NA HORA — o erro volta antes da Chave 8 |
+
+Provados com 25 casos (inclusive os que DEVEM passar) e ao vivo: uma violação deliberada da
+LEI 12 foi negada com a mensagem certa, e o `compila_py` bloqueou o próprio Claude duas vezes
+durante a refatoração da tarde.
+
+### 21.3 · A prova ganhou três casas: skill, chave e nuvem
+
+- **`/prova`** (`.claude/skills/prova/`) — o portão da Chave 8 sem o merge.
+- **`.github/workflows/prova.yml`** — a cada push: `py_compile` + `teste_motor.py` +
+  `teste_administrador.py`. ACUSA vermelho, não bloqueia (bloquear é decisão do dono). Usa os
+  MESMOS secrets dos workflows existentes — nada novo a cadastrar. Receita provada em
+  simulação fiel (checkout limpo, venv virgem, Python 3.11).
+- Skills `/leis` (resumo operativo das 12 leis + revogações vigentes) e `/varredura` (a LEI 9
+  como procedimento com tabela obrigatória) + subagents `cardiodaily-prova`,
+  `streamlit-admin`, `guardiao-leis` (read-only, parecer lei a lei antes do commit).
+
+### 21.4 · Chave 3: dois defeitos reais achados e mortos
+
+**A bomba dos 1000.** MEDIDO: 882 linhas na tabela, e o `buscar()` fazia UM GET sem limite —
+o PostgREST corta em 1000 e NÃO avisa. A 118 artigos de distância, o painel passaria a
+esconder os de nota mais baixa em silêncio e o banner "X de Y" contaria um Y falso. Varredura
+LEI 9 em TODOS os leitores de `artigos`: o administrador era o ÚNICO ilimitado (biblioteca
+teto 200 · lista 7 · daily 30 · briefing 200 · webhook parametrizado · publicador pontual).
+Conserto: paginação em blocos de 1000 via Range com desempate `doc_id` (empate de nota
+embaralhava páginas). Trava: `teste_o_administrador_pagina_o_banco_inteiro` — provada contra
+o código VELHO do git (reprovaria as 4 condições).
+
+**O artigo inaprovável.** A suíte nova de AppTest acusou na PRIMEIRA rodada: tela dizia 861,
+o selectbox oferecia 860. As partes 1 e 2 de "Mechanical Circulatory Support…" (iccl
+2026.03.001/.002, mesma nota 8, mesma revista, mesmo começo de título em 80 caracteres)
+colapsavam no dicionário de rótulos — uma delas ficava INVISÍVEL para a curadoria. Rótulo
+repetido agora ganha o DOI.
+
+### 21.5 · teste_administrador.py + Chave 26 — a TELA provada sem navegador
+
+`streamlit.testing.v1.AppTest`: o painel roda inteiro dentro do Python. 13 verificações:
+abre sem exceção · slider 6–10 e datas vazias (as decisões do dono viraram asserção) ·
+filtro apertado esconde E avisa · e a mais forte: o "Y no banco" do caption é conferido
+contra contagem INDEPENDENTE no Supabase (882 = 882). Roda pela **Chave 26** e no CI.
+O que ela NÃO prova: pixel/navegador — isso continua sendo a Chave 3 aberta de verdade.
+
+### 21.6 · A bateria dizia "sem rede" e fazia chamada de rede — agora é offline DE VERDADE
+
+Descoberto ao simular o CI sem `.env`: `teste_quem_grava_e_quem_le` importa o administrador,
+e importar executava a UI INTEIRA no nível do módulo — inclusive o GET no Supabase. A bateria
+"pura" tocava rede em silêncio desde sempre; sem credencial, morria com um `TypeError`
+enganoso. Conserto (a forma, não o conteúdo): funções no topo, UI inteira em `main()`,
+chamada só quando há `ScriptRunContext` (streamlit run / AppTest). De quebra: `passa()`
+ficou 100% parametrizada (a meia-lição de 21/Ago completada) e `_SO_SEM_TEMA` nasce False
+(NameError latente no dia em que a fila de sem-tema zerasse). Todos os comentários-memória
+do arquivo preservados na íntegra.
+
+**PROVADO: ambiente VAZIO (sem .env, sem credencial) → 91 travas, APROVADO, exit 0.**
+Primeira vez que a bateria é 100% offline de fato.
+
+### 21.7 · O que fica pendente e de quem é
+
+| pendência | de quem |
+|---|---|
+| commit + Chave 8 (que repete estas provas) | Dr. Eduardo |
+| abrir a Chave 3 no navegador uma vez (LEI 7: AppTest ≠ RESOLVIDO) | Dr. Eduardo |
+| primeiro push verde na aba Actions ("Prova do Motor") | Dr. Eduardo confere |
+| PARTE 8 do plano: separar lei × jurisprudência no CLAUDE.md | sessão de decisão do dono |
+| destino do `painel_curadoria.py` aposentado (archive?) | decisão do dono |
+| plugins supabase/playwright instalados — carregam na PRÓXIMA sessão | reiniciar quando for usar |
+
+Bateria ao fim do dia: **91 travas, 91 passam** (novas: paginação; suíte AppTest à parte com
+13 verificações). Plugins `supabase` e `playwright` instalados do marketplace oficial.

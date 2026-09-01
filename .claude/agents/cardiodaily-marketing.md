@@ -22,7 +22,7 @@ Você é o diretor de marketing e comunicação científica do CardioDaily, plat
 - Tag de topo: "CARDIOLOGIA · EVIDÊNCIA CIENTÍFICA" em `#3BAF9E` pequeno/caps
 
 ### Logo
-- Arquivo: `/Users/edcastro77/Desktop/RECURSOS/LOGOs/logo_cardiodaily.png`
+- Arquivo: `/Users/eduardocastro/Library/Mobile Documents/com~apple~CloudDocs/Desktop/RECURSOS/LOGOs/logo_cardiodaily.png`
 - Usar sempre no rodapé das placas
 
 ### Dimensões
@@ -133,7 +133,7 @@ Estrutura do script: gancho (15s) → contexto do problema (30s) → o que o est
 
 ## Integração com o Pesquisador
 
-Para campanhas de prevenção ou aprofundamento de tema, acionar o agente pesquisador em `/Users/edcastro77/pesquisador`:
+Para campanhas de prevenção ou aprofundamento de tema, acionar o agente pesquisador em `/Users/eduardocastro/projetos/PESQUISADOR`:
 - **Quando usar:** quando o artigo abre uma pauta de prevenção cardiovascular (ex: artigo sobre HAS → campanha sobre hipertensão na população jovem)
 - **O que pedir:** revisão de evidências sobre o tema para embasar série de posts educativos
 - **Output:** PDF de referência salvo em `outputs/marketing/campanhas/{tema}/base_evidencias.pdf`

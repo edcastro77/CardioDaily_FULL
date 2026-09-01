@@ -1,108 +1,55 @@
-PARADA POR FUTILIDADE É RESPOSTA, NÃO FRACASSO (29/Ago/2026)
+AS LEIS VIRARAM TRAVAS, E A BATERIA "SEM REDE" TOCAVA REDE (01/Set/2026)
 
-O LIBREXIA-ACS (NEJM, 29/Ago/2026) — milvexian após SCA, 14.194 pacientes,
-HR 1,05 (IC95% 0,91–1,21; p=0,50) — saiu com NOTA 6 e `muda_conduta: NÃO`.
-O Dr. Eduardo mandou o trecho que explica tudo:
+Auditoria do Claude Code sobre o projeto + 7 passos aprovados um a um.
+Nenhuma regra de negócio mudou; mudou o quanto delas é cobrado POR MÁQUINA.
 
-  "On the basis of the results of the prespecified interim analysis, the data
-   and safety monitoring committee recommended halting the trial for futility."
+1) DUAS VERDADES NA PRÓPRIA CONFIGURAÇÃO. O .claude/CLAUDE.md dizia
+   ARTICLE_ANALYSIS_PROMPT_v2 (aposentado), TTS onyx (é cedar) e raiz
+   /Users/edcastro77/ — toda sessão abria lendo isso. Reescrito como
+   ponteiro para o CLAUDE.md da raiz + IDs de infra. Marketing: 2
+   caminhos mortos corrigidos.
 
-O DEFEITO. Parar por futilidade produz, MECANICAMENTE, os dois campos que o
-motor lia como "ensaio que ficou pelo caminho":
+2) HOOKS (.claude/hooks/, 4 scripts + settings.json). LEI 12: cp/mv/rm
+   sobre saidas/outputs/ARTIGOS confere origem 0-byte (NEGA — o caso do
+   gabarito de 20/Ago) e sobrescrita (PERGUNTA). LEI 5: SQL/REST de
+   escrita em `artigos` NEGADO em Bash E no MCP Supabase. Arquivos
+   sagrados pedem confirmação; .env ninguém edita. Todo .py editado
+   compila na hora. Provados com 25 casos + violação deliberada negada
+   ao vivo.
 
-    poder_ok               False    (parou antes do N planejado)
-    eventos_nao_alcancados True     (749 dos 875 previstos = 85,6%)
+3) A PROVA EM TRÊS CASAS. Skill /prova (portão da Chave 8 sem merge),
+   workflow prova.yml a cada push (acusa vermelho, não bloqueia — os
+   secrets já existiam), e as skills /leis e /varredura + subagents
+   cardiodaily-prova, streamlit-admin e guardiao-leis.
 
-E com eles: teto_desenho 8 · rigor teto 7 · Rota 2 FECHADA (`entregou = poder
-and not eventos_nao_alcancados`) → rótulo `incerto` → teto 7 → MCID → 6.
+4) A BOMBA DOS 1000 NA CHAVE 3. Medido: 882 linhas no banco, buscar()
+   sem limite, e o PostgREST corta em 1000 SEM AVISAR — a 118 artigos
+   do painel esconder os de nota baixa em silêncio, com o banner "X de
+   Y" contando um Y falso. Varredura LEI 9: era o ÚNICO leitor
+   ilimitado de `artigos`. Agora pagina (Range, blocos de 1000,
+   desempate doc_id). Trava nova provada contra o código VELHO do git.
 
-Só que futilidade é o OPOSTO de "ficou pelo caminho". O comitê parou porque o
-poder condicional caiu tanto que terminar não mudaria a resposta. O ensaio não
-deixou de responder — ele parou PORQUE respondeu. É a família de defeito que o
-CLAUDE.md persegue inteiro: a ausência lida como fracasso quando ela é a
-conclusão.
+5) O ARTIGO INAPROVÁVEL. A suíte nova de AppTest acusou na PRIMEIRA
+   rodada: tela 861 × selectbox 860. As partes 1 e 2 de "Mechanical
+   Circulatory Support…" (iccl .001/.002, mesma nota/revista/80 chars)
+   colapsavam no dict de rótulos — uma ficava INVISÍVEL para a
+   curadoria. Rótulo repetido agora ganha o DOI.
 
-AGRAVANTE: a exceção do BENEFÍCIO (`parado_cedo_por_beneficio`) estava escrita
-no `teto_desenho` desde sempre. A simétrica nunca existiu. `grep -i futil` no
-projeto inteiro, 29/Ago: UMA ocorrência, num prompt v2 aposentado.
+6) A TELA TEM PROVA PRÓPRIA. teste_administrador.py (AppTest, 13
+   verificações, Chave 26): abre sem exceção, filtros como o dono
+   decidiu, e o "Y no banco" conferido contra contagem INDEPENDENTE no
+   Supabase (882 = 882).
 
-AS DECISÕES DO DR. EDUARDO (29/Ago), uma a uma:
-  1) futilidade neutraliza poder_ok=False?      "sim, teto volta a 10"
-  2) abre a Rota 2 (nulo demonstrado)?          sim — é o MESMO par de campos
-  3) desconta rigor pelos eventos?              "não desconta — se esta é uma
-     resposta plausível eu quero saber e incorporar à minha prática. me
-     interessa saber COM QUE RIGOR esta futilidade foi detectada!"
-  4) exige desfecho duro/adjudicação junto?     "interessa se a pergunta foi
-     respondida" — sem exigência extra
-  confirmação:                                  "confirmo o 9"
+7) A BATERIA DIZIA "SEM REDE" E FAZIA CHAMADA DE REDE. import
+   administrador executava a UI inteira — inclusive o GET no Supabase —
+   dentro de teste_quem_grava_e_quem_le (descoberto simulando o CI sem
+   .env). A UI virou main(), chamada só com ScriptRunContext; passa()
+   ficou 100% parametrizada (a meia-lição de 21/Ago, completada);
+   _SO_SEM_TEMA nasce False (NameError latente). PROVADO: ambiente
+   VAZIO, sem credencial → 91 travas, APROVADO, exit 0. Primeira vez
+   que a bateria é offline DE FATO.
 
-MEDIDO, mesmos fatos, só virando os campos: aplic 6 → 9, muda_conduta → SIM.
-É o mesmo número do DINAMIT, e é o mesmo argumento: "não adianta prescrever
-isto" é tão acionável quanto "prescreva".
-
-A VARREDURA DA LEI 9 — os 6 blocos onde a regra mora:
-  1 analise_prompt.md ............ campo `parado_por_futilidade` +
-                                   `eventos_nao_alcancados` reescrito (só
-                                   INSUFICIÊNCIA; parada do DSMB não conta)
-  2 analise.py · SCHEMA_FATOS .... "parado_por_futilidade": _B (não-obrigatório,
-                                   igual ao irmão)
-  3 teto_desenho ................. `_parou_porque_respondeu` = benefício OU
-                                   futilidade
-  4 nota_estatistica ............. não desconta pelos eventos
-  5 _nulo_esta_demonstrado ....... `entregou` aceita a parada
-  6 teste_motor .................. teste_futilidade_e_resposta_nao_fracasso,
-                                   com 5 controles
-
-ONDE A EXCEÇÃO PAROU, E POR QUÊ. No bloco 4 ela ficou DENTRO do `else`, e não
-no `if` do `parado_cedo_por_beneficio`. Se subisse um nível levaria junto o piso
-`<30 eventos/grupo → teto 6` e o delator da taxa observada — e uma futilidade
-declarada em cima de 40 eventos viraria 9 sem ninguém olhar. A segunda metade da
-frase dele ("com que rigor foi detectada") é exatamente o que esses delatores
-respondem. MEDIDO: futilidade + 25 eventos/grupo → volta a 6.
-
-A AUSÊNCIA NÃO PROMOVE. O campo nasceu hoje; os fatos antigos têm null, e o
-motor trata null como "não houve futilidade". Medido: sem o campo, nota
-inalterada. A regra não mexeu em 274 RCTs em silêncio.
-
-A RE-EXTRAÇÃO — 27 CANDIDATOS VIRARAM 3, SEM GASTAR UM CENTAVO DE LLM.
-Candidatos brutos (poder_ok=False + eventos_nao_alcancados + não parou por
-benefício): 27 de 274 RCTs de intervenção. Em vez de re-extrair os 27
-(US$ 5,71), o PDF de cada um foi LIDO com pdftotext e varrido por
-`futility|futilidade|conditional power` — evidência mais forte que o palpite,
-porque lê o ARTIGO e não o que o extrator resolveu escrever no campo livre:
-
-     3  a palavra ESTÁ no artigo ... LIBREXIA (8x) · Vagal Nerve Stimulation/
-                                    JACC (2x) · CMR-Guided ICD/JAMA (1x)
-    24  não aparece no PDF inteiro . insuficiência de verdade, ficam como estão
-
-O 24º é o CARRESS-HF (Ultrafiltration/NEJM 2012), que eu tinha dado como
-"PDF sem texto extraível" e depois como "PDF não está mais em ARTIGOS/". As duas
-coisas estavam erradas: o PDF extrai 41.417 caracteres, e ele existe — foi o
-Dr. Eduardo que o subiu em 19/Ago. Lido inteiro: futility 0 · conditional power
-0 · interim analysis 0. As duas ocorrências de "stopped" falam da ultrafiltração
-sendo interrompida em pacientes individuais, não do ensaio.
-
-Custo medido no uso.jsonl (1.120 artigos, precos.custo_da_linha): mediana
-US$ 0,212/artigo → os 3 custam US$ 0,64.
-
-A palavra aparecer NÃO prova que o ensaio parou por futilidade — pode ser frase
-de métodos. Quem decide é a re-extração; o grep só evita pagar pelos 24.
-
-TERRA ARRASADA: o carimbo `extrator` mudou de verdade (a definição de
-`eventos_nao_alcancados` é outra). Medido: a fila tem 3 PDFs, os 3 com pacote no
-STAGING → 3 pacotes refeitos. Sem surpresa escondida.
-
-PARQUEADO — A RÉGUA DA TAXA DE EVENTOS ESPERADA. No mesmo dia ele levantou outra
-coisa: "trials de síndrome isquêmica aguda têm média de 9 a 10% de eventos ao
-ano. se teve 5%, será que recrutaram mesmo pacientes de SCA?" No LIBREXIA os
-autores PLANEJARAM 5,0% e observaram 5,1% — o delator `taxa_obs < 0,7 × taxa_esp`
-não dispara porque elas batem. A pergunta dele é outra, e o motor não a faz em
-lugar nenhum: `taxa_esp` contra a LITERATURA. Ele foi buscar a diretriz americana
-de SCA para montar a linha temporal. A régua é clínica e é dele — nada
-implementado até ele voltar com o número.
-
-NOVO: scripts/devolver_para_futilidade.py — devolve os 3 PDFs à fila, em dois
-tempos (ensaio sem --executar), conferindo tamanho da origem e recusando
-sobrescrever destino (LEI 12).
-
-Bateria: 90 travas, 90 passam.
+Bateria: 91/91. AppTest: 13/13. Comentários-memória preservados.
+Registro: CADERNO PARTE 21 (+ ponteiros nas PARTES 14 e 16).
+Pendente do dono: abrir a Chave 3 no navegador uma vez; conferir o
+primeiro "Prova do Motor" verde na aba Actions.

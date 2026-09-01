@@ -5,5 +5,61 @@
       "mcp__plugin_supabase_supabase__get_advisors",
       "mcp__plugin_supabase_supabase__get_project"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guarda_lei12.py\"",
+            "timeout": 10,
+            "statusMessage": "LEI 12: conferindo operação destrutiva"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guarda_lei5.py\"",
+            "timeout": 10,
+            "statusMessage": "LEI 5: conferindo escrita em artigos"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guarda_sagrados.py\"",
+            "timeout": 10,
+            "statusMessage": "Conferindo arquivos sagrados"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*[Ss]upabase.*__(execute_sql|apply_migration)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guarda_lei5.py\"",
+            "timeout": 10,
+            "statusMessage": "LEI 5: conferindo SQL no Supabase"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/compila_py.py\"",
+            "timeout": 30,
+            "statusMessage": "Conferindo sintaxe do .py editado"
+          }
+        ]
+      }
+    ]
   }
 }

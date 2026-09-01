@@ -2093,12 +2093,13 @@ def teste_o_filtro_de_data_nao_esconde_por_conta_propria():
     if fn is None:
         return
 
+    # 01/Set — a `passa()` ficou 100% parametrizada (a UI virou `main()` e as globais
+    # do corpo deixaram de existir no import). A trava passa os filtros PELA PORTA,
+    # como qualquer chamador; o comportamento cobrado abaixo é exatamente o mesmo.
     def roda(artigos, d_ini="", d_fim=""):
-        ns = {"nmin": 1, "nmax": 10, "f_tipo": [], "f_rev": [], "f_tema": [], "busca": "",
-              "_d_ini": d_ini, "_d_fim": d_fim,
-              "_dia": lambda a: str(a.get("data_publicacao") or "")[:10]}
+        ns = {"_dia": lambda a: str(a.get("data_publicacao") or "")[:10]}
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "<passa>", "exec"), ns)
-        return [a for a in artigos if ns["passa"](a)]
+        return [a for a in artigos if ns["passa"](a, d_ini=d_ini, d_fim=d_fim)]
 
     base = [{"titulo": "RALES", "data_publicacao": "1999-09-02", "nota_aplicabilidade": 9},
             {"titulo": "PLATO", "data_publicacao": "2009-09-10", "nota_aplicabilidade": 9},
@@ -5275,6 +5276,60 @@ def teste_o_selo_nao_e_um_caminho_de_arquivo():
           f"achei {len(soltos)}: {soltos} — cada um é um selo esperando virar caminho")
     checa("a tela DIZ quando não há mídia, e por quê", "sem mídia — " in fonte,
           "o curador não pode ficar procurando arquivo que o sistema decidiu não gerar")
+
+
+def teste_o_administrador_pagina_o_banco_inteiro():
+    """01/Set/2026 — O SUPABASE CORTA EM 1000 LINHAS E NÃO AVISA.
+
+    Medido no dia: 882 linhas na tabela, e o `buscar()` do administrador fazia UM GET
+    sem Range nem limit. Faltavam 118 artigos para o painel começar a esconder os de
+    nota mais baixa EM SILÊNCIO — e o banner "X de Y" contaria um Y falso, que é o
+    pior formato de buraco da casa: ausência lida como dado. A varredura de 01/Set
+    conferiu os demais leitores de `artigos`: todos têm limit deliberado (biblioteca
+    teto 200, lista 7, daily 30, briefing 200, webhook parametrizado) ou busca
+    pontual (doc_id=eq.). O administrador era o ÚNICO ilimitado — a trava é dele.
+
+    O conserto: blocos de 1000 via header Range até vir página incompleta (o mesmo
+    desenho que o painel aposentado já usava), com `doc_id` de DESEMPATE na ordenação
+    — sem ele, artigos de nota igual trocam de página entre requisições, e a soma
+    das páginas duplica uns e perde outros.
+
+    Lê a ÁRVORE, não o texto (lição do falso-positivo de 22/Ago, duas travas acima):
+    o comentário que explica o defeito antigo não pode reprovar a trava.
+    """
+    import ast as _ast
+    import os as _os
+    aqui = _os.path.dirname(_os.path.abspath(__file__))
+    fonte = open(_os.path.join(aqui, "administrador.py"), encoding="utf-8").read()
+
+    fn = next((n for n in _ast.parse(fonte).body
+               if isinstance(n, _ast.FunctionDef) and n.name == "buscar"), None)
+    checa("administrador.buscar existe", fn is not None, "o painel inteiro nasce dela")
+    if not fn:
+        return
+
+    lacos = [n for n in _ast.walk(fn) if isinstance(n, (_ast.For, _ast.While))]
+    checa("buscar() tem um laço de páginas", bool(lacos),
+          "um GET só = o teto de 1000 do PostgREST lido como 'banco inteiro'")
+
+    poe_range = any(
+        isinstance(n, _ast.Assign) and n.targets
+        and isinstance(n.targets[0], _ast.Subscript)
+        and isinstance(n.targets[0].slice, _ast.Constant)
+        and n.targets[0].slice.value == "Range"
+        for laco in lacos for n in _ast.walk(laco))
+    checa("cada volta do laço monta o header Range", poe_range,
+          "sem Range, o laço repete a MESMA primeira página")
+
+    tem_break = any(isinstance(n, _ast.Break) for laco in lacos for n in _ast.walk(laco))
+    checa("o laço PARA na página incompleta (break)", tem_break,
+          "sem break, são 100 requisições vazias por abertura de painel")
+
+    ordens = [n.value for n in _ast.walk(fn)
+              if isinstance(n, _ast.Constant) and isinstance(n.value, str)
+              and "nota_aplicabilidade.desc" in n.value]
+    checa("a ordenação tem desempate por doc_id", any("doc_id" in o for o in ordens),
+          "empate de nota embaralha as páginas: duplica uns, perde outros")
 
 
 if __name__ == "__main__":
