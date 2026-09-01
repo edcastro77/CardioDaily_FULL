@@ -1,14 +1,16 @@
-A CHAVE 8 TINHA PERDIDO A CHAVE DE SI MESMA (01/Set/2026)
+O PORTÃO DA CHAVE 8 RODAVA NO PYTHON ERRADO (01/Set/2026)
 
-Ao rodar o merge, o macOS recusou: "não possui os privilégios de acesso
-apropriados". Medido: `8_Merge_para_Main.command` e `11_Prova_da_Extracao.command`
-estavam `-rw-------` — sem o bit de execução que as outras 22 chaves têm
-(`rwx--x--x`). Causa provável: algum editor regravou os dois arquivos e o
-salvamento derrubou o bit.
+Ao mergear, o portão morreu com `ModuleNotFoundError: dotenv` no meio da
+bateria — parecendo defeito do motor. Não era: o PASSO 2/4 chamava `python3`
+puro, o do SISTEMA, que não tem as dependências do projeto. A prova de verdade
+(91 travas) passa — foi provada hoje várias vezes no venv, inclusive em
+ambiente vazio.
 
-Conserto: `chmod 711` nos dois, de volta ao padrão da pasta. O git rastreia o
-modo do arquivo, então a correção viaja no repositório — se acontecer de novo
-num clone, é só rodar o `chmod +x *.command` do LEIA-ME.
+Conserto: o portão agora usa `$CD_VENV/bin/python` (o mesmo ambiente da
+produção), com guarda que recusa se o venv não existir. Prova rodando no
+python errado é prova de OUTRA coisa — e reprovar por ambiente parecendo
+reprovar por conteúdo é exatamente o formato de confusão que a casa persegue.
 
-Vai junto o `.claude/settings.local.json` com as permissões acumuladas da
-sessão de 01/Set (só allowlist de comandos; nenhum segredo).
+(A propósito do estado do git: os dois commits de 01/Set já estavam na main —
+a Chave 7 commitou na branch corrente — e a lab está idêntica a ela. Este
+commit entra pela lab e sobe pela própria Chave 8, já consertada.)

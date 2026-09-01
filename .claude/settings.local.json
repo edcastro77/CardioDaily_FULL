@@ -79,7 +79,9 @@
       "Bash(chmod +x chaves/26_Teste_do_Administrador.command)",
       "Bash(ruby -ryaml -e \"d=YAML.load_file\\('.github/workflows/prova.yml'\\); puts 'YAML válido · steps: ' + d['jobs']['prova']['steps'].length.to_s\")",
       "Bash(awk '{print $1, $NF}')",
-      "Bash(chmod 711 chaves/8_Merge_para_Main.command chaves/11_Prova_da_Extracao.command)"
+      "Bash(chmod 711 chaves/8_Merge_para_Main.command chaves/11_Prova_da_Extracao.command)",
+      "Bash(bash -n chaves/8_Merge_para_Main.command)",
+      "Bash(awk '{print $1}')"
     ]
   }
 }

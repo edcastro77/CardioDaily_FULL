@@ -67,13 +67,18 @@ fi
 
 echo
 echo "PASSO 2/4 · PORTÃO — a prova do motor e a compilação de tudo"
-if ! python3 -u src/teste_motor.py; then
+# 01/Set — o portão rodava com o `python3` do SISTEMA, que não tem as dependências
+# do projeto (morreu com ModuleNotFoundError: dotenv, parecendo defeito do motor).
+# A prova tem que rodar no MESMO ambiente da produção: o venv da casa.
+PYVENV="$CD_VENV/bin/python"
+[ -x "$PYVENV" ] || { echo "⛔ venv não encontrado em $CD_VENV — rode o setup do LEIA-ME."; read -p "Enter. "; exit 1; }
+if ! "$PYVENV" -u src/teste_motor.py; then
   echo; echo "⛔ O MOTOR REPROVOU. A main NÃO vai receber nada."
   echo "   A lab ficou com o merge feito — conserte e rode a Chave 8 de novo."
   read -p "Enter para fechar. "; exit 1
 fi
 ERRO=0
-for f in src/*.py; do python3 -m py_compile "$f" 2>/dev/null || { echo "  ❌ não compila: $f"; ERRO=1; }; done
+for f in src/*.py; do "$PYVENV" -m py_compile "$f" 2>/dev/null || { echo "  ❌ não compila: $f"; ERRO=1; }; done
 if [ "$ERRO" != "0" ]; then
   echo; echo "⛔ Há arquivo que não compila. A main NÃO vai receber nada."
   read -p "Enter para fechar. "; exit 1
