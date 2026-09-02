@@ -1,22 +1,19 @@
-TODO ARQUIVO RESPONDE "POR QUE ESTOU AQUI?" — A LIMPEZA (02/Set/2026)
+A BANCADA GANHOU ESPECIFICAÇÃO — 11 DECISÕES BATIDAS (02/Set/2026)
 
-Três inventários paralelos varreram o projeto inteiro (src · scripts +
-raiz + chaves · pastas de apoio), cada veredito de "órfão" foi
-CONTRAPROVADO por grep independente antes de mover (pipeline.py parecia
-órfão e não é — import em vírgula; a ilha marketing/ é do agente de
-marketing; reprocessar_fila drena uma FILA_ESPERA que o classificador
-ainda alimenta).
+docs/ESPECIFICACAO_BANCADA.md consolida as decisões do dono sobre a
+nova bancada de curadoria, colhidas nas sessões de protótipo:
 
-ARQUIVADO (~65 itens, log em archive/limpeza_02set2026/MOVIMENTOS.log):
-one-shots cumpridos de scripts/ + Chave 24 · o par quebrado Re-Analisar
-Falhas · feature dormente de assinantes · 6 órfãos de src · 27 fixtures
-na raiz do src · 17 CSVs de classificação velhos · 24 logs de tuning de
-julho. DELETADO só o regenerável (.DS_Store, __pycache__, locks ~$,
-pastas vazias). Os 7 backups de .env com segredo em claro foram para
-cofre FORA do repo (~/.cardiodaily_cofre_env, chmod 700).
+  · o TÍTULO clica para a PERÍCIA CardioDaily (a nossa análise é a peça
+    central); o link da revista (DOI) fica discreto ao lado da revista —
+    decisão de produto: o PDF original tem direito autoral, o DOI é o
+    acesso legal para o assinante
+  · prontuário por artigo (NAC colorida, rigor, tema, peças com selo
+    explicado), farol de envio, filtro "entrou na fila" (a data de
+    publicação só tem precisão de MÊS), placar anti-silêncio, hot
+    topics, contestação, busca E-lógica em keywords+MeSH, aprovar e
+    agendar por card, acesso pelo celular
 
-PROVA PÓS-LIMPEZA: py_compile de tudo OK · bateria APROVADO (93 travas)
-· AppTest da Chave 3 APROVADO · distribuidor importa. Nada vivo foi.
+Aberto para a construção real: onde a bancada mora (Streamlit local ×
+web hospedada), ACRI na tela, áudio embutido, modo-conversa.
 
-Perguntas abertas ao dono (CADERNO PARTE 23): VPS ainda em produção? ·
-DUPLICATAS 196 MB · rotação da chave Supabase concluída? · .venv 908 MB.
+Vai junto o settings.local.json com as permissões da sessão de 02/Set.

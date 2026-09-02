@@ -94,7 +94,9 @@
       "Bash(.venv/bin/pip install *)",
       "Bash(grep -vE '^\\\\s*#|^\\\\s*$' .gitignore)",
       "Bash(grep -vE '^#|^$' .gitignore)",
-      "Bash(git ls-files *)"
+      "Bash(git ls-files *)",
+      "Bash(gh workflow *)",
+      "Bash(git -C /Users/eduardocastro/projetos/CardioDaily_FULL log --oneline -2)"
     ]
   }
 }
