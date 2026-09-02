@@ -5278,6 +5278,77 @@ def teste_o_selo_nao_e_um_caminho_de_arquivo():
           "o curador não pode ficar procurando arquivo que o sistema decidiu não gerar")
 
 
+def teste_o_portao_recusa_nota_que_o_motor_nega():
+    """02/Set/2026 — O PORTÃO VALIDAVA FORMATO, NÃO VERDADE.
+
+    A perícia das notas mediu 13 notas FÓSSEIS no Supabase (8 artigos): o contrato conferia
+    "int 0–10, porta ≥6" e nada mais — canônico escrito por motor antigo (ou adulterado à
+    mão) publicava sem ninguém recomputar. O conserto: `publicador.nota_do_motor_bate()`
+    re-executa o motor sobre os fatos do pacote e recusa divergência, SEM retração (a
+    linha do banco fica até o reparo — fóssil se conserta, não se esconde).
+
+    A trava roda a função pura com pacote sintético em pasta temporária: nota igual passa;
+    nota diferente RECUSA; pacote sem fatos RECUSA; fatos sem tipo_documento RECUSA (LEI 8).
+    """
+    import json as _json
+    import os as _os
+    import tempfile as _tmp
+    import publicador as _PB
+
+    fatos = _bom(pergunta="intervencao", desenho="rct", efeito_grande=True)
+    fatos["tipo_documento"] = "original"
+    r = N.score(fatos)
+    certa = {"nota_aplicabilidade": r["aplic"], "nota_trabalho_estatistico": r["trabalho"]}
+
+    with _tmp.TemporaryDirectory() as d:
+        ok, m = _PB.nota_do_motor_bate(d, certa)
+        checa("pacote SEM _fatos.json é recusado", not ok and "fatos" in m.lower(),
+              f"passou sem fatos: {m!r}")
+
+        open(_os.path.join(d, "x_fatos.json"), "w", encoding="utf-8").write(_json.dumps(fatos))
+        ok, m = _PB.nota_do_motor_bate(d, certa)
+        checa("nota IGUAL à do motor PASSA", ok, m)
+
+        errada = dict(certa)
+        errada["nota_aplicabilidade"] = r["aplic"] - 2 if r["aplic"] >= 3 else r["aplic"] + 2
+        ok, m = _PB.nota_do_motor_bate(d, errada)
+        checa("nota DIFERENTE do motor é RECUSADA (fóssil/adulterada não sobe)",
+              not ok and "NÃO CONFERE" in m, f"deixou passar: {m!r}")
+
+        f2 = dict(fatos); f2.pop("tipo_documento", None)
+        open(_os.path.join(d, "x_fatos.json"), "w", encoding="utf-8").write(_json.dumps(f2))
+        ok, m = _PB.nota_do_motor_bate(d, certa)
+        checa("fatos sem tipo_documento → recusa (LEI 8: a caixa decide o motor)",
+              not ok and "tipo_documento" in m, f"passou: {m!r}")
+
+
+def teste_doi_truncado_nao_passa_no_contrato():
+    """02/Set/2026 — SETE ARTIGOS DO LANCET NUMA LINHA SÓ DO BANCO.
+
+    A perícia achou a linha doi="10.1016/" no Supabase: sete artigos DIFERENTES (estatina
+    no idoso, ATLANTIC, amiloidose...) cujo DOI foi extraído TRUNCADO (o classificador não
+    renomeou, a extração parou no prefixo da editora) e que, publicados por upsert-por-DOI,
+    vinham se ENGOLINDO uns aos outros há semanas. O contrato agora exige DOI completo:
+    prefixo sem sufixo identifica editora, não artigo.
+    """
+    import contrato as _C
+
+    base = {"doc_id": "x", "nota_aplicabilidade": 7}
+
+    for ruim in ("10.1016/", "10.1016", "10.1016/abc", "doi.org/10.1016/x123456"):
+        v = _C.validar({**base, "doi": ruim}, checar_arquivos=False)
+        checa(f"contrato RECUSA doi {ruim!r}", any("doi truncado" in x for x in v),
+              f"passou: {[x for x in v if 'doi' in x.lower()]!r}")
+
+    for bom in ("10.1016/S0140-6736(26)00302-8", "10.1056/NEJMoa2609059",
+                "10.1161/CIRCIMAGING.126.019832", ""):
+        rotulo = repr(bom) if bom else "vazio (sem doi é permitido)"
+        v = _C.validar({**base, "doi": bom}, checar_arquivos=False)
+        checa(f"doi {rotulo} NÃO dispara a trava",
+              not any("doi truncado" in x for x in v),
+              f"recusou indevidamente: {[x for x in v if 'doi' in x.lower()]!r}")
+
+
 def teste_o_administrador_pagina_o_banco_inteiro():
     """01/Set/2026 — O SUPABASE CORTA EM 1000 LINHAS E NÃO AVISA.
 

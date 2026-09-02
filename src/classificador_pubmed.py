@@ -252,16 +252,25 @@ def extrair_doi(texto):
     out = []
     while k < n:
         c = texto[k]
-        if c in "\r\n":
+        prev = out[-1] if out else ""
+        if c in "\r\n" or (c == " " and prev == "/"):
             k2 = k
-            while k2 < n and texto[k2] in "\r\n":
+            while k2 < n and texto[k2] in " \r\n":
                 k2 += 1
-            prev = out[-1] if out else ""
             # Junta a quebra SÓ quando o DOI quebrou no MEIO de uma palavra
             # (Elsevier parte '10.1016/j.'⏎'cardfail...'): última char = letra ou '.'
             # E a próxima linha começa com letra minúscula. Assim NÃO gruda a linha
             # do ISSN/página que vem depois de um DOI já completo ('...001'⏎'0733-8651').
             if k2 < n and (prev.isalpha() or prev == ".") and texto[k2].islower():
+                k = k2
+                continue
+            # ═══ 02/Set — DOI NÃO TERMINA EM '/': prefixo sem sufixo é EDITORA ═══
+            # O caso das 7 Lancet numa linha só do banco: o PDF quebra
+            # 'doi.org/10.1016/'⏎'S0140-6736(26)00302-8' e o sufixo começa MAIÚSCULO —
+            # a regra da prosa recusava a emenda e o DOI saía truncado '10.1016/',
+            # colidindo artigos DIFERENTES no upsert. Depois de '/', a continuação
+            # alfanumérica é SEMPRE sufixo de DOI, maiúscula ou não.
+            if k2 < n and prev == "/" and texto[k2].isalnum():
                 k = k2
                 continue
             break

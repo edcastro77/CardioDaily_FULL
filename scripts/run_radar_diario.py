@@ -95,6 +95,36 @@ def _upload_radar_storage(mp3_path: Path, filename: str) -> str | None:
         return None
 
 
+def _enviar_script_telegram(script_path: Path, caption: str) -> bool:
+    """Manda o script .txt como documento no Telegram do Dr. Eduardo.
+
+    Existia inline no passo 8b — mas rodava DEPOIS do TTS, então no dia em que a
+    voz falhou (01/Set, quota da ElevenLabs), o script morreu com o runner e ele
+    ficou sem o texto para gravar. Agora é função, e o caminho de falha também a usa.
+    """
+    tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    tg_chat = os.getenv("TELEGRAM_CHAT_ID", "")
+    if not tg_token or not tg_chat:
+        print("   ⚠️  TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID ausentes — script não enviado.")
+        return False
+    try:
+        import requests as _req
+        r = _req.post(
+            f"https://api.telegram.org/bot{tg_token}/sendDocument",
+            data={"chat_id": tg_chat, "caption": caption},
+            files={"document": (script_path.name, script_path.read_bytes(), "text/plain")},
+            timeout=30,
+        )
+        if r.status_code == 200:
+            print(f"   📨 Script enviado ao Telegram ({script_path.name})")
+            return True
+        print(f"   ⚠️  Telegram recusou: HTTP {r.status_code} — {r.text[:200]}")
+        return False
+    except Exception as e:
+        print(f"   ⚠️  Telegram script falhou: {e}")
+        return False
+
+
 def _inserir_radar_supabase(
     tema: str,
     tema_nome: str,
@@ -267,11 +297,33 @@ def run(categoria: str | None = None, dry_run: bool = False):
     print(f"   💾 Script salvo: {script_path.name}")
 
     # ── 6. Gerar MP3 ──────────────────────────────────────────────────────
+    # ═══ 01/Set/2026 — A VOZ FALHOU E O SCRIPT MORREU JUNTO ═══
+    # A quota da ElevenLabs acabou (renova dia 10). O RuntimeError do TTS derrubava o
+    # processo inteiro: o script — que JÁ ESTAVA PRONTO — morria no disco do runner e o
+    # Dr. Eduardo ficava sem texto para gravar. Decisão dele (opção 1, aprovada em
+    # 01/Set): quando a voz faltar, o SCRIPT vai para o Telegram dele, e NADA sobe ao
+    # Supabase (linha sem áudio = player vazio para o assinante, o defeito de 09/Ago).
+    # Auto-cura: quando os créditos renovarem, o MP3 volta a funcionar e o fluxo
+    # completo se restabelece sozinho — não há nada para reverter.
     print(f"\n🔊 Gerando MP3 (ElevenLabs TTS PT-BR)…")
     mp3_path = script_dir / mp3_filename
-    ok = radar.gerar_audio(script, str(mp3_path))
+    try:
+        ok = radar.gerar_audio(script, str(mp3_path))
+        erro_tts = "" if ok else "gerar_audio devolveu falso"
+    except Exception as e:
+        ok = False
+        erro_tts = f"{type(e).__name__}: {str(e)[:300]}"
     if not ok or not mp3_path.exists():
-        print("❌ Falha na geração do MP3 — abortando envio.")
+        VOO.marcar("E2_AUDIO", ok=False, artigo=f"radar-{data_str}", tema=cat_nome,
+                   erro=f"TTS falhou — script foi ao Telegram para gravação manual · {erro_tts}")
+        print(f"❌ Falha na geração do MP3: {erro_tts}")
+        print("   → modo GRAVAÇÃO MANUAL: o script vai ao Telegram; nada sobe ao Supabase.")
+        if not dry_run:
+            _enviar_script_telegram(
+                script_path,
+                f"🎙️ GRAVE VOCÊ — a voz automática falhou ({data_str} · {cat_nome}).\n"
+                f"Motivo: {erro_tts[:150]}\n"
+                f"Nada subiu ao Supabase; poste o áudio quando gravar.")
         return
     print(f"   ✅ MP3: {mp3_path.name} ({mp3_path.stat().st_size // 1024} KB)")
 
@@ -306,21 +358,9 @@ def run(categoria: str | None = None, dry_run: bool = False):
     )
 
     # ── 8b. Enviar script como documento no Telegram (Dr. Eduardo) ────────
-    tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    tg_chat = os.getenv("TELEGRAM_CHAT_ID", "")
-    if tg_token and tg_chat and not dry_run:
-        try:
-            import requests as _req
-            caption = f"📝 Script do Radar — {cat_nome} ({data_str})\nPronto para gravação."
-            _req.post(
-                f"https://api.telegram.org/bot{tg_token}/sendDocument",
-                data={"chat_id": tg_chat, "caption": caption},
-                files={"document": (script_path.name, script_path.read_bytes(), "text/plain")},
-                timeout=30,
-            )
-            print(f"   📨 Script enviado ao Telegram ({script_path.name})")
-        except Exception as e:
-            print(f"   ⚠️  Telegram script falhou: {e}")
+    if not dry_run:
+        _enviar_script_telegram(
+            script_path, f"📝 Script do Radar — {cat_nome} ({data_str})\nPronto para gravação.")
 
     # ═══ WAYPOINT E3 + O BANNER QUE MENTIA ═══
     # O retorno do insert era IGNORADO e o banner imprimia "✅ Radar concluído!" sempre —

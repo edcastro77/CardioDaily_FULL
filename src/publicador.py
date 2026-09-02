@@ -57,6 +57,40 @@ def _payload_site(ficha):
     return {k: v for k, v in ficha.items() if not k.startswith("_")}
 
 
+def nota_do_motor_bate(pasta, ficha):
+    """(ok, motivo) — recomputa a nota pelo MOTOR a partir dos fatos do pacote e compara
+    com o que a ficha vai publicar.
+
+    ═══ 02/Set/2026 — O PORTÃO PASSA A CONFERIR A VERDADE, NÃO SÓ O FORMATO ═══
+    A perícia das notas achou 13 notas FÓSSEIS no Supabase (8 artigos): o contrato valida
+    "int 0–10 e porta ≥6", mas não recomputa — canônico escrito por um motor antigo (ou
+    adulterado à mão) subia sem ninguém perceber. O carimbo anti-fóssil protege a FILA;
+    quem já publicou e é republicado passava por aqui sem conferência. Agora o motor é
+    re-executado sobre os MESMOS fatos do pacote, e a publicação só passa se a ficha
+    disser o MESMO número. Função pura de leitura: não escreve nada.
+    """
+    import glob as _g
+    fj = _g.glob(os.path.join(pasta, "*_fatos.json"))
+    if not fj:
+        return False, "pacote sem _fatos.json — não consigo recomputar a nota pelo motor"
+    try:
+        fatos = json.load(open(fj[0], encoding="utf-8"))
+    except Exception as e:
+        return False, f"_fatos.json ilegível ({type(e).__name__}) — não confiro a nota"
+    if not fatos.get("tipo_documento"):
+        return False, ("fatos sem tipo_documento — o motor não sabe qual sub-motor usar "
+                       "(LEI 8); devolva o pacote à fila da Chave 2")
+    import notas_prototipo as N
+    r = N.score(fatos)
+    na = ficha.get("nota_aplicabilidade")
+    nr = ficha.get("nota_trabalho_estatistico")
+    if r["aplic"] != na or r["trabalho"] != nr:
+        return False, (f"NOTA NÃO CONFERE: a ficha diz {na}/{nr}, o motor de HOJE diz "
+                       f"{r['aplic']}/{r['trabalho']} — canônico fóssil ou adulterado. "
+                       "Rode src/reparar_notas.py --aplicar e publique de novo.")
+    return True, ""
+
+
 def _upsert_supabase(payload):
     """Upsert idempotente na tabela artigos. A tabela tem DUAS únicas: UNIQUE(doi) e UNIQUE(doc_id).
     Sem `on_conflict` o PostgREST resolve pela PK (id) — e o DOI existente bate na única → 409 (linha antiga
@@ -413,6 +447,20 @@ def processar_pasta(pasta, publicar=False):
 
     _VOO.marcar("P2_CONTRATO", artigo=base, nota=ficha.get("nota_aplicabilidade"),
                 tipo_documento=ficha.get("tipo_documento"), violacoes=0)
+
+    # ═══ 02/Set — O PORTÃO DA VERDADE: a nota da ficha TEM que ser a do motor de hoje ═══
+    # Sem retração: a linha que já está no banco fica como está até o reparo — recusar a
+    # REpublicação não pode apagar artigo do site (fóssil se conserta, não se esconde).
+    ok_nota, motivo_nota = nota_do_motor_bate(pasta, ficha)
+    if not ok_nota:
+        open(os.path.join(pasta, "_REVISAR_publicacao.txt"), "w", encoding="utf-8").write(
+            "RECUSADO PELO PORTÃO DA VERDADE — a nota da ficha não é a do motor de hoje.\n\n"
+            f"  • {motivo_nota}\n")
+        _VOO.marcar("P2_CONTRATO", ok=False, artigo=base,
+                    nota=ficha.get("nota_aplicabilidade"),
+                    tipo_documento=ficha.get("tipo_documento"),
+                    erro=("nota ≠ motor: " + motivo_nota)[:380])
+        return ("RECUSADO(nota≠motor)", ficha.get("nota_aplicabilidade"), [motivo_nota])
 
     # passou no portão do CONTRATO → agora o PREFLIGHT de SCHEMA (roda até no dry-run: pega o erro antes)
     # 22/Ago — primeiro contra a TABELA REAL (uma consulta por rodada), depois contra o schema

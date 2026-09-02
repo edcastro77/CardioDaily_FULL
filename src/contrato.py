@@ -181,6 +181,19 @@ def validar(ficha, checar_arquivos=True):
         v.append(f"nota {n} < 6: por regra o artigo FICA retido (não publica). "
                  f"Bug real: um nota 5 foi parar no Supabase em 25/07.")
 
+    # ═══ 02/Set/2026 — DOI TRUNCADO É COLISÃO, NÃO IDENTIDADE ═══
+    # A perícia achou UMA linha do banco com doi="10.1016/" onde SETE artigos DIFERENTES
+    # do Lancet vinham se sobrescrevendo há semanas: o classificador não renomeou (sem
+    # metadados), a extração do DOI truncou no prefixo, e o upsert por DOI fez cada
+    # publicação engolir a anterior — internamente coerente e errado, sem nada quebrando
+    # no meio (a família de defeito das LEIS 8/9). DOI ou é COMPLETO ou não entra:
+    # prefixo sem sufixo identifica uma EDITORA, não um artigo.
+    _doi = str(ficha.get("doi") or "").strip()
+    if _doi and not re.fullmatch(r"10\.\d{4,9}/\S{4,}", _doi):
+        v.append(f"doi truncado/inválido: {_doi!r} — o upsert por DOI colidiria artigos "
+                 f"DIFERENTES numa mesma linha (caso das 7 Lancet numa linha só, 02/Set). "
+                 f"Conserte o DOI no pacote (reclassificar resolve) antes de publicar.")
+
     # 4b) ═══ O DESENHO CONTRADIZ A CAIXA — RETÉM (10/Ago/2026) ═══
     #
     # É a rede de segurança da LEI 8, ponto 4: *"na dúvida, REVISÃO HUMANA. Classificar errado

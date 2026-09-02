@@ -2397,3 +2397,157 @@ Primeira vez que a bateria é 100% offline de fato.
 
 Bateria ao fim do dia: **91 travas, 91 passam** (novas: paginação; suíte AppTest à parte com
 13 verificações). Plugins `supabase` e `playwright` instalados do marketplace oficial.
+
+### 21.8 · O RADAR SEM VOZ NÃO MORRE MAIS CALADO (01/Set/2026, noite)
+
+O run das 07:34 gerou o script normalmente e morreu no TTS: **quota da ElevenLabs
+esgotada** (renova dia 10). O RuntimeError derrubava o processo inteiro — o script,
+JÁ PRONTO, morria no disco do runner, e o Dr. Eduardo ficava sem texto para gravar.
+
+**Decisão dele (opção 1, aprovada em 01/Set):** quando a voz faltar, o SCRIPT vai ao
+Telegram dele com o aviso "GRAVE VOCÊ" + o motivo, e **nada sobe ao Supabase** (linha
+sem áudio = player vazio, o defeito de 09/Ago). O envio ao Telegram virou função
+(`_enviar_script_telegram`) usada pelos DOIS caminhos — antes rodava só no passo 8b,
+depois do TTS, tarde demais. **Auto-cura:** créditos renovados → MP3 volta → fluxo
+completo se restabelece sozinho, sem nada para reverter.
+
+Provado localmente ponta a ponta: TTS falhou → modo manual → exit 0 → zero Supabase.
+O Telegram local recusou (o token do .env local não é de Telegram — irrelevante: quem
+roda é a nuvem, e o log verde de 31/Ago mostra "📨 Script enviado ao Telegram" com o
+secret de lá). O script de 01/Set foi entregue ao Dr. Eduardo manualmente na sessão.
+
+---
+
+## PARTE 22 — A DOUTRINA DA NOTA: OS 4 MOMENTOS DO CONSULTÓRIO (02/Set/2026)
+
+Ditada pelo Dr. Eduardo após o caso REACT (NEJM, transversal, NAC 6 com perícia em molde
+de RCT). É a premissa-mãe: **o CardioDaily inteiro se desenha a partir dela.**
+
+**A premissa, nas palavras dele:** *"A curadoria se faz, não é um resumidor de artigo,
+porque existe a nota de aplicabilidade clínica. E a nota serve para me dar uma informação
+útil na construção do raciocínio."* A pergunta central da NAC: *"o que faz um trial
+transversal me fazer olhar de forma diferente para meu paciente amanhã?"* O exemplo dele:
+estatina aos 45 vs aos 85 — quem manda é o benefício líquido no horizonte do paciente;
+é ESSA construção de raciocínio que a nota pontua.
+
+**OS 4 MOMENTOS DO CONSULTÓRIO** — cada um com padrão de notas PRÓPRIO:
+
+| momento | a pergunta do consultório | desenhos que servem |
+|---|---|---|
+| 1 · DIAGNÓSTICO SINDRÔMICO | "que síndrome é esta?" (+ mapa/prevalência da doença) | transversais e coortes |
+| 2 · ETIOLOGIA | "qual a causa exata?" | coorte prospectiva com dados refinados; acurácia |
+| 3 · PROGNÓSTICO | "doutor, vou viver ou morrer? em que estágio estou?" | coortes (retrospectivas valem); subgrupo pode valer (CASS → lesão de tronco) |
+| 4 · INTERVENÇÃO | "trato ou não trato?" | **a navalha**: RCT cego, sem dó, sem mimimi de revista |
+
+**Consequências ditadas:**
+- *"O estudo transversal tem seu valor. Não tem por que ele ter teto de 5 ou de 6.
+  Raramente merecerá nota alta — mas quando é muito bem feito, muito bem desenhado"*
+  (Chagas numa tacada só; as necrópsias transversais do Braunwald; Framingham), *"para a
+  construção do raciocínio, ela tem que ser pontuada"*. Rebaixar por categoria *"fica
+  parecendo que a gente está pontuando apenas o RCT"*.
+- Prognóstico: *"eu não vou rebaixar a nota porque é um estudo retrospectivo ou porque é
+  uma análise de subgrupo. Depende do quão boa foi a qualidade da extração para aquele
+  cenário."*
+- Intervenção: *"tem que ser a navalha... 'Ah, tá no New England', se dane. Não pode ter
+  mimimi, não pode ter dó, tem que ser cego."* (O próprio Braunwald sobre uma meta no
+  NEJM: "como isso foi parar no New England?")
+- Meta-análise: mantém GIGO por inteiro — *"se só tem porcaria na meta-análise, é um
+  lixo"*; o que separa é pergunta real + trabalhos que existem + extração. *"'Não tem
+  trabalho ainda' — então não tem como responder. Paciência."*
+- Diretriz: mantém — pontua a QUALIDADE DA BASE (*"o guideline de marca-passo brasileiro
+  é tudo nível C: recomendação unânime, qualidade da indicação ruim — a questão continua
+  em aberto"*).
+
+**MEDIDO no acervo (02/Set):** 1.167 pacotes · 771 originais → 253 RCT e **518 não-RCT**
+(coorte 211 · observacional_ajustado 102 · registro 62 · transversal 52 · caso_controle 15
+· antes_depois 16 · série 9...). A reforma toca ~2/3 dos originais.
+
+**Estado:** doutrina registrada; régua numérica AGUARDA calibração do dono (as células da
+tabela momento × desenho são dele, como foi a escada das metas em 04/Ago). Nada
+implementado ainda. Junto virão: perícia com MOLDE por momento (transversal discutido
+como transversal), delatores de intervenção restritos ao momento 4, dedupe por DOI na
+Chave 2 (o REACT pagou análise DUPLA em 29/Ago: cópia crua às 10:12, renomeada às 18:44)
+e travas + gabarito com o REACT como fixture.
+
+### 22.1 · O DONO DITOU O MÉTODO DO TRANSVERSAL INTEIRO (02/Set/2026, manhã)
+
+Antes de ir trabalhar, o Dr. Eduardo leu o REACT e ditou: (a) o porquê da nota ≥8 —
+transversal de NÍVEL 1, "muda a percepção clínica", com o uso BAYESIANO da prevalência
+contra o escore de risco; (b) o MÉTODO COMPLETO de leitura crítica de transversais:
+checklist de 10 perguntas + 5 armadilhas (base STROBE/JBI/CEBM), os 4 NÍVEIS de impacto
+(percepção → vigilância → hipótese → não muda tratamento), o teste dos 60 segundos, e a
+FRASE-LIMITE obrigatória ("este estudo permite que eu ___, mas não permite que eu conclua
+___"). Registrado na íntegra em **docs/METODO_TRANSVERSAL.md** — é a especificação do
+módulo transversal (extração + motor + molde de perícia). Gabarito nº 0 respondido;
+faltam os 11 (outputs/GABARITO_4_MOMENTOS_02set.md).
+
+### 22.2 · PERÍCIA DAS NOTAS — o sistema NÃO tem régua acessória; tem FÓSSEIS (02/Set/2026)
+
+Pedido dele: *"preciso entender que o sistema não está se desviando e usando um mecanismo
+acessório para dar notas."* Perícia em todo executável (4 peritos paralelos + Conferidor da
+Chave 16 sobre 695 pacotes e o Supabase). **Laudo completo: docs/PERICIA_NOTAS_02set2026.md.**
+
+VEREDITO: um só nascedouro (motor) e um só portão (publicador) — a LEI está de pé. MAS:
+**F1** 13 notas fósseis publicadas (8 artigos; o carimbo anti-fóssil protege a FILA, não
+quem já saiu dela) · **F2** o contrato valida formato, não verdade (não recomputa) ·
+**F3** a camada de PDF da Chave 16 NUNCA rodou — pypdf ausente + except silencioso = 533
+"ilegíveis" que eram aprovação por ausência dentro do próprio instrumento de prova ·
+**F4** higienes (ficha mistura nota do canônico com domínios recalculados; casca de
+prompts v2 que pedem nota, morta mas reanimável). Recomendações no laudo; decisão dele.
+
+### 22.3 · AS 4 RECOMENDAÇÕES EXECUTADAS — E O BURACO ERA MAIOR: GÊMEOS E DOI TRUNCADO (02/Set/2026, noite)
+
+Autorizado pelo Dr. Eduardo ("autorizo as 4"). O que a execução revelou e fez:
+
+**R3 (primeiro, o instrumento):** pypdf instalado + o `except` do conferidor deixou de engolir
+dependência ausente. Verdade nova: 685/695 pacotes falam com UMA voz — os 533 "PDF ilegível"
+eram o instrumento cego, não o acervo.
+
+**R1 virou ARQUEOLOGIA.** Os "8 fósseis" não eram fósseis de motor — eram **PACOTES GÊMEOS**:
+o mesmo DOI analisado 2× (falha de renomear → nome cru → sem dedupe na Chave 2), cada gêmeo
+coerente consigo, o banco com quem escreveu por último. E o pior: **SETE artigos DIFERENTES
+do Lancet com DOI extraído TRUNCADO ("10.1016/")** dividiam UMA linha do banco, engolindo-se
+a cada publicação. ERRO MEU no meio: republiquei primeiro os gêmeos VELHOS (regredi 4 linhas)
+e consertei em seguida republicando os NOVOS (regra da casa: o recente vale). Reparei também
+6 canônicos fósseis reais (reparar_notas: TOPCAT 6→9, clássicos NEJM 6→9, 7→9...).
+
+**R2:** o portão agora CONFERE A VERDADE — `publicador.nota_do_motor_bate()` recomputa o motor
+sobre os fatos e recusa divergência (sem retração). E o contrato RECUSA DOI truncado
+(prefixo sem sufixo identifica editora, não artigo). Travas:
+`teste_o_portao_recusa_nota_que_o_motor_nega` · `teste_doi_truncado_nao_passa_no_contrato`.
+
+**R4:** a nuvem não confere fóssil (os fatos vivem no disco) — o Conferidor entrou na
+**Chave 18**, com resumo ao fim de cada Caixa-Preta.
+
+**BATERIA: 92 travas verdes + 1 VERMELHA VERDADEIRA** — `teste_ficha_sem_contradicao` acusa
+o pacote do lote de 02/Set: *"Discontinuation of β-blockers…"* (Lancet, hot topic do ESC!) na
+caixa `original` com desenho `meta` → motor errado → nota 5 → RETIDO. A LEI 8 em carne viva:
+a caixa errada escondeu um hot topic do congresso.
+
+**FILA DE REANÁLISE (decisão do dono — custa ~US$ 5):** os 7 Lancet do DOI truncado (precisam
+reclassificar p/ DOI certo) · os 6 reparados (peças justificam nota velha; TOPCAT etc.) · a
+meta do betabloqueador (caixa errada) · 2 pacotes sem canônico. A linha-Frankenstein
+doi="10.1016/" no banco: apagar é decisão dele.
+
+### 22.4 · A FILA EXECUTADA E O ACERVO FALANDO COM UMA VOZ (02/Set/2026, fecho)
+
+Autorizado: fila de reanálise + apagar a linha-Frankenstein. Feito:
+- **Linha doi="10.1016/" APAGADA** pelo caminho da lei (`publicador._retirar_do_supabase`;
+  verificado: zero linhas).
+- **A CAUSA do DOI truncado, consertada em `extrair_doi`**: a emenda de quebra de linha só
+  colava continuação minúscula ("prosa começa em maiúscula") — e o sufixo do Lancet começa
+  com S MAIÚSCULO. Regra nova: depois de "/", continuação alfanumérica é SEMPRE sufixo.
+  Provado em 7 formatos (Lancet quebra/espaço, Elsevier meia-palavra, ISSN não gruda).
+- **Fila montada com log** (`outputs/_QUARENTENA_PERICIA_02set2026/MOVIMENTOS.log`):
+  8 nomes crus → INBOX da Chave 1 (renomeiam com o DOI certo) · TOPCAT + Nicorandil +
+  Ultra-Thin → fila ARTIGOS_ORIGINAIS · a meta do betabloqueador → META_ANALISES (caixa
+  certa; estava em _REVISAO_HUMANA e a caixa errada passou por cima) · 21 pacotes velhos
+  (incl. os 4 gêmeos antigos) → QUARENTENA reversível.
+- **3 artigos SEM PDF-fonte no disco** — precisam ser baixados de novo (Lancet): Psoriasis
+  (Seminar) · Systemic light chain and transthyretin amyloidosis · Complete
+  revascularisation versus culprit-only in STEMI. Hoje não têm linha no banco (viviam só
+  na linha-Frankenstein).
+
+**PROVA FINAL: bateria APROVADO (93 travas) · Conferidor APROVADO — "os 675 pacotes falam
+com UMA voz só"** — a primeira vez, com a camada de PDF enxergando de verdade.
+Pendente do dono: Chave 1 → Chave 2 (~13 análises, ~US$ 4; a chave mostra o custo).

@@ -81,7 +81,17 @@
       "Bash(awk '{print $1, $NF}')",
       "Bash(chmod 711 chaves/8_Merge_para_Main.command chaves/11_Prova_da_Extracao.command)",
       "Bash(bash -n chaves/8_Merge_para_Main.command)",
-      "Bash(awk '{print $1}')"
+      "Bash(awk '{print $1}')",
+      "Bash(gh run *)",
+      "Bash(find /Users/eduardocastro/projetos/CardioDaily_FULL/outputs -iname *ilent*theroscl* -maxdepth 4)",
+      "Bash(md5 -q \"/Users/eduardocastro/projetos/CardioDaily_FULL/ARTIGOS/CLASSIFICADOS/_PUBLICADOS/NEJMoa2609059.pdf\" \"/Users/eduardocastro/projetos/CardioDaily_FULL/ARTIGOS/CLASSIFICADOS/_PUBLICADOS/2026-08-The_New_England_journal_-Prevalence_of_Silent_Atherosclerosis_across_Adult_Life.pdf\")",
+      "Bash($FULL/.venv/bin/python *)",
+      "Bash(sort -t: -k2 -rn)",
+      "Bash(awk 'NR<=2061 && /^    def |^def /{l=NR\": \"$0} END{}' src/article_analyzer.py)",
+      "Bash(awk -F: '$1<2061')",
+      "Bash(awk -F: '$1<3027')",
+      "Bash(awk -F: '$1<447')",
+      "Bash(.venv/bin/pip install *)"
     ]
   }
 }

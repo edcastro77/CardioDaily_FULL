@@ -52,13 +52,25 @@ def notas_do_canonico(caminho):
             _n(t, r"nota_trabalho_estatistico:\s*(\d+)"))
 
 
+# ═══ 02/Set — A DEPENDÊNCIA AUSENTE FALAVA COM A VOZ DO DADO ═══
+# O `except: return None` em volta do IMPORT transformava "pypdf não instalado" em
+# "PDF: ilegível" — 533 de 695 pacotes, TODOS mentira. A camada de conferência do PDF
+# (a nota que o assinante REALMENTE abre) nunca tinha rodado, e o relatório parecia
+# medir o acervo. Aprovação/reprovação por ausência DENTRO do instrumento de prova.
+# Agora: falta de dependência ABORTA com a causa dita; o except fica só na extração.
+try:
+    from pypdf import PdfReader as _PdfReader
+except Exception:
+    _PdfReader = None
+
+
 def _texto_do_pdf(caminho):
+    if _PdfReader is None:
+        raise SystemExit("⛔ pypdf NÃO está instalado — sem ele eu não confiro os PDFs.\n"
+                         "   Isto NÃO é 'PDF ilegível': é ambiente incompleto.\n"
+                         "   Conserte com: .venv/bin/pip install pypdf")
     try:
-        from pypdf import PdfReader
-    except Exception:
-        return None
-    try:
-        return "".join((p.extract_text() or "") for p in PdfReader(caminho).pages[:3])
+        return "".join((p.extract_text() or "") for p in _PdfReader(caminho).pages[:3])
     except Exception:
         return None
 

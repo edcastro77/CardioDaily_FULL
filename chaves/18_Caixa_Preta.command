@@ -21,4 +21,14 @@ read -r -p "   Período/filtro: " Q
 echo
 python -u "$CD_FULL/src/caixa_preta.py" $Q
 echo
+# ═══ 02/Set — O CONFERIDOR DE NOTAS ENTRA NA ROTINA (perícia das notas) ═══
+# A nuvem NÃO consegue conferir fóssil: o recálculo do motor precisa dos fatos,
+# que vivem SÓ neste disco. Então a vigilância mora aqui, na chave que você já
+# abre para ver o estado do sistema. Só leitura; o resumo diz se alguma peça
+# (ou a linha do Supabase) discorda do motor de hoje.
+echo "───────────────────────────────────────"
+echo " CONFERIDOR DE NOTAS (resumo · só leitura)"
+set -a; source "$CD_FULL/.env" 2>/dev/null; set +a
+python -u "$CD_FULL/src/conferir_notas.py" --supabase 2>&1 | tail -4
+echo
 read -p "Enter para fechar. "
