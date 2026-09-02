@@ -1,47 +1,22 @@
-SETE ARTIGOS NUMA LINHA SÓ — O PORTÃO PASSA A CONFERIR A VERDADE (02/Set/2026)
+TODO ARQUIVO RESPONDE "POR QUE ESTOU AQUI?" — A LIMPEZA (02/Set/2026)
 
-A perícia das notas (autorizada em 4 recomendações) desceu e achou o fundo:
+Três inventários paralelos varreram o projeto inteiro (src · scripts +
+raiz + chaves · pastas de apoio), cada veredito de "órfão" foi
+CONTRAPROVADO por grep independente antes de mover (pipeline.py parecia
+órfão e não é — import em vírgula; a ilha marketing/ é do agente de
+marketing; reprocessar_fila drena uma FILA_ESPERA que o classificador
+ainda alimenta).
 
-1) O INSTRUMENTO ESTAVA CEGO. O conferidor (Chave 16) dependia do pypdf,
-   que não estava no venv — e o except engolia: 533 "PDF ilegível" que
-   eram ambiente, não acervo. Consertado: dependência ausente ABORTA com
-   a causa. Verdade real: 685/695 pacotes falam com uma voz.
+ARQUIVADO (~65 itens, log em archive/limpeza_02set2026/MOVIMENTOS.log):
+one-shots cumpridos de scripts/ + Chave 24 · o par quebrado Re-Analisar
+Falhas · feature dormente de assinantes · 6 órfãos de src · 27 fixtures
+na raiz do src · 17 CSVs de classificação velhos · 24 logs de tuning de
+julho. DELETADO só o regenerável (.DS_Store, __pycache__, locks ~$,
+pastas vazias). Os 7 backups de .env com segredo em claro foram para
+cofre FORA do repo (~/.cardiodaily_cofre_env, chmod 700).
 
-2) OS "FÓSSEIS" ERAM GÊMEOS. O mesmo DOI analisado duas vezes (falha de
-   renomear → nome cru → sem dedupe), o banco com quem escreveu por
-   último. E SETE artigos DIFERENTES do Lancet com DOI TRUNCADO
-   ("10.1016/") dividiam UMA linha do banco, engolindo-se a cada
-   publicação, há semanas, sem nada quebrar no meio.
+PROVA PÓS-LIMPEZA: py_compile de tudo OK · bateria APROVADO (93 travas)
+· AppTest da Chave 3 APROVADO · distribuidor importa. Nada vivo foi.
 
-3) O CONSERTO ESTRUTURAL (o nome deste commit):
-   · publicador.nota_do_motor_bate() — recomputa o motor sobre os fatos
-     e RECUSA nota divergente (fóssil/adulterada não sobe; sem retração)
-   · contrato recusa DOI truncado — prefixo sem sufixo é editora, não
-     artigo
-   · pypdf no requirements; conferidor entra na Chave 18 (a nuvem não
-     confere fóssil: os fatos vivem no disco)
-   · reparar_notas aplicado: 6 canônicos fósseis reais (TOPCAT 6→9,
-     clássicos NEJM 6→9/7→9) — peças aguardam reanálise
-   · banco realinhado ao pacote MAIS RECENTE nos 4 gêmeos JACC/Circ
-     (com um tropeço meu no caminho: republiquei os velhos primeiro,
-     e desfiz em seguida)
-
-TRAVAS NOVAS: teste_o_portao_recusa_nota_que_o_motor_nega ·
-teste_doi_truncado_nao_passa_no_contrato. Bateria: 92 verdes + 1
-VERMELHA VERDADEIRA — a meta do betabloqueador pós-IAM (Lancet, hot
-topic do ESC) na caixa ORIGINAL, motor errado, nota 5, retida. A LEI 8
-em carne viva; reanálise na fila de decisão do dono (~US$ 5 no total).
-
-Laudo: docs/PERICIA_NOTAS_02set2026.md · CADERNO 22.2/22.3.
-
-ADENDO (mesma noite): fila de reanálise EXECUTADA e linha-Frankenstein
-APAGADA (pelo publicador, LEI 5; zero linhas com doi truncado). Causa do
-truncamento consertada em extrair_doi (sufixo maiúsculo pós-"/" agora
-emenda; provado em 7 formatos). 12 PDFs devolvidos às filas (8 via Chave
-1 com o DOI consertado; TOPCAT/Nicorandil/Ultra-Thin/betabloqueador-META
-direto), 21 pacotes velhos em quarentena reversível com log. 3 artigos
-sem PDF-fonte aguardam re-download (Psoriasis · amiloidose LC/ATTR ·
-revascularização completa no STEMI — Lancet).
-
-PROVA FINAL: bateria APROVADO (93 travas) · Conferidor APROVADO —
-"os 675 pacotes falam com UMA voz só."
+Perguntas abertas ao dono (CADERNO PARTE 23): VPS ainda em produção? ·
+DUPLICATAS 196 MB · rotação da chave Supabase concluída? · .venv 908 MB.

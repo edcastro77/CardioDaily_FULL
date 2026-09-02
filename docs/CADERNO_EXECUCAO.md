@@ -2551,3 +2551,42 @@ Autorizado: fila de reanálise + apagar a linha-Frankenstein. Feito:
 **PROVA FINAL: bateria APROVADO (93 travas) · Conferidor APROVADO — "os 675 pacotes falam
 com UMA voz só"** — a primeira vez, com a camada de PDF enxergando de verdade.
 Pendente do dono: Chave 1 → Chave 2 (~13 análises, ~US$ 4; a chave mostra o custo).
+
+---
+
+## PARTE 23 — A LIMPEZA: TODO ARQUIVO RESPONDE "POR QUE ESTOU AQUI?" (02/Set/2026)
+
+Ordem do Dr. Eduardo: *"quero saber de todos os arquivos — por que estão lá; se não faz parte
+da corrente, por que ainda não virou lixo? Precisa limpar tudo."* Três inventários paralelos
+(src · scripts+raiz+chaves · pastas de apoio) + contraprova independente de cada "órfão"
+antes de mover (o perito também erra: `pipeline.py` parecia órfão por causa de import em
+vírgula, e a ilha `marketing/` é usada pelo agente de marketing).
+
+**EXECUTADO** (log completo: `archive/limpeza_02set2026/MOVIMENTOS.log`):
+- **ARQUIVADO (~65 itens, nada deletado):** 11 one-shots cumpridos de scripts/ (+ a Chave 24,
+  botão de evento passado) · o par quebrado Re-Analisar Falhas.app + reanalisar_falhas.sh
+  (apontavam p/ venv/ inexistente) · feature dormente de assinantes (admin_temas +
+  temas_assinantes.json, sem nenhum leitor) · 6 órfãos de src (achados, placar_achados,
+  reparar_capa, journal_issue_fetcher, redator_prompt.md órfão, prompt v2 morto) · 27
+  fixtures *_fatos.json largadas na raiz de src · 17 CSVs de classificação antigos (ficou o
+  mais recente) · 24 logs de tuning de julho + _BATERIA velha · BRIEFING_BATERIA.md.
+- **DELETADO (só regenerável/vazio):** .DS_Store, locks ~$ do Excel, 12 __pycache__ fora do
+  .venv, 6 diretórios vazios (input/, outputs/{audio,corpus,downloads,images},
+  archive/logs_operacionais).
+- **COFRE:** os 7 backups de .env (segredo em claro parado na raiz desde 04–14/Ago) foram
+  para ~/.cardiodaily_cofre_env/ (fora do repo, chmod 700).
+
+**MANTIDO DE PROPÓSITO (contra a 1ª impressão dos peritos):** `reprocessar_fila.py` (o
+classificador AINDA roteia ahead-of-print p/ FILA_ESPERA — é o ralo de uma pia viva) ·
+ilha `marketing/` (o agente de marketing a usa) · legado GUARDADO com SystemExit (é a
+lápide da LEI 5) · prompts v2 de guideline/meta/revisão (VIVOS — a corrente os lê) ·
+instrumentos sem chave (bateria, gabarito, prova_lote, ensaio_seco, reparar_notas).
+
+**PROVA PÓS-LIMPEZA:** py_compile de TUDO ok · bateria APROVADO (93 travas) · AppTest da
+Chave 3 APROVADO · distribuidor importa. Nada vivo foi junto.
+
+**PERGUNTAS ABERTAS AO DONO:** (1) a VPS (webhook_server/watchdog/tunnel/setup) ainda roda
+em produção? Peritos divergiram; ficou tudo no lugar até resposta. (2) ARTIGOS/DUPLICATAS
+(196 MB) pode ser descartada após conferir contra _PUBLICADOS? (3) a rotação da chave
+Supabase de TROCA_DA_CHAVE.md foi concluída? (4) .venv (908 MB) só se o disco apertar.
+(5) MAPA_DO_SRC.md e chaves/LEIA-ME.md estão desatualizados — reescrever quando quiser.

@@ -91,7 +91,10 @@
       "Bash(awk -F: '$1<2061')",
       "Bash(awk -F: '$1<3027')",
       "Bash(awk -F: '$1<447')",
-      "Bash(.venv/bin/pip install *)"
+      "Bash(.venv/bin/pip install *)",
+      "Bash(grep -vE '^\\\\s*#|^\\\\s*$' .gitignore)",
+      "Bash(grep -vE '^#|^$' .gitignore)",
+      "Bash(git ls-files *)"
     ]
   }
 }
