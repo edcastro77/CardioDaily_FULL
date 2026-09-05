@@ -188,8 +188,13 @@ def validar(ficha, checar_arquivos=True):
     # publicação engolir a anterior — internamente coerente e errado, sem nada quebrando
     # no meio (a família de defeito das LEIS 8/9). DOI ou é COMPLETO ou não entra:
     # prefixo sem sufixo identifica uma EDITORA, não um artigo.
+    # 05/Set — a EMENDA: `Sintetico_<slug>` é a identidade legítima da casa para artigo
+    # SEM DOI (Framingham 1962, clássicos NEJM sem DOI no texto). É única por título e
+    # não colide — a trava de 02/Set, escrita contra o "10.1016/" truncado, recusou 4
+    # clássicos NEJM na primeira rodada do lote de 04/Set por não conhecer a convenção.
     _doi = str(ficha.get("doi") or "").strip()
-    if _doi and not re.fullmatch(r"10\.\d{4,9}/\S{4,}", _doi):
+    if (_doi and not _doi.startswith("Sintetico_")
+            and not re.fullmatch(r"10\.\d{4,9}/\S{4,}", _doi)):
         v.append(f"doi truncado/inválido: {_doi!r} — o upsert por DOI colidiria artigos "
                  f"DIFERENTES numa mesma linha (caso das 7 Lancet numa linha só, 02/Set). "
                  f"Conserte o DOI no pacote (reclassificar resolve) antes de publicar.")

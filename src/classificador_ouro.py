@@ -42,7 +42,7 @@ import argparse
 from dotenv import load_dotenv
 
 from classificador_pubmed import (
-    PDFExtractor, extrair_doi, pubmed_lookup, europepmc_lookup, map_pubtype,
+    PDFExtractor, extrair_doi, doi_do_nome_do_arquivo, crossref_lookup, pubmed_lookup, europepmc_lookup, map_pubtype,
     eh_descartavel, _novo_nome, doi_e_deste_artigo, FOLDERS, SUB_ANALISE, SUB_DESCARTE, SUB_REVISAO,
     RedeIndisponivel,
 )
@@ -361,12 +361,16 @@ def classificar(pasta, dry_run=True, max_n=0):
             texto = ""
             VOO.marcar("C1_TEXTO", ok=False, artigo=nome, erro=f"{type(e).__name__}: {e}")
             print(f"        ⚠️ {nome[:52]}: não consegui ler o PDF — {type(e).__name__}: {str(e)[:80]}")
-        doi = extrair_doi(texto)
+        # 05/Set — o DOI pode vir do NOME DO ARQUIVO da editora (NEJMoa013474, PIIS…):
+        # PDFs antigos não imprimem DOI no texto, e sem DOI os clássicos ficavam de nome
+        # cru para sempre — a fábrica dos gêmeos da perícia de 02/Set. O DOI do nome é do
+        # PRÓPRIO arquivo (não é citação emprestada), fonte confiável.
+        doi = extrair_doi(texto) or doi_do_nome_do_arquivo(nome)
         # ═══ WAYPOINT C2 — "o DOI foi encontrado" ═══
         # Sem DOI não há PubMed, e sem PubMed a cascata perde a camada mais confiável.
         # Não é erro (Framingham 1962 não tem DOI) — mas tem de ficar registrado.
         VOO.marcar("C2_DOI", ok=bool(doi), artigo=nome, doi=doi or "",
-                   erro=None if doi else "nenhum DOI no texto extraído")
+                   erro=None if doi else "nenhum DOI no texto extraído nem no nome do arquivo")
 
         # título/metadados p/ rename (grátis) — e pubtypes p/ o descarte determinístico
         pubtypes, meta, falha_rede = [], {}, False
@@ -375,6 +379,12 @@ def classificar(pasta, dry_run=True, max_n=0):
                 pubtypes, meta = pubmed_lookup(doi)
                 if not meta:
                     _, meta = europepmc_lookup(doi)
+                if not meta:
+                    # 05/Set — revista nova/sim-pub: o Crossref responde pelo DOI antes da
+                    # indexação (caso xwag/EHJ-VSHD). SÓ para o rename; a classificação
+                    # segue a cascata de sempre, e o título ainda é confrontado com as
+                    # páginas 1-3 pela trava do DOI emprestado.
+                    meta = crossref_lookup(doi)
                 # ═══ WAYPOINT C3 — "o PubMed respondeu sobre este DOI" ═══
                 # `if r.ok else []` faz um 4xx ser indistinguível de "DOI não indexado".
                 # A RedeIndisponivel cobre 429/5xx/timeout; isto aqui cobre o resto.

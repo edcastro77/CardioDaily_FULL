@@ -1,31 +1,23 @@
-O MOTOR 2 EXISTE — A RÉGUA DOS 4 MOMENTOS EM CÓDIGO (04/Set/2026)
+A ESTREIA DO MOTOR 2: DUAS PROVAS CEGAS, DUAS ACERTADAS (04-05/Set/2026)
 
-"Pode construir o motor!" — construído, calibrado pelos 9 casos que o
-Dr. Eduardo julgou à mão, e provado sem tocar um artigo do acervo.
+O lote de 134 pós-ESC estreou a régua dos 4 momentos em produção. O
+Motor 2, sem conhecer o gabarito, reproduziu as notas do dono:
+Esporte×FA → 5 (dele: 5; sistema antigo: 6) e Photon-FFR → 5 (dele:
+4/5; antigo: 8). 16 vereditos 4M com distribuição saudável; RWD de
+intervenção segurado em 6 com muda_conduta NÃO.
 
-O DESENHO (score_quatro_momentos, não-RCT): dois passos em série.
-PASSO 1 · PORTÃO DE ENTRADA — "o estudo morre na hora que não preza
-pela qualidade de entrada do dado": exemplar teto 8 · comprometida-mas-
-declarada teto 7 (honestidade preserva crédito) · regra do 2º exame
-teto 6 (coorte de sobreviventes) · precária ≤5 (gerador de hipótese;
-underpowered para a pergunta −2). PASSO 2 · CONTRIBUIÇÃO AO RACIOCÍNIO
-no momento da pergunta (sindrômico · etiologia/acurácia · prognóstico ·
-intervenção): muda a percepção = teto · vigilância = teto−1 · hipótese
-= 5 · nada = 4; a regra do ACESSO gradua (tecnologia sem horizonte no
-Brasil trava em 5); utilidade argumentativa real sustenta o 6.
+CONSERTOS QUE A RODADA EXIGIU:
+1) O DOI MORA NO NOME DO ARQUIVO DA EDITORA — NEJMoa013474/PIIS...
+   derivam o DOI do próprio nome (clássicos sem DOI no texto); trava
+   com 10 casos, incluindo os negativos (rutters2024 não ganha DOI
+   inventado). 119/123 renomeados no lote (97%).
+2) CROSSREF COMO 3ª DEFESA DO RENAME — revista nova (EHJ-VSHD 2026,
+   caso xwag) resolve pelo registro do DOI sem esperar indexação do
+   PubMed; o título ainda é confrontado pela trava do DOI emprestado.
+3) A EMENDA DO SINTÉTICO — a trava de DOI recusou 4 clássicos NEJM
+   (DIG, MADIT-II, AF-CHF, Poole) por não conhecer "Sintetico_<slug>",
+   a identidade legítima da casa para artigo SEM DOI (Framingham).
+   Contrato emendado; os 4 fecham na próxima Chave 2 (fatos em cache).
 
-A NAVALHA É INTOCÁVEL: RCT/pool seguem na LEI 0 (provado por trava).
-Bicondicional preservada. Teto 8 do não-RCT mantido — subir exige
-revogação explícita da LEI 0 pelo dono (pendência declarada).
-
-ROLLOUT SEM TERREMOTO: o motor 2 só dispara com os fatos novos
-(`entrada` + `contribuicao`, no schema e no prompt de extração).
-MEDIDO: 675 iguais · 0 mudam — nada muda em silêncio; a régua entra
-artigo a artigo, por reanálise.
-
-TRAVA-GABARITO: teste_a_regua_dos_4_momentos_do_dono carrega os 9
-casos dele, nota a nota — regra futura que mude qualquer uma tem que
-vir com decisão dele por escrito. Bateria: 94 travas verdes.
-
-FASE 2 declarada: moldes de perícia por momento + reanálise
-progressiva + os 4 pontos restantes do gabarito como validação cega.
+Bateria: 96 travas verdes. Renomeador agora com três defesas:
+DOI do texto → DOI do nome → Crossref.

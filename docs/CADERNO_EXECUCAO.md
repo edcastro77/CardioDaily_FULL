@@ -2761,3 +2761,29 @@ travas, TODAS VERDES na primeira rodada dos fixtures.
 discutindo transversal, com frase-limite; o do RWD com o tripé; o do prognóstico com
 causa×sintoma) + reanálise progressiva do acervo + os 4 pontos restantes do gabarito
 (3, 5, 8, 12) como validação cega do motor novo.
+
+### 25.1 · A ESTREIA DO MOTOR 2 EM PRODUÇÃO — E OS CONSERTOS DA PRIMEIRA RODADA (04-05/Set/2026)
+
+**Lote de 134 (semana pós-ESC): 262 análises no período, 485 publicações ok.**
+
+**VALIDAÇÃO CEGA: 2 DE 2.** O Motor 2, sem conhecer o gabarito, reproduziu as notas do
+dono nos dois artigos dele que passaram pela reanálise: Esporte×FA → 5 (dele: 5; antigo: 6)
+e Photon-FFR → 5 (dele: 4/5; antigo: 8). Distribuição saudável em 16 vereditos 4M
+(5×4 · 6×8 · 7×4), RWD de intervenção segurado em 6 com muda_conduta NÃO.
+
+**Consertos da rodada:**
+1. **DOI pelo nome do arquivo da editora** (`doi_do_nome_do_arquivo`): NEJMoa/PII →
+   DOI derivado; trava com 10 casos incl. negativos. 119/123 renomeados no lote (97%).
+2. **Crossref como 3ª defesa do rename**: revista nova (caso xwag/EHJ-VSHD 2026) e
+   sim-pub resolvem pelo registro do DOI sem esperar indexação; título ainda confrontado
+   pela trava do DOI emprestado. Os 3 xwag renomeados (e xwag039 é PRÉ-CLÍNICO — rota).
+3. **A EMENDA DO SINTÉTICO**: a trava de DOI de 02/Set recusou 4 clássicos NEJM (DIG,
+   MADIT-II, AF-CHF, Poole) porque não conhecia `Sintetico_<slug>` — a convenção legítima
+   da casa para artigo SEM DOI (Framingham). Contrato emendado; trava atualizada; os 4
+   ficam para a próxima Chave 2 (fatos em cache).
+4. HEAAL renomeado à mão (falha transitória de rede na rodada) — fila 100% batizada.
+
+**Pontos-cegos anotados (backlog):** o voo da NUVEM não escreve no disco local — a
+Caixa-Preta acusa "radar em silêncio" mesmo com o radar entregando (provado no log do
+Actions: script no Telegram em 04/Set). E a agenda_envio segue com 6 atrasados sem
+reagendamento (Chave 3).

@@ -239,6 +239,34 @@ _LLM_LABELS = set(FOLDERS) | {"relato_de_caso", "incerto"}
 _DOI_VALID = set("-._;()/:")
 
 
+# ═══ 05/Set — O NOME DO ARQUIVO DA EDITORA CARREGA O DOI ═══
+# PDFs antigos (NEJM 1997-2008, Lancet PII) não imprimem o DOI no texto — mas o arquivo
+# baixado da editora É o DOI: `NEJMoa013474.pdf` = 10.1056/NEJMoa013474; o PII do
+# Elsevier `PIIS0140673609619139` decodifica para 10.1016/S0140-6736(09)61913-9
+# (idem `1-s2.0-S...-main.pdf`). Sem isto, os clássicos ficavam de nome cru para sempre
+# — e nome cru foi a fábrica dos gêmeos e da linha-Frankenstein (perícia de 02/Set).
+# O DOI do NOME é do próprio arquivo (não é "emprestado" de citação), por isso é fonte
+# CONFIÁVEL mesmo quando o rótulo do topo torna o texto suspeito.
+_RE_NEJM_NOME = re.compile(r"^(NEJM(?:oa|cp|ra|e|c|sa|sr|p|icm|ms|hpr)?\d{6,18}[a-z]?)",
+                           re.IGNORECASE)
+
+
+def doi_do_nome_do_arquivo(nome):
+    """DOI derivado do NOME do arquivo da editora, ou None. Só padrões inequívocos."""
+    base = os.path.basename(str(nome or ""))
+    base = re.sub(r"\.pdf$", "", base, flags=re.IGNORECASE).strip()
+    m = _RE_NEJM_NOME.match(base)
+    if m:
+        return f"10.1056/{m.group(1)}"
+    # PII Elsevier/Lancet: S + 16 dígitos (com X possível no fim) — `PIIS...` ou `1-s2.0-S...-main`
+    m = re.match(r"^(?:PII)?S(\d{4})(\d{4})(\d{2})(\d{5})([\dX])$",
+                 base.replace("1-s2.0-", "").replace("-main", ""), re.IGNORECASE)
+    if m:
+        p1, p2, ano, seq, dv = m.groups()
+        return f"10.1016/S{p1}-{p2}({ano}){seq}-{dv}"
+    return None
+
+
 def extrair_doi(texto):
     """Extrai o DOI tolerando QUEBRA DE LINHA no meio (PDF quebra 'j.card'⏎'fail...').
     Junta a continuação só se ela for DOI-like (minúscula/dígito); prosa começa em maiúscula."""
@@ -506,6 +534,36 @@ def _slug(s, maxlen=60):
     return s[:maxlen] or "SEM_TITULO"
 
 
+# ═══ 05/Set — CROSSREF: O REGISTRO DO DOI NÃO ESPERA INDEXAÇÃO ═══
+# Revista NOVA (o caso xwag: "EHJ - Valvular and Structural Heart Disease", 2026, vol. 2)
+# e sim-pub de congresso têm DOI válido ANTES de o PubMed/EuropePMC indexarem — e o
+# rename ficava cru mesmo com o DOI na mão. O Crossref é o registro do próprio DOI:
+# responde na hora. SÓ PARA O NOME: pubtypes não vêm daqui, a cascata de classificação
+# continua exatamente a mesma. O metadado passa pela MESMA trava do DOI emprestado
+# (doi_e_deste_artigo confronta o título com as páginas 1-3 antes de ter autoridade).
+def crossref_lookup(doi):
+    """Metadados de rename via Crossref → {"title","journal","pubdate"} ou {}."""
+    import requests
+    try:
+        r = requests.get(f"https://api.crossref.org/works/{doi}",
+                         headers={"User-Agent": "CardioDaily/1.0 (mailto:edcastro77@gmail.com)"},
+                         timeout=15)
+        if not r.ok:
+            return {}
+        m = r.json().get("message", {}) or {}
+        titulo = " ".join(m.get("title") or [])[:300].strip()
+        if not titulo:
+            return {}
+        revista = " ".join(m.get("container-title") or []).strip()
+        partes = ((m.get("published-print") or m.get("published-online")
+                   or m.get("issued") or {}).get("date-parts") or [[]])[0]
+        pubdate = "-".join(f"{int(x):02d}" if int(x) < 100 else str(x)
+                           for x in partes[:2] if x is not None) if partes else ""
+        return {"title": titulo, "journal": revista, "pubdate": pubdate}
+    except Exception:
+        return {}
+
+
 def _novo_nome(meta, original):
     pd = meta.get("pubdate", "")
     ym = re.search(r"(\d{4})[-\s]*(\w{2,3})?", pd)
@@ -544,7 +602,7 @@ def classificar_pasta(pasta, dry_run=True, max_n=0, esperar_indexacao=True):
             texto = extractor.extract_text(caminho)
         except Exception:
             texto = ""
-        doi = extrair_doi(texto)
+        doi = extrair_doi(texto) or doi_do_nome_do_arquivo(nome)
 
         # camada 1 e 1b (fontes autoritativas grátis)
         pubtypes, meta = pubmed_lookup(doi) if doi else ([], {})
@@ -552,6 +610,9 @@ def classificar_pasta(pasta, dry_run=True, max_n=0, esperar_indexacao=True):
         if not pubtypes and doi:
             pubtypes, meta = europepmc_lookup(doi)
             fonte = "EuropePMC"
+        if not meta and doi:
+            meta = crossref_lookup(doi)   # revista nova/sim-pub: só o NOME vem daqui
+            fonte = "Crossref(nome)" if meta else fonte
         titulo = meta.get("title", "")
 
         if eh_descartavel(pubtypes, titulo, texto):

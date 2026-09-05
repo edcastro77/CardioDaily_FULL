@@ -98,7 +98,13 @@
       "Bash(gh workflow *)",
       "Bash(git -C /Users/eduardocastro/projetos/CardioDaily_FULL log --oneline -2)",
       "Bash(find /Users/eduardocastro/projetos/CardioDaily_FULL/ARTIGOS -iname *shock* -name *.pdf)",
-      "Bash(find /Users/eduardocastro/projetos/CardioDaily_FULL/outputs -maxdepth 3 -type d -iname *Defibrillator* -o -maxdepth 3 -type d -iname *Sacubitril*)"
+      "Bash(find /Users/eduardocastro/projetos/CardioDaily_FULL/outputs -maxdepth 3 -type d -iname *Defibrillator* -o -maxdepth 3 -type d -iname *Sacubitril*)",
+      "Bash(awk '{print \"VIVO PID\", $2}')",
+      "Bash(awk '{print \"VIVO:\", $2, $11, $12}')",
+      "Bash(find /Users/eduardocastro/projetos/CardioDaily_FULL/ARTIGOS/CLASSIFICADOS -name *.pdf -newer /Users/eduardocastro/projetos/CardioDaily_FULL/ARTIGOS/_CLASSIFICACAO_20260901-1727.csv)",
+      "Bash(find /Users/eduardocastro/projetos/CardioDaily_FULL/ARTIGOS/CLASSIFICADOS -maxdepth 2 -name *.pdf -newer /Users/eduardocastro/projetos/CardioDaily_FULL/ARTIGOS/_CLASSIFICACAO_20260901-1727.csv)",
+      "Bash(/Users/eduardocastro/projetos/CardioDaily_FULL/.venv/bin/python -)",
+      "Bash(awk '{print \"CHAVE 2 VIVA · PID\", $2}')"
     ]
   }
 }

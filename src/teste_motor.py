@@ -5322,6 +5322,30 @@ def teste_o_portao_recusa_nota_que_o_motor_nega():
               not ok and "tipo_documento" in m, f"passou: {m!r}")
 
 
+def teste_o_doi_mora_no_nome_do_arquivo_da_editora():
+    """05/Set/2026 — PDFs antigos não imprimem DOI; o NOME do arquivo da editora imprime.
+
+    Sem isto, os clássicos (NEJM 1997-2008, Lancet PII) ficavam de nome cru para sempre —
+    a fábrica dos gêmeos e da linha-Frankenstein (perícia de 02/Set). O DOI do nome é do
+    PRÓPRIO arquivo, confiável mesmo quando o rótulo do topo torna o texto suspeito.
+    """
+    from classificador_pubmed import doi_do_nome_do_arquivo as f
+    certos = {
+        "NEJMoa013474.pdf": "10.1056/NEJMoa013474",
+        "NEJM199702203360801.pdf": "10.1056/NEJM199702203360801",
+        "NEJMoa071098.pdf": "10.1056/NEJMoa071098",
+        "PIIS0140673609619139.pdf": "10.1016/S0140-6736(09)61913-9",
+        "1-s2.0-S014067362601247X-main.pdf": "10.1016/S0140-6736(26)01247-X",
+        "PIIS014067361832484X.pdf": "10.1016/S0140-6736(18)32484-X",
+    }
+    for nome, doi in certos.items():
+        checa(f"doi do nome: {nome[:34]}", f(nome) == doi, f"veio {f(nome)!r}, esperava {doi}")
+    for nome in ("xwag060.pdf", "rutters2024.pdf", "2026-08-Lancet-Coisa_Normal.pdf",
+                 "Estatina e idosos.pdf"):
+        checa(f"NÃO inventa doi para {nome[:28]}", f(nome) is None,
+              f"inventou {f(nome)!r} — padrão ambíguo não pode virar identidade")
+
+
 def teste_a_regua_dos_4_momentos_do_dono():
     """04/Set/2026 — O MOTOR 2, calibrado pelos 9 casos que o Dr. Eduardo julgou à mão.
 
@@ -5436,8 +5460,11 @@ def teste_doi_truncado_nao_passa_no_contrato():
         checa(f"contrato RECUSA doi {ruim!r}", any("doi truncado" in x for x in v),
               f"passou: {[x for x in v if 'doi' in x.lower()]!r}")
 
+    # 05/Set — `Sintetico_<slug>` é a convenção da casa para SEM-DOI (Framingham): passa.
+    # A 1ª versão desta trava não a conhecia e recusou 4 clássicos NEJM no lote de 04/Set.
     for bom in ("10.1016/S0140-6736(26)00302-8", "10.1056/NEJMoa2609059",
-                "10.1161/CIRCIMAGING.126.019832", ""):
+                "10.1161/CIRCIMAGING.126.019832", "",
+                "Sintetico_the-effect-of-digoxin-on-mortality"):
         rotulo = repr(bom) if bom else "vazio (sem doi é permitido)"
         v = _C.validar({**base, "doi": bom}, checar_arquivos=False)
         checa(f"doi {rotulo} NÃO dispara a trava",
