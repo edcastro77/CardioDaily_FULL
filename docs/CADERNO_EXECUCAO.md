@@ -2590,3 +2590,174 @@ em produção? Peritos divergiram; ficou tudo no lugar até resposta. (2) ARTIGO
 (196 MB) pode ser descartada após conferir contra _PUBLICADOS? (3) a rotação da chave
 Supabase de TROCA_DA_CHAVE.md foi concluída? (4) .venv (908 MB) só se o disco apertar.
 (5) MAPA_DO_SRC.md e chaves/LEIA-ME.md estão desatualizados — reescrever quando quiser.
+
+---
+
+## PARTE 24 — A PRIMEIRA VALIDAÇÃO EXTERNA: OS AUTORES DE DIRETRIZ CONCORDARAM COM A RÉGUA (02/Set/2026)
+
+O Dr. Eduardo levou a análise de diretrizes do CardioDaily (a régua AGREE + % nível C +
+RECOMENDACAO_DIRETRIZ — a escala "confie quanto?" de 06/Ago) ao grupo "Cardiologia – trials
+e discussões": colegas com pós-doutorado em Harvard, coordenadores de pesquisa clínica,
+incluindo o coordenador da ATUAL diretriz brasileira de IC (BCRI).
+
+O achado apresentado: a diretriz brasileira de 2018 dependia MENOS de opinião de
+especialista que a ESC 2026, que bate ~43% de recomendações nível C. **Todos elogiaram e
+concordaram com a pontuação.** Respostas no grupo: *"Basta ver que ferro venoso saiu como
+maior força que vacinação na primeira versão e depois 'corrigiram'"* · *"Agora diretrizes
+brasileiras vão seguir o GRADE... Chega de 'eu acho'"* · *"o pior é quando o 'eu acho' é
+feito por médicos com financiamento da indústria."*
+
+**Por que isto importa além da alegria:** é a primeira calibração EXTERNA da régua — quem
+concordou com a nota é quem ESCREVE diretriz. A tese do produto (o filtro, LEI 10; a
+diretriz pontuada por "confie quanto?", não retida) sobreviveu ao escrutínio do público
+mais difícil que existe para ela. Palavras dele: *"fiquei feliz porque mostra que estamos
+construindo algo útil de fato."*
+
+### 24.1 · GABARITO Nº 11 RESPONDIDO — E O MÉTODO DO MUNDO REAL FOI DITADO (04/Set/2026)
+
+O observacional do ABC (sacubitril vs enalapril em doses máximas): **sistema deu 7, o dono
+deu 3** — a maior divergência do gabarito até agora, e no sentido que a LEI 10 protege
+(o sistema estava BRANDO com mundo real ruim). Junto veio o método completo: o TRIPÉ do
+RWD (extração padronizada · armazenamento · análise), a realidade brasileira do prontuário
+sem padrão, o underpowered como não-resposta, a seleção de quem tolera dose máxima como
+confusão por indicação, e **o direito de PARAR de ler** quando a estrutura reprova.
+Ele forneceu ainda o checklist formal (FDA/ICH M14/EMA/ENCePP, set/2026): 20 marcas de
+credibilidade + 10 erros FATAIS + graduação A–F. Registrado em
+**docs/METODO_MUNDO_REAL.md** + **docs/RWD_Critical_Appraisal_Checklist.docx**.
+Placar do gabarito: 2 de 13 respondidos (nº 0 REACT ≥8 · nº 11 ABC = 3); faltam 10.
+
+### 24.2 · GABARITO Nº 1 — WISDOM-HMOD, NOTA 8 (04/Set/2026)
+
+Sistema deu 6/6; o dono deu **8** — mesma direção do REACT: o motor está DURO demais com
+transversal bem executado. Três peças de método novas no ditado (METODO_TRANSVERSAL v1.1):
+os critérios de BRADFORD HILL como régua da associação (plausibilidade forte + gradiente,
+mas SEM temporalidade → topo barrado); a credencial da AFERIÇÃO VALIDADA (eco cegado com
+ICC/CV pré-definidos e core lab SOBE a confiança — o inverso do ABC nº 11); e a validação
+do INSTRUMENTO conferida por fora (aparelho de punho). O 8 é pago pela aplicabilidade:
+"muda a minha prática no consultório". Placar do gabarito: 3 de 13 (0: ≥8 · 1: 8 · 11: 3).
+
+### 24.3 · GABARITO Nº 10 — DAPA-HF, NOTA 9/10: A PRIMEIRA CONCORDÂNCIA (04/Set/2026)
+
+Sistema 9 × dono 9/10 ("pessoal 10 — emocional declarado; aceito bem 9/10", com o vídeo
+dele de 2020 para a SCC como testemunho). **A navalha do momento 4 está calibrada** — os
+desvios do motor concentram-se no transversal (duro demais) e no RWD (brando demais).
+O ditado ainda rendeu o gabarito POSITIVO da navalha (poder atingido 888/844, adjudicação
+cega, perda ~2%, população generalizável, base otimizada, subgrupos coerentes, mecanismo
+plausível, checagem ativa com o PI) — material para o molde do redator de RCT exemplar.
+Placar: 4 de 13 (0: ≥8 · 1: 8 · 10: 9/10 · 11: 3).
+
+### 24.4 · A SÍNTESE DO DONO: OS DOIS MOTORES (04/Set/2026)
+
+Depois de 4 pontos de calibração, ele fechou a arquitetura numa frase: *"nos preparamos
+muito para os RCT — onde a navalha não perdoa; trabalhos de vida real e transversais
+precisam garantir a QUALIDADE DE ENTRADA da informação e depois se perguntar se
+ACRESCENTAM ALGO AO RACIOCÍNIO CLÍNICO nos 4 pontos-chave."*
+
+A fórmula que substitui a matriz de células proposta em 02/Set:
+- **Motor 1 — RCT/intervenção:** a navalha atual (LEI 0). Calibrada (DAPA 9×9/10). Intacta.
+- **Motor 2 — não-RCT:** dois passos em SÉRIE:
+  1. **Portão de entrada** (qualidade da informação): tripé RWD, aferição validada,
+     amostragem descrita, instrumento validado. Reprovou → parou de ler, nota baixa
+     (o "eu teria parado aqui" do ABC como regra).
+  2. **Contribuição ao raciocínio nos 4 momentos** (sindrômico · etiologia · prognóstico ·
+     intervenção): a nota é o tamanho do que o estudo ACRESCENTA ao momento certo,
+     graduado por Bradford Hill + níveis de impacto (percepção → vigilância → hipótese).
+
+Os 9 artigos restantes do gabarito calibram os NÚMEROS dos dois passos.
+
+### 24.5 · GABARITO Nº 4 — EnHOPE 6/7, E O MÉTODO DO MOMENTO 2 CHEGOU (04/Set/2026)
+
+Troponina-hs 0h/1h no Brasil: sistema 8 → dono **6/7** ("não mais que 7"). Penalização
+principal: ~500 prospectivos × ~4.500 RETROSPECTIVOS — a ENTRADA manda (passo 1 do motor
+2). Ele forneceu o checklist completo do momento 2 (docs/CardioDaily_Checklist_Valor_de_
+Testes.docx + METODO_VALOR_DE_TESTES.md): a escada "associação ≠ acurácia ≠ prognóstico ≠
+incremental ≠ utilidade ≠ benefício" + 10 erros fatais (spectrum, verification,
+incorporation, threshold hacking...). Regras novas que instrumento formal nenhum tem:
+**HONESTIDADE DECLARADA** (limitação confessada preserva crédito; omitida, despenca),
+**DECISÃO INDEPENDENTE do teste** como credencial, e **CONFLITO DO LEITOR declarado**
+(ele conhece o 1º autor e leu "como se não conhecesse").
+Placar: 5 de 13 (0: ≥8 · 1: 8 · 4: 6/7 · 10: 9/10 · 11: 3). Três métodos entregues
+(transversal · RWD · valor de testes); faltam prognóstico (M3) e os números finais.
+
+### 24.6 · GABARITO Nº 6 — PHOTON-FFR 4/5: A REGRA DO ACESSO (04/Set/2026)
+
+Sistema 8 → dono **4/5**, a maior divergência até agora. Prova de conceito de Oxford bem
+executada que "só validou o aparelho": sem acesso no Brasil ("15-20 anos, se Deus
+quiser"), não acrescenta a NENHUM dos 4 momentos → nota de hipótese. Regra nova no passo
+2 do motor 2: **acesso/validade externa GRADUA a nota**, não é rodapé. Secundário:
+espectro DAC crônica+SCA misturadas. Placar: 6 de 13 (0:≥8 · 1:8 · 4:6/7 · 6:4/5 ·
+10:9/10 · 11:3).
+
+### 24.7 · O FUNDAMENTO DA REGRA DO ACESSO (04/Set/2026)
+
+Ele completou o porquê do 4/5 do photon-FFR: economia (exame custaria o dobro do
+cateterismo; manutenção + "lixo nuclear" na troca; "não compensa") + a particularidade da
+medicina (única área onde tecnologia AUMENTA custo) + o custo MORAL do conhecimento sem
+acesso ("nos faz sofrer por não ter oferecido tudo que conhecemos"). A régua do acesso
+protege o tempo e a consciência do leitor — doutrina de produto, registrada no
+METODO_VALOR_DE_TESTES.
+
+### 24.8 · GABARITO Nº 7 — CHOQUES DO CDI 8: O MÉTODO DO M3 FECHOU A COLEÇÃO (04/Set/2026)
+
+Poole/SCD-HeFT (NEJM 2008): sistema 7 → dono **8** ("qualidade muito alta... nenhum erro
+fatal — evidência muito forte"). O ditado entregou o método do PROGNÓSTICO completo
+(docs/METODO_PROGNOSTICO.md + Checklist_Fatores_Prognosticos.pdf): exposição
+tempo-dependente contra o viés de tempo imortal, adjudicação cega, EPV≥10, sensibilidade
+"inteligente" (mortes <24h fora → HR 2,99 persiste), independência com prova (sponsor
+sem papel), e o LIMITE estrutural que trava o topo: ajuste só de baseline não separa
+"o choque CAUSA ou é SINTOMA da falência". Veredito clínico exemplar: choque = sinal de
+virada → o foco migra para a disfunção refratária.
+**A COLEÇÃO DOS MÉTODOS ESTÁ COMPLETA**: M1 transversal · M2 valor de testes · M3
+prognóstico · M4 navalha (LEI 0) · RWD. Placar: 7 de 13 (0:≥8 · 1:8 · 4:6/7 · 6:4/5 ·
+7:8 · 10:9/10 · 11:3). Faltam 2, 3, 5, 8, 9, 12 — já são números de calibração fina.
+
+### 24.9 · GABARITO Nº 2 — ESPORTE×FA 5: O POLO NEGATIVO DO TRANSVERSAL (04/Set/2026)
+
+Sistema 6 → dono **5** (primeira vez ABAIXO do sistema num transversal — a régua dele não
+é "transversal vale mais": é "a ENTRADA decide"). Autorrelato×autorrelato + seleção por
+campanha temática + carga de vida estimada por multiplicação ingênua → morre no portão de
+entrada → gerador de hipótese. Regras novas: RED FLAG da prevalência incompatível (7,5%
+de FA em meia-idade ≈ taxa de >65 denuncia a amostra) e GIGO transversal (splines e EPV
+corretos não salvam dado ruim). Placar: 8 de 13 (0:≥8 · 1:8 · 2:5 · 4:6/7 · 6:4/5 · 7:8 ·
+10:9/10 · 11:3). Faltam 3, 5, 8, 9, 12.
+
+### 24.10 · GABARITO Nº 9 — TRAJETÓRIA DE FEVE 6: A REGRA DO SEGUNDO EXAME (04/Set/2026)
+
+Sistema 6 = dono 6, mas por caminhos diferentes. Ditado: a "regra do segundo exame"
+(inclusão que exige exame de seguimento → coorte de sobreviventes; 73% descartados, os
+excluídos mais velhos e doentes) → taxas absolutas inválidas, só o gradiente comparativo
+sobrevive; e o valor ARGUMENTATIVO real (a munição do médico do interior contra o atraso
+porta-balão) paga o 6. METODO_PROGNOSTICO v1.1. Placar: 9 de 13. Faltam 3, 5, 8, 12.
+
+---
+
+## PARTE 25 — O MOTOR 2 FOI CONSTRUÍDO: A RÉGUA DOS 4 MOMENTOS EM CÓDIGO (04/Set/2026)
+
+Ordem dele: *"pode construir o motor!"* — com 9 de 13 pontos do gabarito calibrados e os
+5 métodos ditados. Varredura LEI 9 declarada antes de codar; blocos tocados: 4 (schema +
+prompt), 5 (motor), 9 (travas), 10 (docs). Redatores (bloco 7) = FASE 2, declarada.
+
+**O DESENHO** (`notas_prototipo.score_quatro_momentos`): dois passos em série —
+PASSO 1 · portão de ENTRADA (exemplar → teto 8 · comprometida-declarada → teto 7 ·
+regra do 2º exame → teto 6 · precária → ≤5, "morre no portão"; underpowered −2;
+honestidade declarada preserva) · PASSO 2 · CONTRIBUIÇÃO ao raciocínio no momento da
+pergunta (nível 1 = teto · 2 = teto−1 · 3 = hipótese 5 · 4 = nada 4; a regra do ACESSO
+gradua — indisponível trava em 5; utilidade argumentativa sustenta o 6). Bicondicional
+preservada (intervenção sem RCT nunca alcança 9 → muda_conduta NÃO). Teto 8 do não-RCT
+mantido ("observacionais excluídos de NAC ≥9", LEI 0) — subir exige revogação explícita
+do dono no CLAUDE.md, PENDÊNCIA DECLARADA.
+
+**O ROLLOUT SEM TERREMOTO**: o Motor 2 só dispara com os FATOS NOVOS (`entrada` +
+`contribuicao`, agora no schema e no prompt de extração). **MEDIDO: 675 iguais · 0 mudam**
+— nenhum artigo do acervo muda de nota em silêncio; a régua nova entra artigo a artigo,
+conforme reanálise. RCT/pool seguem na navalha, intocada (provado por trava).
+
+**A TRAVA-GABARITO**: `teste_a_regua_dos_4_momentos_do_dono` carrega os 9 casos julgados
+por ele, nota a nota (REACT/WISDOM 8 · CDI 8 · photon 4-5 · EnHOPE 6-7 · FEVE 6 ·
+Esporte×FA 5 · ABC 3 · DAPA ≥9 na navalha · fatos antigos inalterados). Bateria: 94
+travas, TODAS VERDES na primeira rodada dos fixtures.
+
+**FASE 2 (pendente)**: moldes de perícia por momento (o redator do transversal
+discutindo transversal, com frase-limite; o do RWD com o tripé; o do prognóstico com
+causa×sintoma) + reanálise progressiva do acervo + os 4 pontos restantes do gabarito
+(3, 5, 8, 12) como validação cega do motor novo.

@@ -5322,6 +5322,102 @@ def teste_o_portao_recusa_nota_que_o_motor_nega():
               not ok and "tipo_documento" in m, f"passou: {m!r}")
 
 
+def teste_a_regua_dos_4_momentos_do_dono():
+    """04/Set/2026 — O MOTOR 2, calibrado pelos 9 casos que o Dr. Eduardo julgou à mão.
+
+    Cada fixture abaixo é um artigo REAL que ele leu e pontuou (gabarito de 02-04/Set),
+    com o porquê registrado nos docs/METODO_*.md. A trava carrega o gabarito INTEIRO:
+    regra nova que mude qualquer uma destas notas tem que vir com decisão dele, por
+    escrito — é o mesmo desenho da trava do desconto de indústria (22/Ago).
+
+    E a REGRA DO ROLLOUT: fatos SEM os campos novos seguem na régua antiga — pacote
+    velho não muda de nota em silêncio (medido: 0 de 1.167 no dia do commit).
+    """
+    def caso(nome, fatos, esperado, rotulo):
+        r = N.score(fatos)
+        ok = r["aplic"] in esperado if isinstance(esperado, tuple) else r["aplic"] == esperado
+        checa(f"4M · {nome} → {esperado}", ok,
+              f"veio {r['aplic']} — contraria o gabarito do dono ({rotulo})")
+        return r
+
+    # ── entrada EXEMPLAR libera o passo 2 ──
+    caso("REACT/WISDOM (transversal exemplar, muda a percepção)", {
+        "tipo_documento": "original", "pergunta": "prevalencia", "desenho": "transversal",
+        "entrada": {"coleta_prospectiva_padronizada": True, "desfecho_verificado": "exame_validado",
+                    "afericao_validada": True, "selecao": "populacional"},
+        "contribuicao": {"momento": "sindromico", "nivel_impacto": 1,
+                         "acesso_brasil": "disponivel", "temporalidade_estabelecida": False},
+    }, 8, "transversal exemplar não é capado em 5/6; temporalidade barra o 9")
+
+    caso("Choques do CDI (prognóstico exemplar)", {
+        "tipo_documento": "original", "pergunta": "prognostico", "desenho": "observacional_ajustado",
+        "entrada": {"coleta_prospectiva_padronizada": True, "desfecho_verificado": "adjudicado",
+                    "exposicao_tempo_dependente": True, "epv_ok": True, "selecao": "consecutiva"},
+        "contribuicao": {"momento": "prognostico", "nivel_impacto": 1,
+                         "acesso_brasil": "disponivel", "temporalidade_estabelecida": False},
+    }, 8, "tempo-dependente + adjudicação cega = 8; causa×sintoma barra o 9")
+
+    # ── a regra do ACESSO (photon-FFR): bem executado, contribuição nula, inacessível ──
+    caso("Photon-FFR (prova de conceito sem acesso)", {
+        "tipo_documento": "original", "pergunta": "diagnostico", "desenho": "coorte",
+        "entrada": {"coleta_prospectiva_padronizada": True, "desfecho_verificado": "exame_validado",
+                    "afericao_validada": True, "selecao": "consecutiva"},
+        "contribuicao": {"momento": "etiologia_acuracia", "nivel_impacto": 4,
+                         "acesso_brasil": "indisponivel"},
+    }, (4, 5), "só validou o aparelho e não chega ao Brasil — nota de hipótese")
+
+    # ── entrada COMPROMETIDA: honestidade preserva; 2º exame trava em 6 ──
+    caso("EnHOPE (misto retro/prospectivo DECLARADO)", {
+        "tipo_documento": "original", "pergunta": "diagnostico", "desenho": "coorte",
+        "entrada": {"coleta_prospectiva_padronizada": False, "pct_retrospectivo": 80,
+                    "limitacoes_declaradas": True, "desfecho_verificado": "adjudicado",
+                    "selecao": "consecutiva"},
+        "contribuicao": {"momento": "etiologia_acuracia", "nivel_impacto": 2,
+                         "acesso_brasil": "disponivel"},
+    }, (6, 7), "a entrada manda, mas a honestidade declarada preserva — 6/7, não mais que 7")
+
+    caso("Trajetória de FEVE (regra do 2º exame + munição do interior)", {
+        "tipo_documento": "original", "pergunta": "prognostico", "desenho": "coorte",
+        "entrada": {"coleta_prospectiva_padronizada": True, "selecao_pelo_exame_seguimento": True,
+                    "pct_elegiveis_excluidos": 73, "limitacoes_declaradas": True,
+                    "desfecho_verificado": "prontuario", "selecao": "consecutiva"},
+        "contribuicao": {"momento": "prognostico", "nivel_impacto": 2,
+                         "acesso_brasil": "disponivel", "utilidade_argumentativa": True},
+    }, 6, "coorte de sobreviventes: só o gradiente sobrevive; a utilidade argumentativa paga o 6")
+
+    # ── entrada PRECÁRIA: morre no portão ──
+    caso("Esporte×FA (autorrelato × autorrelato × campanha)", {
+        "tipo_documento": "original", "pergunta": "prevalencia", "desenho": "transversal",
+        "entrada": {"desfecho_verificado": "autorrelato", "selecao": "voluntarios_campanha",
+                    "prevalencia_incompativel": True},
+        "contribuicao": {"momento": "sindromico", "nivel_impacto": 3, "acesso_brasil": "disponivel"},
+    }, 5, "morre no portão de entrada — gerador de hipótese; splines não salvam dado ruim")
+
+    caso("ABC sacubitril (RWD precário + underpowered)", {
+        "tipo_documento": "original", "pergunta": "intervencao", "desenho": "observacional_ajustado",
+        "entrada": {"coleta_prospectiva_padronizada": False, "limitacoes_declaradas": False,
+                    "underpowered_para_pergunta": True, "desfecho_verificado": "prontuario"},
+        "contribuicao": {"momento": "intervencao", "nivel_impacto": 3, "acesso_brasil": "disponivel"},
+    }, 3, "sem tripé + 900 pacientes para a pergunta do PARADIGM — 'eu teria parado de ler aqui'")
+
+    # ── a NAVALHA fica intocada: RCT nunca entra no motor 2, mesmo com fatos novos ──
+    f_rct = _bom(pergunta="intervencao", desenho="rct", efeito_grande=True)
+    f_rct["tipo_documento"] = "original"
+    f_rct["entrada"] = {"coleta_prospectiva_padronizada": True}
+    f_rct["contribuicao"] = {"momento": "intervencao", "nivel_impacto": 1}
+    r = N.score(f_rct)
+    checa("4M · DAPA-HF: RCT segue na NAVALHA mesmo com fatos novos (nota 10 do _bom)",
+          r["aplic"] >= 9 and not r.get("motor_4m"),
+          f"veio {r['aplic']} · motor_4m={r.get('motor_4m')} — a navalha é intocável")
+
+    # ── ROLLOUT: fatos ANTIGOS (sem os campos) seguem na régua antiga ──
+    f_velho = _bom(pergunta="prognostico", desenho="transversal")
+    r_velho = N.score(f_velho)
+    checa("4M · fatos ANTIGOS não mudam de régua (transversal não-intervenção segue teto 6)",
+          r_velho["aplic"] <= 6 and not r_velho.get("motor_4m"),
+          f"veio {r_velho['aplic']} · motor_4m={r_velho.get('motor_4m')} — pacote velho mudou em silêncio!")
+
+
 def teste_doi_truncado_nao_passa_no_contrato():
     """02/Set/2026 — SETE ARTIGOS DO LANCET NUMA LINHA SÓ DO BANCO.
 

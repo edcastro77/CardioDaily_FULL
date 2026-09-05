@@ -242,6 +242,50 @@ SCHEMA_FATOS = {
         "falhas_fatais": {"type": "array",
                           "items": {"type": "string",
                                     "enum": ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"]}},
+        # ═══ 04/Set — A RÉGUA DOS 4 MOMENTOS (Motor 2, só não-RCT) ═══
+        # FATOS para o portão de ENTRADA e para a CONTRIBUIÇÃO ao raciocínio — calibrados
+        # pelo gabarito do Dr. Eduardo (docs/METODO_TRANSVERSAL/VALOR_DE_TESTES/PROGNOSTICO/
+        # MUNDO_REAL.md). Continuam sendo FATOS: o modelo não dá nota, descreve o que o
+        # artigo DIZ sobre a própria coleta e o que o achado acrescenta e a quem.
+        "entrada": {
+            "type": "object",
+            "properties": {
+                "coleta_prospectiva_padronizada": _B3,
+                "pct_retrospectivo": {"type": ["number", "null"],
+                                      "description": "% da amostra de origem RETROSPECTIVA (prontuário/registro); null se 100% prospectiva ou não informado"},
+                "desfecho_verificado": {"type": ["string", "null"],
+                                        "enum": ["adjudicado", "exame_validado", "prontuario", "autorrelato", None],
+                                        "description": "COMO o desfecho foi confirmado: comitê independente > exame validado (core lab/reprodutibilidade com limiar pré-definido) > prontuário > autorrelato"},
+                "afericao_validada": _B3,
+                "instrumento_validado": _B3,
+                "selecao": {"type": ["string", "null"],
+                            "enum": ["consecutiva", "aleatoria", "populacional", "conveniencia", "voluntarios_campanha", None]},
+                "selecao_pelo_exame_seguimento": _B3,
+                "pct_elegiveis_excluidos": {"type": ["number", "null"]},
+                "limitacoes_declaradas": _B3,
+                "decisao_independente_do_teste": _B3,
+                "prevalencia_incompativel": _B3,
+                "exposicao_tempo_dependente": _B3,
+                "epv_ok": _B3,
+                "underpowered_para_pergunta": _B3,
+                "exclusoes_pos_exposicao": _B3,
+            },
+        },
+        "contribuicao": {
+            "type": "object",
+            "properties": {
+                "momento": {"type": ["string", "null"],
+                            "enum": ["sindromico", "etiologia_acuracia", "prognostico", "intervencao", None],
+                            "description": "qual dos 4 momentos do consultório a pergunta do estudo serve"},
+                "nivel_impacto": {"type": ["integer", "null"],
+                                  "description": "1=muda a percepção/prática do momento · 2=gera vigilância · 3=gera hipótese · 4=não acrescenta ao raciocínio"},
+                "acesso_brasil": {"type": ["string", "null"],
+                                  "enum": ["disponivel", "limitado", "indisponivel", None],
+                                  "description": "o recurso/exame/tecnologia central existe na prática brasileira?"},
+                "temporalidade_estabelecida": _B3,
+                "utilidade_argumentativa": _B3,
+            },
+        },
     },
     # obrigatórios: o que o motor de rigor e o canônico NÃO podem receber vazio
     "required": ["titulo", "revista", "ano", "pergunta", "desenho", "retrospectivo", "fracao_ejecao", "open_label", "poder_ok",

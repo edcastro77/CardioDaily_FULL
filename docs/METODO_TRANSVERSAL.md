@@ -154,3 +154,62 @@ nenhum impacto"*.
 | MOTOR | nota = NÍVEL de impacto (1→alto … 4→baixo) × qualidade da execução (JBI); **sem teto categórico por ser transversal**; delatores próprios (OR vendido como risco; causalidade insinuada; amostra de conveniência; sem sensibilidade) |
 | PERÍCIA | molde transversal = este checklist + semáforo + FRASE-LIMITE obrigatória — nunca mais o esqueleto de RCT com "não se aplica" |
 | GABARITO | REACT = fixture nº 0, nota do dono ≥8 |
+
+---
+
+## ADENDO v1.1 (04/Set/2026) — O CASO WISDOM-HMOD (gabarito nº 1, nota do dono: 8)
+
+O segundo transversal julgado pelo dono — e o par perfeito do REACT: sistema deu 6/6,
+ele deu **8**. Três peças de método novas:
+
+### 1 · Os critérios de BRADFORD HILL entram na régua da associação
+Ditados um a um para graduar "quanto confiar numa associação": **temporalidade** (a causa
+antes da doença — o que o transversal NÃO prova), **força** (RR/OR altos resistem a viés),
+**consistência** (replicado por outros, em outras populações), **gradiente dose-resposta**,
+**plausibilidade biológica**, **coerência** com a história natural, **especificidade**,
+**evidência experimental** (remover a exposição reduz o desfecho) e **analogia**.
+No WISDOM: plausibilidade forte (posição supina → retorno venoso → sobrecarga; simpático
+nos non-dippers/risers) + gradiente (só nos ≥3 anti-hipertensivos) + o contraste
+consultório-nulo × noturna-forte → associação de alta qualidade. Mas SEM temporalidade →
+**o topo (9-10) fica barrado**. *"Ele apenas viu uma correlação; não pode fixar
+causalidade."*
+
+### 2 · A credencial da AFERIÇÃO VALIDADA (o inverso do caso ABC)
+O que elevou a confiança: o desfecho (eco) foi medido por avaliadores certificados,
+CEGADOS para a clínica, com reprodutibilidade inter-observador, intra-observador e
+INTERINSTITUCIONAL medidas em subamostra aleatória, com limiares pré-definidos
+(ICC>0,85 para FEVE/volumes; CV<10%) e core lab. *"Esta descrição torna válida a
+comparação e fortalece muito a confiabilidade."* — REGRA: reprodutibilidade DESCRITA
+com limiar pré-definido é credencial que sobe; aferição sem padrão declarado (ABC) derruba.
+
+### 3 · A validação do INSTRUMENTO conta — e o leitor confere por fora
+Ele foi verificar se o aparelho de punho tinha validação independente antes de acreditar
+("a vantagem de ler numa revista grande"). REGRA: exposição medida por dispositivo →
+o estudo (ou a perícia) deve citar a validação do dispositivo; instrumento sem validação
+= exposição sob suspeita.
+
+### O que paga o 8 (aplicabilidade, nível 1-2 do método)
+*"Muda a minha prática no consultório"*: primeiro aparelho de punho validado que ele
+conhecia; mede a noite com mínimo impacto no sono; repetível em qualquer lugar (viagem,
+família compartilha); muito mais barato que o MAPA; à venda no Brasil. Consultório não
+associando com HVE = a medida de rotina é insuficiente para o risco — vigilância nova.
+**Transversal de nível 1 com execução exemplar e consequência prática imediata = 8.**
+
+---
+
+## ADENDO v1.2 (04/Set) — O POLO NEGATIVO: ESPORTE × FA (gabarito nº 2, nota 5; sistema deu 6)
+
+O transversal que MORRE no portão de entrada — o contraponto do REACT (≥8) e do WISDOM (8):
+- **Exposição**: horas atuais × anos = "carga de vida" (*"presume o mesmo volume por
+  décadas — isso é piada"*); intensidade não capturada (admitido pelos autores).
+- **Desfecho**: FA por AUTORRELATO em questionário online — sem ECG, sem adjudicação.
+- **Seleção**: voluntários de campanha temática sobre o coração (quem tem sintoma responde).
+- **RED FLAG DE TRIAGEM (regra nova)**: prevalência incompatível com a esperada da
+  população (7,5% de FA na meia-idade ≈ a taxa dos >65) — quando o número básico do
+  estudo destoa da epidemiologia conhecida, a amostra se denuncia sozinha.
+- **GIGO no transversal**: modelo estatístico correto (EPV ok, splines) NÃO salva —
+  *"o problema não é o modelo, é a qualidade do dado inserido. Aí já morreu."*
+
+**Veredito-padrão**: entrada reprovada → NÍVEL 3 (gera hipótese, não conduta) → nota 5.
+A escala do transversal agora tem os dois polos ditados: entrada exemplar + contribuição
+ao raciocínio = 8-9 · entrada precária = 5, independente da plausibilidade biológica.

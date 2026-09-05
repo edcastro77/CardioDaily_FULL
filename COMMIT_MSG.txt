@@ -1,19 +1,31 @@
-A BANCADA GANHOU ESPECIFICAÇÃO — 11 DECISÕES BATIDAS (02/Set/2026)
+O MOTOR 2 EXISTE — A RÉGUA DOS 4 MOMENTOS EM CÓDIGO (04/Set/2026)
 
-docs/ESPECIFICACAO_BANCADA.md consolida as decisões do dono sobre a
-nova bancada de curadoria, colhidas nas sessões de protótipo:
+"Pode construir o motor!" — construído, calibrado pelos 9 casos que o
+Dr. Eduardo julgou à mão, e provado sem tocar um artigo do acervo.
 
-  · o TÍTULO clica para a PERÍCIA CardioDaily (a nossa análise é a peça
-    central); o link da revista (DOI) fica discreto ao lado da revista —
-    decisão de produto: o PDF original tem direito autoral, o DOI é o
-    acesso legal para o assinante
-  · prontuário por artigo (NAC colorida, rigor, tema, peças com selo
-    explicado), farol de envio, filtro "entrou na fila" (a data de
-    publicação só tem precisão de MÊS), placar anti-silêncio, hot
-    topics, contestação, busca E-lógica em keywords+MeSH, aprovar e
-    agendar por card, acesso pelo celular
+O DESENHO (score_quatro_momentos, não-RCT): dois passos em série.
+PASSO 1 · PORTÃO DE ENTRADA — "o estudo morre na hora que não preza
+pela qualidade de entrada do dado": exemplar teto 8 · comprometida-mas-
+declarada teto 7 (honestidade preserva crédito) · regra do 2º exame
+teto 6 (coorte de sobreviventes) · precária ≤5 (gerador de hipótese;
+underpowered para a pergunta −2). PASSO 2 · CONTRIBUIÇÃO AO RACIOCÍNIO
+no momento da pergunta (sindrômico · etiologia/acurácia · prognóstico ·
+intervenção): muda a percepção = teto · vigilância = teto−1 · hipótese
+= 5 · nada = 4; a regra do ACESSO gradua (tecnologia sem horizonte no
+Brasil trava em 5); utilidade argumentativa real sustenta o 6.
 
-Aberto para a construção real: onde a bancada mora (Streamlit local ×
-web hospedada), ACRI na tela, áudio embutido, modo-conversa.
+A NAVALHA É INTOCÁVEL: RCT/pool seguem na LEI 0 (provado por trava).
+Bicondicional preservada. Teto 8 do não-RCT mantido — subir exige
+revogação explícita da LEI 0 pelo dono (pendência declarada).
 
-Vai junto o settings.local.json com as permissões da sessão de 02/Set.
+ROLLOUT SEM TERREMOTO: o motor 2 só dispara com os fatos novos
+(`entrada` + `contribuicao`, no schema e no prompt de extração).
+MEDIDO: 675 iguais · 0 mudam — nada muda em silêncio; a régua entra
+artigo a artigo, por reanálise.
+
+TRAVA-GABARITO: teste_a_regua_dos_4_momentos_do_dono carrega os 9
+casos dele, nota a nota — regra futura que mude qualquer uma tem que
+vir com decisão dele por escrito. Bateria: 94 travas verdes.
+
+FASE 2 declarada: moldes de perícia por momento + reanálise
+progressiva + os 4 pontos restantes do gabarito como validação cega.

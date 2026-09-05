@@ -370,6 +370,55 @@ CASO A CASO:
 
 Não é permitido escrever um NNT sem o horizonte ao lado.
 
+════════════════════════════════════════════════════════════════════════════
+A RÉGUA DOS 4 MOMENTOS — campos `entrada` e `contribuicao` (SÓ para não-RCT)
+════════════════════════════════════════════════════════════════════════════
+Se o desenho NÃO é rct/pool_pre_especificado/meta, preencha os dois blocos. São FATOS,
+não notas: você descreve o que o artigo DIZ sobre a própria coleta e a quem o achado serve.
+
+`entrada` — a qualidade da informação que ALIMENTOU o estudo:
+- coleta_prospectiva_padronizada: o artigo DESCREVE coleta prospectiva com protocolo
+  padronizado? (true só com descrição explícita; false se admite coleta retrospectiva/sem
+  padrão; null se não dá para saber)
+- pct_retrospectivo: se a amostra mistura origem prospectiva e retrospectiva, o % retro.
+- desfecho_verificado: o degrau MAIS ALTO que o artigo comprova — "adjudicado" (comitê
+  independente/cego) > "exame_validado" (core lab OU reprodutibilidade com limiar
+  pré-definido, ex.: ICC>0,85/CV<10%) > "prontuario" > "autorrelato" (questionário, sem
+  confirmação objetiva).
+- afericao_validada / instrumento_validado: a medida central tem validação DESCRITA?
+- selecao: como os participantes entraram — "voluntarios_campanha" quando responderam a
+  recrutamento de mídia TEMÁTICO (quem tem o problema responde mais).
+- selecao_pelo_exame_seguimento: o critério de inclusão EXIGE um exame de seguimento
+  (2º eco, retorno em X dias)? Isso filtra sobreviventes ambulatoriais.
+- pct_elegiveis_excluidos: % dos elegíveis descartados até a análise final.
+- limitacoes_declaradas: os autores CONFESSAM as limitações de entrada com clareza?
+  (Isto importa: limitação declarada preserva crédito; omitida, não.)
+- decisao_independente_do_teste: a conduta clínica dos pacientes NÃO dependia do
+  teste/medida em estudo?
+- prevalencia_incompativel: a frequência básica do achado destoa GRITANTEMENTE da
+  epidemiologia conhecida da população? (ex.: FA de 7,5% em meia-idade = taxa de >65)
+- exposicao_tempo_dependente: exposição que surge no seguimento foi tratada como
+  covariável dependente de tempo (anti-tempo-imortal)?
+- epv_ok: ≥~10 eventos por parâmetro ajustado?
+- underpowered_para_pergunta: o N/eventos é claramente insuficiente para a pergunta que o
+  estudo diz responder (compare com o que os RCTs da área precisaram)?
+- exclusoes_pos_exposicao: excluíram pacientes por critérios que só se conhecem DEPOIS da
+  exposição (ex.: "só quem tolerou dose máxima")?
+
+`contribuicao` — o que o achado acrescenta ao RACIOCÍNIO do médico brasileiro:
+- momento: a pergunta serve a qual momento do consultório? "sindromico" (que síndrome é/
+  quanto existe) · "etiologia_acuracia" (qual a causa; o teste acerta?) · "prognostico"
+  (vai viver ou morrer; em que estágio) · "intervencao" (trato ou não).
+- nivel_impacto: 1 = muda a percepção/prática daquele momento (ex.: prevalência que
+  invalida o escore; aparelho validado disponível) · 2 = gera vigilância ("procurar mais
+  sistematicamente") · 3 = gera hipótese · 4 = não acrescenta (ex.: só validou um aparelho).
+- acesso_brasil: o recurso central existe na prática brasileira? "indisponivel" para
+  tecnologia sem horizonte real de chegada (photon-counting) — acesso GRADUA a
+  contribuição, não é rodapé.
+- temporalidade_estabelecida: o desenho prova que a exposição PRECEDE o desfecho?
+- utilidade_argumentativa: mesmo com limites, o achado dá ao médico munição concreta para
+  uma briga real do sistema (ex.: tempo porta-balão)?
+
 
 ARTIGO:
 {article_text}

@@ -2118,6 +2118,136 @@ def muda_conduta(a, aplic):
     return "SIM" if ok else "NÃO"
 
 
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# MOTOR 2 — A RÉGUA DOS 4 MOMENTOS (04/Set/2026) · construído sob ordem do Dr. Eduardo
+#
+# A síntese dele (CADERNO 24.4): *"nos preparamos muito para os RCT — onde a navalha não
+# perdoa; trabalhos de vida real e transversais precisam garantir a QUALIDADE DE ENTRADA
+# da informação e depois se perguntar se ACRESCENTAM ALGO AO RACIOCÍNIO CLÍNICO nos 4
+# pontos-chave"* (sindrômico · etiologia/acurácia · prognóstico · intervenção).
+#
+# DOIS PASSOS EM SÉRIE, calibrados pelos 9 casos que ele julgou à mão (o gabarito de
+# 02-04/Set, docs/METODO_{TRANSVERSAL,VALOR_DE_TESTES,PROGNOSTICO,MUNDO_REAL}.md):
+#   PASSO 1 · PORTÃO DE ENTRADA — exemplar / comprometida / precária. "O estudo morre na
+#             hora que não preza pela qualidade de entrada do dado" (Esporte×FA → 5;
+#             ABC → 3). Honestidade declarada preserva crédito (EnHOPE 6/7); a regra do
+#             2º exame trava em 6 (FEVE); entrada exemplar libera o passo 2 (WISDOM,
+#             REACT, CDI → 8).
+#   PASSO 2 · CONTRIBUIÇÃO AO RACIOCÍNIO no momento da pergunta — nível 1 (muda a
+#             percepção/prática) = teto · nível 2 (vigilância) = teto−1 · nível 3
+#             (hipótese) = 5 · nível 4 (nada) = 4. A regra do ACESSO gradua ("prova de
+#             conceito sem acesso = 4-5", photon-FFR); utilidade argumentativa real
+#             sustenta o 6 (FEVE).
+#
+# ⚠️ SÓ RODA COM FATOS NOVOS (`entrada` + `contribuicao` extraídos): pacote antigo segue
+# na régua antiga até ser REANALISADO — nada muda em silêncio no acervo (medido em
+# 04/Set: 0 de 1.167 pacotes mudam de nota com este commit). RCT/pool continuam na
+# navalha, intocada. Teto 8 do não-RCT preservado ("observacionais excluídos de NAC ≥9",
+# LEI 0) — subir além disso exige revogação EXPLÍCITA do dono no CLAUDE.md.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+def _entrada_nivel_4m(e):
+    """Passo 1 — classifica a ENTRADA e devolve (nivel, motivos)."""
+    m = []
+    precaria = False
+    if e.get("desfecho_verificado") == "autorrelato":
+        precaria = True
+        m.append("desfecho por AUTORRELATO, sem ECG/prontuário/adjudicação")
+    if e.get("selecao") == "voluntarios_campanha":
+        precaria = True
+        m.append("seleção por voluntários de campanha temática (quem tem sintoma responde)")
+    if e.get("prevalencia_incompativel"):
+        precaria = True
+        m.append("prevalência incompatível com a epidemiologia conhecida — a amostra se denuncia sozinha")
+    if e.get("coleta_prospectiva_padronizada") is False and not e.get("limitacoes_declaradas"):
+        precaria = True
+        m.append("coleta sem padronização descrita E sem honestidade sobre isso")
+    if precaria:
+        return "precaria", m
+
+    comprometida = False
+    if (e.get("pct_retrospectivo") or 0) > 50:
+        comprometida = True
+        m.append(f"maioria retrospectiva ({e.get('pct_retrospectivo')}%) — a ENTRADA manda")
+    if e.get("selecao_pelo_exame_seguimento"):
+        comprometida = True
+        m.append("seleção pelo exame de SEGUIMENTO — coorte de sobreviventes (regra do 2º exame)")
+    if (e.get("pct_elegiveis_excluidos") or 0) > 50:
+        comprometida = True
+        m.append(f"{e.get('pct_elegiveis_excluidos')}% dos elegíveis descartados")
+    if e.get("coleta_prospectiva_padronizada") is False:
+        comprometida = True
+        m.append("coleta sem padronização prospectiva descrita (mas declarada)")
+    if comprometida:
+        return "comprometida", m
+    return "exemplar", m
+
+
+def score_quatro_momentos(a):
+    """Motor 2 — não-RCT com fatos novos. Ver o bloco de doutrina acima."""
+    e = a.get("entrada") or {}
+    c = a.get("contribuicao") or {}
+    nivel, motivos = _entrada_nivel_4m(e)
+    flags = [f"4M · passo 1: entrada {nivel.upper()}"]
+    flags += [f"entrada: {x}" for x in motivos]
+
+    teto_ext = 10
+    if nivel == "precaria":
+        teto1 = 5
+        flags.append("entrada precária: o estudo morre no portão — no máximo GERADOR DE "
+                     "HIPÓTESE; a conclusão não ganha leitura (régua do dono, casos "
+                     "Esporte×FA e ABC)")
+        if e.get("underpowered_para_pergunta"):
+            teto1 -= 2
+            flags.append("underpowered para a pergunta: estudo que NÃO PODE responder não "
+                         "ganha nota de resposta (−2)")
+        if e.get("exclusoes_pos_exposicao"):
+            teto1 = min(teto1, 4)
+            flags.append("exclusões pós-exposição ligadas a prognóstico (RWD fatal ☠7/☠8)")
+        aplic = max(3, teto1)
+        rigor = 4
+    else:
+        if nivel == "exemplar":
+            teto1 = 8   # "observacionais excluídos de NAC ≥9" (LEI 0) — teto mantido
+        elif e.get("selecao_pelo_exame_seguimento"):
+            teto1 = 6   # regra do 2º exame: só o gradiente sobrevive, nunca as taxas
+        elif e.get("limitacoes_declaradas"):
+            teto1 = 7
+            flags.append("HONESTIDADE DECLARADA preserva crédito: a limitação confessada "
+                         "deixa o leitor decidir informado (caso EnHOPE)")
+        else:
+            teto1 = 6
+        ni = c.get("nivel_impacto") or 3
+        base = {1: teto1, 2: teto1 - 1, 3: 5, 4: 4}.get(ni, 5)
+        flags.append(f"4M · passo 2: contribuição nível {ni} ao momento "
+                     f"{c.get('momento') or '?'}")
+        acesso = c.get("acesso_brasil")
+        if acesso == "indisponivel":
+            teto_ext = 5
+            if base > 5:
+                flags.append("regra do ACESSO: tecnologia/recurso sem existência no "
+                             "horizonte do leitor = prova de conceito (caso photon-FFR); "
+                             "'não quero perder meu tempo com o que não vou aplicar'")
+            base = min(base, 5)
+        elif acesso == "limitado":
+            teto_ext = 7
+            base = min(base, 7)
+        if c.get("utilidade_argumentativa") and base < 6:
+            base = 6
+            flags.append("utilidade ARGUMENTATIVA real sustenta o 6: dá ao médico a "
+                         "munição para buscar solução (caso trajetória de FEVE)")
+        aplic = max(3, base)
+        rigor = 8 if nivel == "exemplar" else 6
+
+    if (c.get("momento") == "intervencao") or (a.get("pergunta") == "intervencao"):
+        mc = "SIM" if aplic >= 9 else "NÃO"   # bicondicional — inatingível sob teto 8, de propósito
+    else:
+        mc = "N/A (não é intervenção)"
+
+    return {"trabalho": rigor, "aplic": aplic, "teto_desenho": teto1, "teto_externa": teto_ext,
+            "muda_conduta": mc, "rota": ROTA_CLINICA, "falhas_fatais": [],
+            "motor": "ORIGINAL", "motor_4m": True, "flags": flags, "delatores": flags}
+
+
 def score(a):
     # PASSO −1 — QUAL MOTOR (LEI 8, 02/Ago). Vem ANTES da rota de propósito: se o classificador diz
     # que é DIRETRIZ, é diretriz — mesmo que o extrator tenha devolvido desenho='nao_classificavel'.
@@ -2151,6 +2281,14 @@ def score(a):
                 "motor": {"meta": "META", "diretriz": "DIRETRIZ",
                           "revisao_narrativa": "REVISAO"}.get(t, "ORIGINAL"),
                 "flags": [motivo]}
+
+    # ═══ MOTOR 2 — A RÉGUA DOS 4 MOMENTOS (04/Set) ═══
+    # Só dispara com os FATOS NOVOS (`entrada` + `contribuicao`) e NUNCA para RCT/pool/meta
+    # (a navalha é intocável). Pacote antigo (sem os campos) segue na régua de sempre até
+    # ser reanalisado — medido: 0 de 1.167 pacotes mudam de nota com este commit.
+    if (t != "meta" and a.get("desenho") not in ("rct", "pool_pre_especificado", "meta")
+            and isinstance(a.get("entrada"), dict) and isinstance(a.get("contribuicao"), dict)):
+        return score_quatro_momentos(a)
 
     # META tem motor próprio, recuperado do prompt_meta_analise_v2.md dele. ORIGINAL segue na LEI 0.
     #

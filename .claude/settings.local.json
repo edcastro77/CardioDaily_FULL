@@ -96,7 +96,9 @@
       "Bash(grep -vE '^#|^$' .gitignore)",
       "Bash(git ls-files *)",
       "Bash(gh workflow *)",
-      "Bash(git -C /Users/eduardocastro/projetos/CardioDaily_FULL log --oneline -2)"
+      "Bash(git -C /Users/eduardocastro/projetos/CardioDaily_FULL log --oneline -2)",
+      "Bash(find /Users/eduardocastro/projetos/CardioDaily_FULL/ARTIGOS -iname *shock* -name *.pdf)",
+      "Bash(find /Users/eduardocastro/projetos/CardioDaily_FULL/outputs -maxdepth 3 -type d -iname *Defibrillator* -o -maxdepth 3 -type d -iname *Sacubitril*)"
     ]
   }
 }
