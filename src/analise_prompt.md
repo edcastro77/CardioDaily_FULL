@@ -409,9 +409,12 @@ não notas: você descreve o que o artigo DIZ sobre a própria coleta e a quem o
 - momento: a pergunta serve a qual momento do consultório? "sindromico" (que síndrome é/
   quanto existe) · "etiologia_acuracia" (qual a causa; o teste acerta?) · "prognostico"
   (vai viver ou morrer; em que estágio) · "intervencao" (trato ou não).
-- nivel_impacto: 1 = muda a percepção/prática daquele momento (ex.: prevalência que
-  invalida o escore; aparelho validado disponível) · 2 = gera vigilância ("procurar mais
-  sistematicamente") · 3 = gera hipótese · 4 = não acrescenta (ex.: só validou um aparelho).
+- nivel_impacto: 1 = muda a percepção/prática daquele momento — inclui o prognóstico que
+  REDIRECIONA a conduta (ex.: prevalência que invalida o escore; aparelho validado
+  disponível; marcador que muda o FOCO do médico, como choque de CDI → reavaliar a bomba,
+  não celebrar o resgate) · 2 = gera vigilância ("procurar mais sistematicamente", sem
+  redirecionar conduta) · 3 = gera hipótese · 4 = não acrescenta (ex.: só validou um
+  aparelho).
 - acesso_brasil: o recurso central existe na prática brasileira? "indisponivel" para
   tecnologia sem horizonte real de chegada (photon-counting) — acesso GRADUA a
   contribuição, não é rodapé.

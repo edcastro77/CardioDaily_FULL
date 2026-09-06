@@ -1,23 +1,16 @@
-A ESTREIA DO MOTOR 2: DUAS PROVAS CEGAS, DUAS ACERTADAS (04-05/Set/2026)
+A TERCEIRA PROVA CEGA ERROU POR UM — E ENSINOU O EXTRATOR (06/Set/2026)
 
-O lote de 134 pós-ESC estreou a régua dos 4 momentos em produção. O
-Motor 2, sem conhecer o gabarito, reproduziu as notas do dono:
-Esporte×FA → 5 (dele: 5; sistema antigo: 6) e Photon-FFR → 5 (dele:
-4/5; antigo: 8). 16 vereditos 4M com distribuição saudável; RWD de
-intervenção segurado em 6 com muda_conduta NÃO.
+O Poole dos choques (gabarito nº 7 do dono: 8) saiu do Motor 2 com 7.
+O diagnóstico honrou o método: o extrator acertou OS 12 FATOS de
+entrada do prognóstico (adjudicação, tempo-dependência, EPV, exclusões
+pós-exposição — a régua ditada lida por máquina). A divergência foi
+UMA: julgou a contribuição como nível 2 (vigilância) onde o dono julga
+nível 1 — porque a definição não dizia que prognóstico que REDIRECIONA
+a conduta é nível 1.
 
-CONSERTOS QUE A RODADA EXIGIU:
-1) O DOI MORA NO NOME DO ARQUIVO DA EDITORA — NEJMoa013474/PIIS...
-   derivam o DOI do próprio nome (clássicos sem DOI no texto); trava
-   com 10 casos, incluindo os negativos (rutters2024 não ganha DOI
-   inventado). 119/123 renomeados no lote (97%).
-2) CROSSREF COMO 3ª DEFESA DO RENAME — revista nova (EHJ-VSHD 2026,
-   caso xwag) resolve pelo registro do DOI sem esperar indexação do
-   PubMed; o título ainda é confrontado pela trava do DOI emprestado.
-3) A EMENDA DO SINTÉTICO — a trava de DOI recusou 4 clássicos NEJM
-   (DIG, MADIT-II, AF-CHF, Poole) por não conhecer "Sintetico_<slug>",
-   a identidade legítima da casa para artigo SEM DOI (Framingham).
-   Contrato emendado; os 4 fecham na próxima Chave 2 (fatos em cache).
+O conserto: a definição de nivel_impacto no analise_prompt.md agora
+inclui, com as palavras dele, o marcador que muda o FOCO do médico
+("choque de CDI → reavaliar a bomba, não celebrar o resgate").
 
-Bateria: 96 travas verdes. Renomeador agora com três defesas:
-DOI do texto → DOI do nome → Crossref.
+Placar da validação cega do Motor 2: Esporte×FA 5=5 · Photon-FFR 5≈4/5
+· Poole 7 vs 8 (causa achada e corrigida). Na próxima reanálise, sai 8.
